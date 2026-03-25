@@ -1,4 +1,4 @@
-# School System
+# School Data System
 
 Modernized School Data System (SDS) with:
 - Backend: Laravel 13 (PHP 8.3)
