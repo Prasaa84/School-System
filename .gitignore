@@ -1,0 +1,9 @@
+.env
+/backend/vendor
+/frontend/node_modules
+/backend/storage/*.key
+/backend/storage/logs
+/backend/storage/framework
+/backend/storage/app/public
+/backend/bootstrap/cache/*
+!/backend/bootstrap/cache/.gitignore

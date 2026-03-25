@@ -1,0 +1,89 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1\Auth;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Auth\LoginRequest;
+use App\Models\ApiToken;
+use App\Models\SdsUser;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+
+class AuthController extends Controller
+{
+    public function login(LoginRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $user = SdsUser::query()
+            ->with('role')
+            ->where('username', (string) $validated['username'])
+            ->where('password', md5((string) $validated['password']))
+            ->where('status_id', 1)
+            ->where('is_deleted', 0)
+            ->first();
+
+        if ($user === null) {
+            return response()->json([
+                'message' => 'Invalid username or password.',
+            ], 401);
+        }
+
+        $plainToken = Str::random(64);
+
+        ApiToken::query()->create([
+            'user_id' => (int) $user->user_id,
+            'token_hash' => hash('sha256', $plainToken),
+            'expires_at' => now()->addHours(12),
+        ]);
+
+        return response()->json([
+            'token_type' => 'Bearer',
+            'access_token' => $plainToken,
+            'user' => $this->formatUser($user),
+        ]);
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        /** @var SdsUser|null $user */
+        $user = $request->attributes->get('auth_user');
+
+        if ($user === null) {
+            return response()->json([
+                'message' => 'User not found.',
+            ], 401);
+        }
+
+        return response()->json([
+            'user' => $this->formatUser($user),
+        ]);
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $token = $request->attributes->get('auth_token');
+
+        if ($token !== null) {
+            $token->delete();
+        }
+
+        return response()->json([
+            'message' => 'Logged out successfully.',
+        ]);
+    }
+
+    /**
+     * @return array<string, int|string|null>
+     */
+    private function formatUser(SdsUser $user): array
+    {
+        return [
+            'user_id' => (int) $user->user_id,
+            'username' => (string) $user->username,
+            'role_id' => isset($user->role_id) ? (int) $user->role_id : null,
+            'role_name' => $user->role?->role_name,
+        ];
+    }
+}
