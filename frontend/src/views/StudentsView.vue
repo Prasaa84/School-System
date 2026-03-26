@@ -3,9 +3,6 @@
     <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="font-brand text-xs uppercase tracking-[0.2em] text-slate-500">Students Module</p>
       <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">Students</h1>
-      <p class="mt-2 text-sm text-slate-600">
-        Student list from `student_tbl` with current grade/class computed using the old business rule.
-      </p>
     </header>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
