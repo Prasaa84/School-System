@@ -25,14 +25,19 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/dashboard/summary', DashboardSummaryController::class);
 
         Route::get('/grades', GradeController::class);
+        Route::post('/grades/initialize-year', [GradeController::class, 'initializeYear']);
+        Route::put('/grades/{gradeRowId}', [GradeController::class, 'update'])->whereNumber('gradeRowId');
+        Route::delete('/grades/{gradeRowId}', [GradeController::class, 'destroy'])->whereNumber('gradeRowId');
         Route::get('/grades/report', GradeReportController::class);
 
         Route::get('/classes', [ClassController::class, 'index']);
+        Route::put('/classes/{classRowId}', [ClassController::class, 'update'])->whereNumber('classRowId');
         Route::get('/classes/by-grade/{gradeId}', [ClassLookupController::class, 'byGrade'])
             ->whereNumber('gradeId');
         Route::get('/classes/report', ClassReportController::class);
 
         Route::get('/staff', [StaffController::class, 'index']);
+        Route::get('/staff/options', [StaffController::class, 'options']);
         Route::get('/staff/report-summary', [StaffController::class, 'reportSummary']);
 
         Route::get('/students', [StudentController::class, 'index']);
