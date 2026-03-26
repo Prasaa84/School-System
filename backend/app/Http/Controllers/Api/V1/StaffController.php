@@ -88,6 +88,33 @@ class StaffController extends Controller
         }
     }
 
+    public function options(): JsonResponse
+    {
+        if (!Schema::hasTable('staff_tbl')) {
+            return response()->json(['data' => []]);
+        }
+
+        $user = $this->authUser();
+        $staffColumns = Schema::getColumnListing('staff_tbl');
+        $staffSchoolColumn = $this->resolveSchoolColumn($staffColumns);
+
+        $query = DB::table('staff_tbl as st')
+            ->select(['st.stf_id', 'st.name_with_ini'])
+            ->when(Schema::hasColumn('staff_tbl', 'is_deleted'), function ($builder): void {
+                $builder->where('st.is_deleted', 0);
+            })
+            ->orderBy('st.name_with_ini');
+
+        $this->applySchoolScope($query, $user, 'st', $staffSchoolColumn);
+
+        return response()->json([
+            'data' => $query->get()->map(fn ($row): array => [
+                'stf_id' => (int) $row->stf_id,
+                'name_with_ini' => (string) ($row->name_with_ini ?? ''),
+            ])->all(),
+        ]);
+    }
+
     public function reportSummary(Request $request): JsonResponse
     {
         $year = $request->query('year');
