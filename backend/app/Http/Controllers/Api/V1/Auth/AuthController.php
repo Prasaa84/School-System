@@ -9,6 +9,7 @@ use App\Models\SdsUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -25,6 +26,10 @@ class AuthController extends Controller
             ->first();
 
         if ($user === null || !Hash::check((string) $validated['password'], (string) $user->password)) {
+            Log::warning('Login failed.', [
+                'username' => (string) $validated['username'],
+            ]);
+
             return response()->json([
                 'message' => 'Invalid username or password.',
             ], 401);
@@ -36,6 +41,12 @@ class AuthController extends Controller
             'user_id' => (int) $user->user_id,
             'token_hash' => hash('sha256', $plainToken),
             'expires_at' => now()->addHours(12),
+        ]);
+
+        Log::info('Login success.', [
+            'user_id' => (int) $user->user_id,
+            'username' => (string) $user->username,
+            'role_id' => isset($user->role_id) ? (int) $user->role_id : null,
         ]);
 
         return response()->json([
@@ -67,6 +78,19 @@ class AuthController extends Controller
 
         if ($token !== null) {
             $token->delete();
+        }
+
+        $user = $request->attributes->get('auth_user');
+        if ($user instanceof SdsUser) {
+            Log::info('Logout.', [
+                'user_id' => (int) $user->user_id,
+                'username' => (string) $user->username,
+                'role_id' => isset($user->role_id) ? (int) $user->role_id : null,
+            ]);
+        } else {
+            Log::info('Logout.', [
+                'user_id' => null,
+            ]);
         }
 
         return response()->json([
