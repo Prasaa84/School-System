@@ -8,6 +8,7 @@ use App\Models\ApiToken;
 use App\Models\SdsUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -19,12 +20,11 @@ class AuthController extends Controller
         $user = SdsUser::query()
             ->with('role')
             ->where('username', (string) $validated['username'])
-            ->where('password', md5((string) $validated['password']))
             ->where('status_id', 1)
             ->where('is_deleted', 0)
             ->first();
 
-        if ($user === null) {
+        if ($user === null || !Hash::check((string) $validated['password'], (string) $user->password)) {
             return response()->json([
                 'message' => 'Invalid username or password.',
             ], 401);
