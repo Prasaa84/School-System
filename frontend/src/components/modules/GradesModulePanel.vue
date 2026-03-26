@@ -21,9 +21,9 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          <tr v-for="grade in grades" :key="grade.sch_grd_id ?? `${grade.school_id}-${grade.grade_id}-${grade.year}`">
+          <tr v-for="grade in grades" :key="grade.sch_grd_id ?? `${grade.census_id}-${grade.grade_id}-${grade.year}`">
             <td class="px-3 py-2">{{ grade.year ?? '-' }}</td>
-            <td v-if="isAdmin" class="px-3 py-2">{{ grade.school_name || grade.school_id || '-' }}</td>
+            <td v-if="isAdmin" class="px-3 py-2">{{ grade.school_name || grade.census_id || '-' }}</td>
             <td class="px-3 py-2">{{ grade.grade || '-' }}</td>
             <td class="px-3 py-2">
               <template v-if="canManage && grade.sch_grd_id">
@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-interface Grade { sch_grd_id: number | null; school_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; grade_head: string | null }
+interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; grade_head: string | null }
 interface GradeReportRow { grade_id: number; grade: string; year: number; student_count: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
 
@@ -115,3 +115,4 @@ const onGradeHeadChange = (gradeRowId: number, event: Event): void => {
   emit('update-grade-head', gradeRowId, Number.isFinite(value) ? value : 0)
 }
 </script>
+

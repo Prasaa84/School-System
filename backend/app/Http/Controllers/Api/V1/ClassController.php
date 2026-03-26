@@ -58,7 +58,7 @@ class ClassController extends Controller
         }
 
         if ($schoolColumn !== null) {
-            $query->addSelect(DB::raw("sgct.{$schoolColumn} as school_id"));
+            $query->addSelect(DB::raw("sgct.{$schoolColumn} as census_id"));
             $query->orderBy("sgct.{$schoolColumn}");
         }
 
@@ -93,7 +93,7 @@ class ClassController extends Controller
         $rows = $query->get()->map(function ($row): array {
             return [
                 'sch_grd_cls_id' => isset($row->sch_grd_cls_id) ? (int) $row->sch_grd_cls_id : null,
-                'school_id' => isset($row->school_id) ? (int) $row->school_id : null,
+                'census_id' => isset($row->census_id) ? (int) $row->census_id : null,
                 'school_name' => $row->school_name ?? null,
                 'grade_id' => isset($row->grade_id) ? (int) $row->grade_id : null,
                 'grade' => $row->grade,
@@ -169,3 +169,6 @@ class ClassController extends Controller
         return response()->json(['message' => 'Class row updated.']);
     }
 }
+
+
+

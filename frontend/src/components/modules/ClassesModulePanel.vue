@@ -25,9 +25,9 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          <tr v-for="item in classes" :key="item.sch_grd_cls_id ?? `${item.school_id}-${item.grade_id}-${item.class_id}-${item.year}`">
+          <tr v-for="item in classes" :key="item.sch_grd_cls_id ?? `${item.census_id}-${item.grade_id}-${item.class_id}-${item.year}`">
             <td class="px-3 py-2">{{ item.year ?? '-' }}</td>
-            <td v-if="isAdmin" class="px-3 py-2">{{ item.school_name || item.school_id || '-' }}</td>
+            <td v-if="isAdmin" class="px-3 py-2">{{ item.school_name || item.census_id || '-' }}</td>
             <td class="px-3 py-2">{{ item.grade || '-' }}</td>
             <td class="px-3 py-2">{{ item.class || '-' }}</td>
             <td class="px-3 py-2">
@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-interface ClassItem { sch_grd_cls_id: number | null; school_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null }
+interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null }
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
 interface ClassGradeOption { grade_id: number; grade: string }
@@ -131,3 +131,4 @@ const onCurrentChange = (classRowId: number, event: Event): void => {
   emit('update-class-current', classRowId, Number.isFinite(value) ? value : 0)
 }
 </script>
+

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Concerns;
 
 use App\Models\SdsUser;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 trait AppliesSchoolScope
 {
@@ -25,10 +27,37 @@ trait AppliesSchoolScope
             return null;
         }
 
-        foreach (['census_id', 'school_id'] as $column) {
-            $value = $user->{$column} ?? null;
-            if (is_numeric($value)) {
-                return (int) $value;
+        $value = $user->census_id ?? null;
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        $userId = is_numeric($user->user_id ?? null) ? (int) $user->user_id : null;
+        if ($userId === null) {
+            return null;
+        }
+
+        if (Schema::hasTable('school_details_tbl')) {
+            $query = DB::table('school_details_tbl')->where('user_id', $userId);
+            if (Schema::hasColumn('school_details_tbl', 'is_deleted')) {
+                $query->where('is_deleted', 0);
+            }
+
+            $censusId = $query->value('census_id');
+            if (is_numeric($censusId)) {
+                return (int) $censusId;
+            }
+        }
+
+        if (Schema::hasTable('staff_tbl')) {
+            $query = DB::table('staff_tbl')->where('user_id', $userId);
+            if (Schema::hasColumn('staff_tbl', 'is_deleted')) {
+                $query->where('is_deleted', 0);
+            }
+
+            $censusId = $query->value('census_id');
+            if (is_numeric($censusId)) {
+                return (int) $censusId;
             }
         }
 
@@ -42,10 +71,6 @@ trait AppliesSchoolScope
     {
         if (in_array('census_id', $columns, true)) {
             return 'census_id';
-        }
-
-        if (in_array('school_id', $columns, true)) {
-            return 'school_id';
         }
 
         return null;
