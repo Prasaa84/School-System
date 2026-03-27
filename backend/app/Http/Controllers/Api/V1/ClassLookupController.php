@@ -2,31 +2,82 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Controller;
+use App\Models\SchoolGradeClass;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ClassLookupController extends Controller
 {
-    public function byGrade(int $gradeId): JsonResponse
-    {
-        $streamId = DB::table('grade_tbl')
-            ->where('grade_id', $gradeId)
-            ->value('stream_id');
+    use AppliesSchoolScope;
 
-        if ($streamId === null) {
+    public function byGrade(Request $request, int $gradeId): JsonResponse
+    {
+        $gradeClassTable = (new SchoolGradeClass())->getTable();
+        if (!Schema::hasTable($gradeClassTable)) {
             return response()->json([
-                'message' => 'Grade not found.',
-            ], 404);
+                'year' => null,
+                'data' => [],
+            ]);
         }
 
-        $classes = DB::table('class_tbl')
-            ->select(['class_id', 'class', 'stream_id'])
-            ->where('stream_id', $streamId)
-            ->orderBy('class_id')
+        $columns = Schema::getColumnListing($gradeClassTable);
+        $schoolColumn = $this->resolveSchoolColumn($columns);
+        $hasIsDeleted = in_array('is_deleted', $columns, true);
+
+        $requestedYear = $request->query('year');
+        if ($requestedYear !== null && (!is_numeric($requestedYear) || (int) $requestedYear < 2000 || (int) $requestedYear > 2100)) {
+            return response()->json([
+                'message' => 'Invalid academic year.',
+            ], 422);
+        }
+
+        $selectedYear = is_numeric($requestedYear) ? (int) $requestedYear : null;
+        if ($selectedYear === null) {
+            $yearQuery = DB::table("{$gradeClassTable} as sgct")
+                ->where('sgct.grade_id', $gradeId);
+
+            if ($hasIsDeleted) {
+                $yearQuery->where('sgct.is_deleted', 0);
+            }
+
+            $this->applySchoolScope($yearQuery, $this->authUser(), 'sgct', $schoolColumn);
+            $selectedYear = $yearQuery->max('sgct.year');
+        }
+
+        if ($selectedYear === null) {
+            return response()->json([
+                'year' => null,
+                'data' => [],
+            ]);
+        }
+
+        $query = DB::table("{$gradeClassTable} as sgct")
+            ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+            ->select([
+                'ct.class_id',
+                DB::raw('ct.class as class'),
+                'ct.stream_id',
+            ])
+            ->where('sgct.grade_id', $gradeId)
+            ->where('sgct.year', $selectedYear);
+
+        if ($hasIsDeleted) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        $this->applySchoolScope($query, $this->authUser(), 'sgct', $schoolColumn);
+
+        $classes = $query
+            ->distinct()
+            ->orderBy('ct.class_id')
             ->get();
 
         return response()->json([
+            'year' => (int) $selectedYear,
             'data' => $classes,
         ]);
     }

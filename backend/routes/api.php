@@ -41,5 +41,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/staff/report-summary', [StaffController::class, 'reportSummary']);
 
         Route::get('/students', [StudentController::class, 'index']);
+        Route::get('/students/options', [StudentController::class, 'options']);
+        Route::post('/students', [StudentController::class, 'store']);
+        Route::get('/students/{studentId}', [StudentController::class, 'show'])->whereNumber('studentId');
+        Route::put('/students/{studentId}', [StudentController::class, 'update'])->whereNumber('studentId');
+        Route::delete('/students/{studentId}', [StudentController::class, 'destroy'])->whereNumber('studentId');
     });
 });
+
+

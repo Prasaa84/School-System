@@ -187,11 +187,16 @@ class ModuleCatalogController extends Controller
         ]);
 
         $roleMap = [
-            1 => ['grades', 'classes', 'staff', 'students'],
+            1 => ['grades', 'classes', 'students', 'staff', 'payments', 'reports'],
+            2 => ['grades', 'classes', 'students', 'staff', 'payments', 'reports'],
+            3 => ['grades', 'classes', 'students', 'staff', 'reports'],
             4 => ['payments', 'students', 'grades', 'classes'],
+            5 => ['students', 'grades', 'classes'],
+            6 => ['students', 'grades', 'classes'],
+            7 => ['students', 'grades', 'classes']
         ];
 
-        $keys = $roleMap[$roleId ?? -1] ?? ['students', 'grades', 'classes', 'staff', 'payments', 'reports'];
+        $keys = $roleMap[$roleId ?? -1] ?? ['grades', 'grades', 'classes', 'staff', 'payments', 'reports'];
 
         return collect($keys)
             ->map(fn (string $key): ?array => $catalog->get($key))

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Controller;
+use App\Models\SchoolGrade;
+use App\Models\SchoolGradeClass;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,29 +16,53 @@ class GradeController extends Controller
 {
     use AppliesSchoolScope;
 
-    public function __invoke(): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
-        if (!Schema::hasTable('school_grade_tbl')) {
-            return response()->json(['data' => []]);
+        $gradeTable = (new SchoolGrade())->getTable();
+
+        if (!Schema::hasTable($gradeTable)) {
+            return response()->json([
+                'year' => null,
+                'years' => [],
+                'data' => [],
+            ]);
         }
 
         $user = $this->authUser();
-        $gradeColumns = Schema::getColumnListing('school_grade_tbl');
+        $gradeColumns = Schema::getColumnListing($gradeTable);
         $hasIsDeleted = in_array('is_deleted', $gradeColumns, true);
         $schoolColumn = $this->resolveSchoolColumn($gradeColumns);
 
-        $latestYearQuery = DB::table('school_grade_tbl as sgt');
+        $availableYearsQuery = SchoolGrade::query();
         if ($hasIsDeleted) {
-            $latestYearQuery->where('sgt.is_deleted', 0);
+            $availableYearsQuery->where('is_deleted', 0);
         }
-        $this->applySchoolScope($latestYearQuery, $user, 'sgt', $schoolColumn);
-        $latestYear = $latestYearQuery->max('year');
+        $this->applySchoolScope($availableYearsQuery->getQuery(), $user, null, $schoolColumn);
+        $availableYears = $availableYearsQuery
+            ->select('year')
+            ->distinct()
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(fn ($year): int => (int) $year)
+            ->filter(fn ($year): bool => $year >= 2000 && $year <= 2100)
+            ->values()
+            ->all();
 
-        if ($latestYear === null) {
-            return response()->json(['data' => []]);
+        if (empty($availableYears)) {
+            return response()->json([
+                'year' => null,
+                'years' => [],
+                'data' => [],
+            ]);
         }
 
-        $query = DB::table('school_grade_tbl as sgt')
+        $requestedYear = $request->query('year');
+        $requestedYear = is_numeric($requestedYear) ? (int) $requestedYear : null;
+        $selectedYear = ($requestedYear !== null && in_array($requestedYear, $availableYears, true))
+            ? $requestedYear
+            : $availableYears[0];
+
+        $query = DB::table("{$gradeTable} as sgt")
             ->leftJoin('grade_tbl as gt', 'sgt.grade_id', '=', 'gt.grade_id')
             ->select([
                 'sgt.sch_grd_id',
@@ -44,7 +70,7 @@ class GradeController extends Controller
                 'sgt.year',
                 DB::raw('gt.grade as grade'),
             ])
-            ->where('sgt.year', $latestYear)
+            ->where('sgt.year', $selectedYear)
             ->orderBy('sgt.grade_id');
 
         if (in_array('stf_id', $gradeColumns, true)) {
@@ -62,8 +88,8 @@ class GradeController extends Controller
 
         $this->applySchoolScope($query, $user, 'sgt', $schoolColumn);
 
-        if (Schema::hasTable('school_tbl') && $schoolColumn !== null) {
-            $query->leftJoin('school_tbl as sc', "sgt.{$schoolColumn}", '=', 'sc.census_id')
+        if (Schema::hasTable('school_details_tbl') && $schoolColumn !== null) {
+            $query->leftJoin('school_details_tbl as sc', "sgt.{$schoolColumn}", '=', 'sc.census_id')
                 ->addSelect(DB::raw('sc.sch_name as school_name'));
         }
 
@@ -86,14 +112,17 @@ class GradeController extends Controller
         })->all();
 
         return response()->json([
-            'year' => (int) $latestYear,
+            'year' => (int) $selectedYear,
+            'years' => $availableYears,
             'data' => $rows,
         ]);
     }
-
     public function initializeYear(Request $request): JsonResponse
     {
-        if (!Schema::hasTable('school_grade_tbl') || !Schema::hasTable('school_grade_class_tbl')) {
+        $gradeTable = (new SchoolGrade())->getTable();
+        $gradeClassTable = (new SchoolGradeClass())->getTable();
+
+        if (!Schema::hasTable($gradeTable) || !Schema::hasTable($gradeClassTable)) {
             return response()->json([
                 'message' => 'Required tables are missing.',
             ], 422);
@@ -103,6 +132,7 @@ class GradeController extends Controller
         if ($user === null) {
             return response()->json(['message' => 'Unauthorized.'], 401);
         }
+
         if (!in_array((int) $user->role_id, [1, 2], true)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
@@ -112,8 +142,8 @@ class GradeController extends Controller
             return response()->json(['message' => 'Invalid target year.'], 422);
         }
 
-        $gradeColumns = Schema::getColumnListing('school_grade_tbl');
-        $classColumns = Schema::getColumnListing('school_grade_class_tbl');
+        $gradeColumns = Schema::getColumnListing($gradeTable);
+        $classColumns = Schema::getColumnListing($gradeClassTable);
         $gradeHasIsDeleted = in_array('is_deleted', $gradeColumns, true);
         $classHasIsDeleted = in_array('is_deleted', $classColumns, true);
         $gradeSchoolColumn = $this->resolveSchoolColumn($gradeColumns);
@@ -140,14 +170,16 @@ class GradeController extends Controller
                 $gradeHasIsDeleted,
                 $classHasIsDeleted,
                 $gradeSchoolColumn,
-                $classSchoolColumn
+                $classSchoolColumn,
+                $gradeTable,
+                $gradeClassTable
             ): array {
-                $gradeSourceYear = $this->resolveSourceYear('school_grade_tbl', $gradeSchoolColumn, $censusId, $targetYear);
-                $classSourceYear = $this->resolveSourceYear('school_grade_class_tbl', $classSchoolColumn, $censusId, $targetYear);
+                $gradeSourceYear = $this->resolveSourceYear($gradeTable, $gradeSchoolColumn, $censusId, $targetYear);
+                $classSourceYear = $this->resolveSourceYear($gradeClassTable, $classSchoolColumn, $censusId, $targetYear);
 
                 $createdGrades = 0;
                 if ($gradeSourceYear !== null) {
-                    $sourceGradeQuery = DB::table('school_grade_tbl')
+                    $sourceGradeQuery = DB::table($gradeTable)
                         ->where($gradeSchoolColumn, $censusId)
                         ->where('year', $gradeSourceYear);
                     if ($gradeHasIsDeleted) {
@@ -155,7 +187,7 @@ class GradeController extends Controller
                     }
                     $sourceGradeRows = $sourceGradeQuery->get();
 
-                    $existingGradeQuery = DB::table('school_grade_tbl')
+                    $existingGradeQuery = DB::table($gradeTable)
                         ->where($gradeSchoolColumn, $censusId)
                         ->where('year', $targetYear);
                     if ($gradeHasIsDeleted) {
@@ -199,14 +231,14 @@ class GradeController extends Controller
                     }
 
                     if (!empty($gradeInserts)) {
-                        DB::table('school_grade_tbl')->insert($gradeInserts);
+                        DB::table($gradeTable)->insert($gradeInserts);
                         $createdGrades = count($gradeInserts);
                     }
                 }
 
                 $createdClasses = 0;
                 if ($classSourceYear !== null) {
-                    $sourceClassQuery = DB::table('school_grade_class_tbl')
+                    $sourceClassQuery = DB::table($gradeClassTable)
                         ->where($classSchoolColumn, $censusId)
                         ->where('year', $classSourceYear);
                     if ($classHasIsDeleted) {
@@ -214,7 +246,7 @@ class GradeController extends Controller
                     }
                     $sourceClassRows = $sourceClassQuery->get();
 
-                    $existingClassQuery = DB::table('school_grade_class_tbl')
+                    $existingClassQuery = DB::table($gradeClassTable)
                         ->where($classSchoolColumn, $censusId)
                         ->where('year', $targetYear);
                     if ($classHasIsDeleted) {
@@ -268,7 +300,7 @@ class GradeController extends Controller
                     }
 
                     if (!empty($classInserts)) {
-                        DB::table('school_grade_class_tbl')->insert($classInserts);
+                        DB::table($gradeClassTable)->insert($classInserts);
                         $createdClasses = count($classInserts);
                     }
                 }
@@ -297,6 +329,8 @@ class GradeController extends Controller
 
     public function update(Request $request, int $gradeRowId): JsonResponse
     {
+        $gradeTable = (new SchoolGrade())->getTable();
+
         $user = $this->authUser();
         if ($user === null) {
             return response()->json(['message' => 'Unauthorized.'], 401);
@@ -309,10 +343,10 @@ class GradeController extends Controller
         $stfId = $request->input('stf_id');
         $stfId = is_numeric($stfId) ? (int) $stfId : null;
 
-        $columns = Schema::getColumnListing('school_grade_tbl');
+        $columns = Schema::getColumnListing($gradeTable);
         $schoolColumn = $this->resolveSchoolColumn($columns);
 
-        $query = DB::table('school_grade_tbl as sgt')->where('sgt.sch_grd_id', $gradeRowId);
+        $query = DB::table("{$gradeTable} as sgt")->where('sgt.sch_grd_id', $gradeRowId);
         if (in_array('is_deleted', $columns, true)) {
             $query->where('sgt.is_deleted', 0);
         }
@@ -335,7 +369,7 @@ class GradeController extends Controller
         }
 
         if (!empty($updates)) {
-            DB::table('school_grade_tbl')->where('sch_grd_id', $gradeRowId)->update($updates);
+            DB::table($gradeTable)->where('sch_grd_id', $gradeRowId)->update($updates);
         }
 
         return response()->json(['message' => 'Grade row updated.']);
@@ -343,6 +377,9 @@ class GradeController extends Controller
 
     public function destroy(int $gradeRowId): JsonResponse
     {
+        $gradeTable = (new SchoolGrade())->getTable();
+        $gradeClassTable = (new SchoolGradeClass())->getTable();
+
         $user = $this->authUser();
         if ($user === null) {
             return response()->json(['message' => 'Unauthorized.'], 401);
@@ -352,12 +389,12 @@ class GradeController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        $gradeColumns = Schema::getColumnListing('school_grade_tbl');
-        $classColumns = Schema::getColumnListing('school_grade_class_tbl');
+        $gradeColumns = Schema::getColumnListing($gradeTable);
+        $classColumns = Schema::getColumnListing($gradeClassTable);
         $gradeSchoolColumn = $this->resolveSchoolColumn($gradeColumns);
         $classSchoolColumn = $this->resolveSchoolColumn($classColumns);
 
-        $query = DB::table('school_grade_tbl as sgt')->where('sgt.sch_grd_id', $gradeRowId);
+        $query = DB::table("{$gradeTable} as sgt")->where('sgt.sch_grd_id', $gradeRowId);
         if (in_array('is_deleted', $gradeColumns, true)) {
             $query->where('sgt.is_deleted', 0);
         }
@@ -368,15 +405,15 @@ class GradeController extends Controller
             return response()->json(['message' => 'Grade row not found.'], 404);
         }
 
-        DB::transaction(function () use ($gradeRowId, $row, $gradeColumns, $classColumns, $gradeSchoolColumn, $classSchoolColumn): void {
+        DB::transaction(function () use ($gradeRowId, $row, $gradeColumns, $classColumns, $gradeSchoolColumn, $classSchoolColumn, $gradeTable, $gradeClassTable): void {
             if (in_array('is_deleted', $gradeColumns, true)) {
-                DB::table('school_grade_tbl')->where('sch_grd_id', $gradeRowId)->update(['is_deleted' => 1]);
+                DB::table($gradeTable)->where('sch_grd_id', $gradeRowId)->update(['is_deleted' => 1]);
             } else {
-                DB::table('school_grade_tbl')->where('sch_grd_id', $gradeRowId)->delete();
+                DB::table($gradeTable)->where('sch_grd_id', $gradeRowId)->delete();
             }
 
             if ($classSchoolColumn !== null && $gradeSchoolColumn !== null) {
-                $classQuery = DB::table('school_grade_class_tbl')
+                $classQuery = DB::table($gradeClassTable)
                     ->where($classSchoolColumn, $row->{$gradeSchoolColumn})
                     ->where('grade_id', $row->grade_id)
                     ->where('year', $row->year);
@@ -406,6 +443,3 @@ class GradeController extends Controller
         return $query->max('year');
     }
 }
-
-
-

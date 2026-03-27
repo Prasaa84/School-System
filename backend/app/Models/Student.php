@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Student extends Model
 {
@@ -11,5 +12,9 @@ class Student extends Model
     public $timestamps = false;
 
     protected $guarded = [];
-}
 
+    public function school(): BelongsTo
+    {
+        return $this->belongsTo(SchoolDetail::class, 'census_id', 'census_id');
+    }
+}

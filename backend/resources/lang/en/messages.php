@@ -14,6 +14,12 @@ return [
     'students' => [
         'list_failed' => 'Unable to load students list.',
         'create_failed' => 'Unable to add student.',
+        'create_success' => 'Student added successfully.',
+        'update_failed' => 'Unable to update student.',
+        'update_success' => 'Student updated successfully.',
+        'delete_failed' => 'Unable to delete student.',
+        'delete_success' => 'Student deleted successfully.',
+        'not_found' => 'Student not found.',
         'already_exists' => 'Student with admission number :index_no already exists.',
         'census_required' => 'Unable to determine school census ID.',
         'grade_class_mismatch' => 'Selected grade and class do not match.',
@@ -26,6 +32,7 @@ return [
             'grade_invalid' => 'Selected grade is invalid.',
             'class_invalid' => 'Selected class is invalid.',
             'year_invalid' => 'Academic year must be between 2000 and 2100.',
+            'grade_class_required' => 'Please select both grade and class, or leave both empty.',
         ],
     ],
     'staff' => [
@@ -45,3 +52,7 @@ return [
         'server_error' => 'Something went wrong. Please try again.',
     ],
 ];
+
+
+
+

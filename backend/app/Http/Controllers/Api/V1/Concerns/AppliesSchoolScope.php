@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Concerns;
 
+use App\Models\SchoolDetail;
 use App\Models\SdsUser;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,17 @@ trait AppliesSchoolScope
 
     protected function isAdministrator(?SdsUser $user): bool
     {
-        return (int) ($user?->role_id ?? 0) === 1;
+        if ($user === null) {
+            return false;
+        }
+
+        if ((int) ($user->role_id ?? 0) === 1) {
+            return true;
+        }
+
+        $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
+
+        return in_array($roleName, ['admin', 'administrator'], true);
     }
 
     protected function resolveUserCensusId(?SdsUser $user): ?int
@@ -37,9 +48,10 @@ trait AppliesSchoolScope
             return null;
         }
 
-        if (Schema::hasTable('school_details_tbl')) {
-            $query = DB::table('school_details_tbl')->where('user_id', $userId);
-            if (Schema::hasColumn('school_details_tbl', 'is_deleted')) {
+        $schoolTable = (new SchoolDetail())->getTable();
+        if (Schema::hasTable($schoolTable) && Schema::hasColumn($schoolTable, 'user_id')) {
+            $query = SchoolDetail::query()->where('user_id', $userId);
+            if (Schema::hasColumn($schoolTable, 'is_deleted')) {
                 $query->where('is_deleted', 0);
             }
 
@@ -64,6 +76,73 @@ trait AppliesSchoolScope
         return null;
     }
 
+    protected function hasRequestedSchoolContext(): bool
+    {
+        $request = request();
+        $headerValue = trim((string) ($request->header('X-School-Census-Id') ?? ''));
+        if ($headerValue !== '') {
+            return true;
+        }
+
+        return trim((string) ($request->query('school_census_id') ?? '')) !== '';
+    }
+
+    protected function resolveRequestedSchoolCensusId(?SdsUser $user): ?int
+    {
+        if (!$this->isAdministrator($user)) {
+            return null;
+        }
+
+        $request = request();
+        $rawValue = $request->header('X-School-Census-Id');
+        if ($rawValue === null || trim((string) $rawValue) === '') {
+            $rawValue = $request->query('school_census_id');
+        }
+
+        if ($rawValue === null || trim((string) $rawValue) === '') {
+            return null;
+        }
+
+        if (!is_numeric($rawValue)) {
+            return null;
+        }
+
+        $censusId = (int) $rawValue;
+        if ($censusId <= 0) {
+            return null;
+        }
+
+        if (!$this->schoolExists($censusId)) {
+            return null;
+        }
+
+        return $censusId;
+    }
+
+    protected function resolveEffectiveSchoolCensusId(?SdsUser $user): ?int
+    {
+        if ($this->isAdministrator($user)) {
+            return $this->resolveRequestedSchoolCensusId($user);
+        }
+
+        return $this->resolveUserCensusId($user);
+    }
+
+    protected function schoolExists(int $censusId): bool
+    {
+        $schoolTable = (new SchoolDetail())->getTable();
+        if ($censusId <= 0 || !Schema::hasTable($schoolTable)) {
+            return false;
+        }
+
+        $query = SchoolDetail::query()->where('census_id', $censusId);
+        if (Schema::hasColumn($schoolTable, 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        return $query->exists();
+    }
+
     /**
      * @param  array<int, string>  $columns
      */
@@ -78,17 +157,22 @@ trait AppliesSchoolScope
 
     protected function applySchoolScope(Builder $query, ?SdsUser $user, ?string $alias, ?string $schoolColumn): void
     {
-        if ($this->isAdministrator($user)) {
-            return;
-        }
-
         if ($schoolColumn === null) {
             $query->whereRaw('1 = 0');
             return;
         }
 
-        $censusId = $this->resolveUserCensusId($user);
+        $isAdmin = $this->isAdministrator($user);
+        $censusId = $this->resolveEffectiveSchoolCensusId($user);
+
         if ($censusId === null) {
+            if ($isAdmin) {
+                if ($this->hasRequestedSchoolContext()) {
+                    $query->whereRaw('1 = 0');
+                }
+                return;
+            }
+
             $query->whereRaw('1 = 0');
             return;
         }
@@ -97,3 +181,8 @@ trait AppliesSchoolScope
         $query->where($qualified, $censusId);
     }
 }
+
+
+
+
+
