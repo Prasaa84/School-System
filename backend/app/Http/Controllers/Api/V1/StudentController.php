@@ -65,44 +65,45 @@ class StudentController extends Controller
         $students = $studentsQuery->paginate($perPage);
         $items = collect($students->items());
 
-        $indexNumbers = $items
-            ->pluck('index_no')
-            ->filter(fn ($value): bool => $value !== null && $value !== '')
+        $studentIds = $items
+            ->pluck('std_id')
+            ->filter(fn ($value): bool => is_numeric($value))
+            ->map(fn ($value): int => (int) $value)
             ->values()
             ->all();
 
         $currentGradeClasses = collect();
 
-        if (!empty($indexNumbers)) {
-            $latestYearSubquery = DB::table('student_grade_class_tbl as sgc_latest')
-                ->selectRaw('sgc_latest.index_no, MAX(sgc_latest.year) as latest_year')
-                ->where('sgc_latest.is_deleted', 0)
-                ->groupBy('sgc_latest.index_no');
-
-            $currentGradeClasses = DB::table('student_grade_class_tbl as sgc')
-                ->joinSub($latestYearSubquery, 'latest', function ($join): void {
-                    $join
-                        ->on('sgc.index_no', '=', 'latest.index_no')
-                        ->on('sgc.year', '=', 'latest.latest_year');
+        if (!empty($studentIds) && Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
+            $gradeClassRows = DB::table('student_grade_class_tbl as sgc')
+                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+                ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+                ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+                ->whereIn('sgc.std_id', $studentIds)
+                ->when(Schema::hasColumn('student_grade_class_tbl', 'is_deleted'), function ($query): void {
+                    $query->where('sgc.is_deleted', 0);
                 })
-                ->leftJoin('grade_tbl as gt', 'sgc.grade_id', '=', 'gt.grade_id')
-                ->leftJoin('class_tbl as ct', 'sgc.class_id', '=', 'ct.class_id')
-                ->whereIn('sgc.index_no', $indexNumbers)
-                ->where('sgc.is_deleted', 0)
+                ->when(Schema::hasColumn('school_grade_class_tbl', 'is_deleted'), function ($query): void {
+                    $query->where('sgct.is_deleted', 0);
+                })
                 ->select([
-                    'sgc.index_no',
-                    'sgc.year',
+                    'sgc.std_id',
+                    'sgc.st_gr_cl_id',
+                    'sgct.year',
                     'gt.grade',
                     'ct.class',
                 ])
-                ->orderBy('sgc.index_no')
-                ->get()
-                ->keyBy(fn ($row) => (string) $row->index_no);
+                ->orderByDesc('sgct.year')
+                ->orderByDesc('sgc.st_gr_cl_id')
+                ->get();
+
+            $currentGradeClasses = $gradeClassRows
+                ->unique(fn ($row): int => (int) ($row->std_id ?? 0))
+                ->keyBy(fn ($row): int => (int) ($row->std_id ?? 0));
         }
 
         $data = $items->map(function ($student) use ($currentGradeClasses): array {
-            $indexKey = (string) $student->index_no;
-            $gradeClass = $currentGradeClasses->get($indexKey);
+            $gradeClass = $currentGradeClasses->get((int) ($student->std_id ?? 0));
 
             $gradeClassLabel = 'N/A';
             $currentYear = null;
@@ -235,6 +236,7 @@ class StudentController extends Controller
 
         $gradeId = is_numeric($validated['grade_id'] ?? null) ? (int) $validated['grade_id'] : null;
         $classId = is_numeric($validated['class_id'] ?? null) ? (int) $validated['class_id'] : null;
+        $year = is_numeric($validated['year'] ?? null) ? (int) $validated['year'] : null;
 
         if ($gradeId !== null && $classId !== null) {
             $gradeStreamId = DB::table('grade_tbl')->where('grade_id', $gradeId)->value('stream_id');
@@ -247,13 +249,39 @@ class StudentController extends Controller
             }
         }
 
+        $hasAnyAssignment = $gradeId !== null || $classId !== null || $year !== null;
+        $hasCompleteAssignment = $gradeId !== null && $classId !== null && $year !== null;
+        if ($hasAnyAssignment && !$hasCompleteAssignment) {
+            $errors = [];
+            if ($gradeId === null || $classId === null) {
+                $message = __('messages.students.validation.grade_class_required');
+                $errors['grade_id'] = [$message];
+                $errors['class_id'] = [$message];
+            }
+            if ($year === null) {
+                $errors['year'] = [__('messages.students.validation.year_invalid')];
+            }
+
+            return $this->invalidStudentAssignmentResponse($errors);
+        }
+
+        $schoolGradeClassId = null;
+        if ($hasCompleteAssignment) {
+            $schoolGradeClassId = $this->resolveSchoolGradeClassId($gradeId, $classId, $year, (string) $censusId);
+            if ($schoolGradeClassId === null) {
+                return response()->json([
+                    'message' => __('messages.students.grade_class_mismatch'),
+                ], 422);
+            }
+        }
+
         try {
             Log::info('Student store transaction begin.', [
                 'index_no' => $indexNo,
                 'census_id' => $censusId,
             ]);
 
-            DB::transaction(function () use ($validated, $indexNo, $censusId, $gradeId, $classId): void {
+            DB::transaction(function () use ($validated, $indexNo, $censusId, $schoolGradeClassId): void {
                 $now = now();
 
                 $studentData = [
@@ -278,29 +306,25 @@ class StudentController extends Controller
                     'is_deleted' => 0,
                 ];
 
-                DB::table('student_tbl')->insert($studentData);
+                $studentId = (int) DB::table('student_tbl')->insertGetId($studentData);
                 Log::info('Student store: student_tbl inserted.', [
+                    'std_id' => $studentId,
                     'index_no' => $indexNo,
                     'census_id' => $censusId,
                 ]);
 
-                if ($gradeId !== null && $classId !== null) {
+                if ($schoolGradeClassId !== null && Schema::hasTable('student_grade_class_tbl')) {
                     DB::table('student_grade_class_tbl')->insert([
-                        'index_no' => $indexNo,
-                        'grade_id' => $gradeId,
-                        'class_id' => $classId,
-                        'year' => (int) $validated['year'],
-                        'census_id' => $censusId,
+                        'std_id' => $studentId,
+                        'sch_grd_cls_id' => $schoolGradeClassId,
                         'date_added' => $now,
                         'date_updated' => $now,
                         'is_deleted' => 0,
                     ]);
 
                     Log::info('Student store: student_grade_class_tbl inserted.', [
-                        'index_no' => $indexNo,
-                        'census_id' => $censusId,
-                        'grade_id' => $gradeId,
-                        'class_id' => $classId,
+                        'std_id' => $studentId,
+                        'sch_grd_cls_id' => $schoolGradeClassId,
                     ]);
                 }
 
@@ -361,6 +385,7 @@ class StudentController extends Controller
             ], 500);
         }
     }
+
     public function show(int $studentId): JsonResponse
     {
         $user = $this->authUser();
@@ -383,17 +408,19 @@ class StudentController extends Controller
         }
 
         $gradeClass = null;
-        if (Schema::hasTable('student_grade_class_tbl')) {
+        if (Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
             $gradeClassQuery = DB::table('student_grade_class_tbl as sgc')
-                ->select(['sgc.grade_id', 'sgc.class_id', 'sgc.year'])
-                ->where('sgc.index_no', (string) $student->index_no)
-                ->orderByDesc('sgc.year');
+                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+                ->select(['sgct.grade_id', 'sgct.class_id', 'sgct.year', 'sgc.st_gr_cl_id'])
+                ->where('sgc.std_id', $studentId)
+                ->orderByDesc('sgct.year')
+                ->orderByDesc('sgc.st_gr_cl_id');
 
             if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
                 $gradeClassQuery->where('sgc.is_deleted', 0);
             }
-            if (Schema::hasColumn('student_grade_class_tbl', 'census_id')) {
-                $gradeClassQuery->where('sgc.census_id', $censusId);
+            if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+                $gradeClassQuery->where('sgct.is_deleted', 0);
             }
 
             $gradeClass = $gradeClassQuery->first();
@@ -458,6 +485,7 @@ class StudentController extends Controller
             ],
         ]);
     }
+
     public function update(StudentStoreRequest $request, int $studentId): JsonResponse
     {
         $user = $this->authUser();
@@ -506,6 +534,7 @@ class StudentController extends Controller
 
         $gradeId = is_numeric($validated['grade_id'] ?? null) ? (int) $validated['grade_id'] : null;
         $classId = is_numeric($validated['class_id'] ?? null) ? (int) $validated['class_id'] : null;
+        $year = is_numeric($validated['year'] ?? null) ? (int) $validated['year'] : null;
 
         if ($gradeId !== null && $classId !== null) {
             $gradeStreamId = DB::table('grade_tbl')->where('grade_id', $gradeId)->value('stream_id');
@@ -518,8 +547,34 @@ class StudentController extends Controller
             }
         }
 
+        $hasAnyAssignment = $gradeId !== null || $classId !== null || $year !== null;
+        $hasCompleteAssignment = $gradeId !== null && $classId !== null && $year !== null;
+        if ($hasAnyAssignment && !$hasCompleteAssignment) {
+            $errors = [];
+            if ($gradeId === null || $classId === null) {
+                $message = __('messages.students.validation.grade_class_required');
+                $errors['grade_id'] = [$message];
+                $errors['class_id'] = [$message];
+            }
+            if ($year === null) {
+                $errors['year'] = [__('messages.students.validation.year_invalid')];
+            }
+
+            return $this->invalidStudentAssignmentResponse($errors);
+        }
+
+        $schoolGradeClassId = null;
+        if ($hasCompleteAssignment) {
+            $schoolGradeClassId = $this->resolveSchoolGradeClassId($gradeId, $classId, $year, (string) $censusId);
+            if ($schoolGradeClassId === null) {
+                return response()->json([
+                    'message' => __('messages.students.grade_class_mismatch'),
+                ], 422);
+            }
+        }
+
         try {
-            DB::transaction(function () use ($studentId, $student, $validated, $indexNo, $originalCensusId, $censusId, $gradeId, $classId): void {
+            DB::transaction(function () use ($studentId, $student, $validated, $indexNo, $originalCensusId, $censusId, $hasCompleteAssignment, $schoolGradeClassId): void {
                 $now = now();
                 $oldIndexNo = (string) ($student->index_no ?? '');
 
@@ -542,72 +597,75 @@ class StudentController extends Controller
                     'date_updated' => $now,
                 ]);
 
-                if ($originalCensusId !== $censusId) {
-                    foreach (['student_grade_class_tbl', 'guardian_tbl'] as $table) {
-                        if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'index_no') || !Schema::hasColumn($table, 'census_id')) {
-                            continue;
+                if (Schema::hasTable('student_grade_class_tbl') && $originalCensusId !== $censusId) {
+                    $assignmentQuery = DB::table('student_grade_class_tbl')->where('std_id', $studentId);
+                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                        $assignmentUpdates = ['is_deleted' => 1];
+                        if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+                            $assignmentUpdates['date_updated'] = $now;
                         }
+                        $assignmentQuery->where('is_deleted', 0)->update($assignmentUpdates);
+                    } else {
+                        $assignmentQuery->delete();
+                    }
+                }
 
+                if ($hasCompleteAssignment && $schoolGradeClassId !== null && Schema::hasTable('student_grade_class_tbl')) {
+                    $assignmentQuery = DB::table('student_grade_class_tbl')->where('std_id', $studentId);
+                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                        $assignmentUpdates = ['is_deleted' => 1];
+                        if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+                            $assignmentUpdates['date_updated'] = $now;
+                        }
+                        $assignmentQuery->where('is_deleted', 0)->update($assignmentUpdates);
+                    } else {
+                        $assignmentQuery->delete();
+                    }
+
+                    $insert = [
+                        'std_id' => $studentId,
+                        'sch_grd_cls_id' => $schoolGradeClassId,
+                    ];
+                    if (Schema::hasColumn('student_grade_class_tbl', 'date_added')) {
+                        $insert['date_added'] = $now;
+                    }
+                    if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+                        $insert['date_updated'] = $now;
+                    }
+                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                        $insert['is_deleted'] = 0;
+                    }
+
+                    DB::table('student_grade_class_tbl')->insert($insert);
+                }
+
+                if (Schema::hasTable('guardian_tbl')) {
+                    if ($originalCensusId !== $censusId && Schema::hasColumn('guardian_tbl', 'census_id')) {
                         $updates = ['census_id' => $censusId];
-                        if (Schema::hasColumn($table, 'date_updated')) {
+                        if (Schema::hasColumn('guardian_tbl', 'date_updated')) {
                             $updates['date_updated'] = $now;
                         }
 
-                        DB::table($table)
+                        DB::table('guardian_tbl')
                             ->where('index_no', $oldIndexNo)
                             ->where('census_id', $originalCensusId)
                             ->update($updates);
                     }
-                }
 
-                if ($oldIndexNo !== '' && $oldIndexNo !== $indexNo) {
-                    foreach (['student_grade_class_tbl', 'guardian_tbl'] as $table) {
-                        if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'index_no')) {
-                            continue;
-                        }
-
-                        $query = DB::table($table)->where('index_no', $oldIndexNo);
-                        if (Schema::hasColumn($table, 'census_id')) {
+                    if ($oldIndexNo !== '' && $oldIndexNo !== $indexNo) {
+                        $query = DB::table('guardian_tbl')->where('index_no', $oldIndexNo);
+                        if (Schema::hasColumn('guardian_tbl', 'census_id')) {
                             $query->where('census_id', $censusId);
                         }
 
                         $updates = ['index_no' => $indexNo];
-                        if (Schema::hasColumn($table, 'date_updated')) {
+                        if (Schema::hasColumn('guardian_tbl', 'date_updated')) {
                             $updates['date_updated'] = $now;
                         }
 
                         $query->update($updates);
                     }
-                }
 
-                if ($gradeId !== null && $classId !== null && Schema::hasTable('student_grade_class_tbl')) {
-                    $year = (int) $validated['year'];
-                    $base = ['index_no' => $indexNo, 'year' => $year];
-                    if (Schema::hasColumn('student_grade_class_tbl', 'census_id')) {
-                        $base['census_id'] = $censusId;
-                    }
-
-                    $updates = ['grade_id' => $gradeId, 'class_id' => $classId];
-                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
-                        $updates['is_deleted'] = 0;
-                    }
-                    if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
-                        $updates['date_updated'] = $now;
-                    }
-
-                    $exists = DB::table('student_grade_class_tbl')->where($base)->exists();
-                    if ($exists) {
-                        DB::table('student_grade_class_tbl')->where($base)->update($updates);
-                    } else {
-                        $insert = array_merge($base, $updates);
-                        if (Schema::hasColumn('student_grade_class_tbl', 'date_added')) {
-                            $insert['date_added'] = $now;
-                        }
-                        DB::table('student_grade_class_tbl')->insert($insert);
-                    }
-                }
-
-                if (Schema::hasTable('guardian_tbl')) {
                     $guardianBase = ['index_no' => $indexNo];
                     if (Schema::hasColumn('guardian_tbl', 'census_id')) {
                         $guardianBase['census_id'] = $censusId;
@@ -669,6 +727,7 @@ class StudentController extends Controller
             ], 500);
         }
     }
+
     public function destroy(int $studentId): JsonResponse
     {
         $user = $this->authUser();
@@ -706,19 +765,28 @@ class StudentController extends Controller
                     DB::table('student_tbl')->where('std_id', $studentId)->delete();
                 }
 
-                foreach (['student_grade_class_tbl', 'guardian_tbl'] as $table) {
-                    if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'index_no')) {
-                        continue;
+                if (Schema::hasTable('student_grade_class_tbl')) {
+                    $query = DB::table('student_grade_class_tbl')->where('std_id', $studentId);
+                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                        $updates = ['is_deleted' => 1];
+                        if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+                            $updates['date_updated'] = $now;
+                        }
+                        $query->update($updates);
+                    } else {
+                        $query->delete();
                     }
+                }
 
-                    $query = DB::table($table)->where('index_no', $indexNo);
-                    if (Schema::hasColumn($table, 'census_id')) {
+                if (Schema::hasTable('guardian_tbl')) {
+                    $query = DB::table('guardian_tbl')->where('index_no', $indexNo);
+                    if (Schema::hasColumn('guardian_tbl', 'census_id')) {
                         $query->where('census_id', $censusId);
                     }
 
-                    if (Schema::hasColumn($table, 'is_deleted')) {
+                    if (Schema::hasColumn('guardian_tbl', 'is_deleted')) {
                         $updates = ['is_deleted' => 1];
-                        if (Schema::hasColumn($table, 'date_updated')) {
+                        if (Schema::hasColumn('guardian_tbl', 'date_updated')) {
                             $updates['date_updated'] = $now;
                         }
                         $query->update($updates);
@@ -745,6 +813,7 @@ class StudentController extends Controller
             ], 500);
         }
     }
+
     private function canManageStudentActions(?SdsUser $user): bool
     {
         if ($user === null) {
@@ -784,14 +853,58 @@ class StudentController extends Controller
 
         return $query->first();
     }
+
+    private function resolveSchoolGradeClassId(int $gradeId, int $classId, int $year, string $censusId): ?int
+    {
+        if (!Schema::hasTable('school_grade_class_tbl')) {
+            return null;
+        }
+
+        $query = DB::table('school_grade_class_tbl')
+            ->where('grade_id', $gradeId)
+            ->where('class_id', $classId)
+            ->where('year', $year)
+            ->whereIn('census_id', $this->censusCandidates($censusId));
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        $schoolGradeClassId = $query
+            ->orderByDesc('sch_grd_cls_id')
+            ->value('sch_grd_cls_id');
+
+        return is_numeric($schoolGradeClassId) ? (int) $schoolGradeClassId : null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function censusCandidates(string $censusId): array
+    {
+        $raw = trim($censusId);
+        $candidates = collect([$raw])->filter(fn ($value): bool => $value !== '');
+
+        if (is_numeric($raw)) {
+            $asNumber = (string) ((int) $raw);
+            $candidates
+                ->push($asNumber)
+                ->push(str_pad($asNumber, 5, '0', STR_PAD_LEFT))
+                ->push(str_pad($asNumber, 7, '0', STR_PAD_LEFT));
+        }
+
+        return $candidates->unique()->values()->all();
+    }
+
+    /**
+     * @param  array<string, array<int, string>>  $errors
+     */
+    private function invalidStudentAssignmentResponse(array $errors): JsonResponse
+    {
+        return response()->json([
+            'message' => __('messages.request.validation_failed'),
+            'errors' => $errors,
+        ], 422);
+    }
 }
-
-
-
-
-
-
-
-
-
 

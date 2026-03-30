@@ -36,7 +36,7 @@ class StudentStoreRequest extends FormRequest
             'religion_id' => ['nullable', 'integer'],
             'grade_id' => ['nullable', 'integer', 'exists:grade_tbl,grade_id'],
             'class_id' => ['nullable', 'integer', 'exists:class_tbl,class_id'],
-            'year' => ['required', 'integer', 'between:2000,2100'],
+            'year' => ['nullable', 'integer', 'between:2000,2100'],
             'census_id' => ['nullable', 'integer'],
             'father_name' => ['nullable', 'string', 'max:255'],
             'father_job' => ['nullable', 'string', 'max:255'],
@@ -95,8 +95,3 @@ class StudentStoreRequest extends FormRequest
         throw new HttpResponseException($response);
     }
 }
-
-
-
-
-

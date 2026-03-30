@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SchoolGradeClass extends Model
 {
@@ -11,4 +12,9 @@ class SchoolGradeClass extends Model
     public $timestamps = false;
 
     protected $guarded = [];
+
+    public function studentAssignments(): HasMany
+    {
+        return $this->hasMany(StudentGradeClass::class, 'sch_grd_cls_id', 'sch_grd_cls_id');
+    }
 }

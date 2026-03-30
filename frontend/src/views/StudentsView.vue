@@ -1,8 +1,8 @@
 <template>
   <div class="space-y-5">
     <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p class="font-brand text-xs uppercase tracking-[0.2em] text-slate-500">Students Module</p>
-      <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">Students</h1>
+      <p class="font-brand text-xs uppercase tracking-[0.2em] text-slate-500">{{ text.studentsModule }}</p>
+      <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ text.studentsTitle }}</h1>
     </header>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -10,7 +10,7 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Search by admission number or name"
+          :placeholder="text.searchPlaceholder"
           :class="[
             'w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none ring-cyan-500 focus:ring-2',
             isAdmin ? 'md:max-w-xs lg:max-w-sm' : 'md:max-w-md',
@@ -24,14 +24,14 @@
             class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2"
             @change="onAdminSchoolContextChange"
           >
-            <option :value="0">All schools</option>
+            <option :value="0">{{ text.allSchools }}</option>
             <option v-for="row in schools" :key="row.id" :value="row.id">{{ row.label }}</option>
           </select>
           <button class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700" @click="loadStudents(1)">
-            Search
+            {{ text.search }}
           </button>
           <button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddDialog">
-            Add Student
+            {{ text.addStudent }}
           </button>
         </div>
       </div>
@@ -44,20 +44,20 @@
         <table class="min-w-full divide-y divide-slate-200 text-sm">
           <thead class="bg-slate-50">
             <tr>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">Adm No</th>
-              <th v-if="isAdmin" class="px-3 py-2 text-left font-semibold text-slate-600">School</th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">Name with Initials</th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">Grade/Class</th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">Phone</th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">DOB</th>
-              <th v-if="showActionColumn" class="px-3 py-2 text-left font-semibold text-slate-600">Actions</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.admissionNoShort }}</th>
+              <th v-if="isAdmin" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.school }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.nameWithInitials }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gradeClass }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.phone }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.dob }}</th>
+              <th v-if="showActionColumn" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.actions }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-for="student in students" :key="student.std_id" class="hover:bg-slate-50">
               <td class="px-3 py-2 font-medium text-slate-800">{{ student.index_no }}</td>
               <td v-if="isAdmin" class="px-3 py-2 text-slate-700">
-                <span :title="'Census ID: ' + (student.census_id ?? 'N/A')">{{ student.school_name || '-' }}</span>
+                <span :title="censusTooltip(student.census_id)">{{ student.school_name || '-' }}</span>
               </td>
               <td class="px-3 py-2 text-slate-700">{{ student.name_with_initials }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.grade_class }}</td>
@@ -71,7 +71,7 @@
                     :disabled="loadingEditStudentId === student.std_id || deletingStudentId === student.std_id"
                     @click="openEditDialog(student)"
                   >
-                    {{ 'Edit' }}
+                    {{ text.edit }}
                   </button>
                   <button
                     v-if="student.can_delete || canManageStudents"
@@ -79,35 +79,35 @@
                     :disabled="deletingStudentId === student.std_id || loadingEditStudentId === student.std_id"
                     @click="deleteStudent(student)"
                   >
-                    {{ deletingStudentId === student.std_id ? 'Deleting...' : 'Delete' }}
+                    {{ deletingStudentId === student.std_id ? text.deleting : text.delete }}
                   </button>
                 </div>
               </td>
             </tr>
             <tr v-if="!loading && students.length === 0">
-              <td :colspan="5 + (isAdmin ? 1 : 0) + (showActionColumn ? 1 : 0)" class="px-3 py-6 text-center text-slate-500">No students found.</td>
+              <td :colspan="5 + (isAdmin ? 1 : 0) + (showActionColumn ? 1 : 0)" class="px-3 py-6 text-center text-slate-500">{{ text.noStudentsFound }}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <div class="mt-4 flex items-center justify-between text-sm text-slate-600">
-        <p>Total: {{ meta.total }}</p>
+        <p>{{ text.total }}: {{ meta.total }}</p>
         <div class="flex flex-wrap items-center gap-2 md:justify-end">
           <button
             class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="meta.current_page <= 1 || loading"
             @click="loadStudents(meta.current_page - 1)"
           >
-            Prev
+            {{ text.prev }}
           </button>
-          <span>Page {{ meta.current_page }} / {{ meta.last_page }}</span>
+          <span>{{ text.page }} {{ meta.current_page }} / {{ meta.last_page }}</span>
           <button
             class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="meta.current_page >= meta.last_page || loading"
             @click="loadStudents(meta.current_page + 1)"
           >
-            Next
+            {{ text.next }}
           </button>
         </div>
       </div>
@@ -120,8 +120,8 @@
     <div v-if="showAddDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeAddDialog">
       <section class="max-h-[90vh] w-full max-w-6xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-display text-xl font-bold text-slate-900">{{ isEditMode ? 'Edit Student (Manual)' : 'Add Student (Manual)' }}</h2>
-          <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" @click="closeAddDialog">Close</button>
+          <h2 class="font-display text-xl font-bold text-slate-900">{{ isEditMode ? text.editStudentManual : text.addStudentManual }}</h2>
+          <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" @click="closeAddDialog">{{ text.close }}</button>
         </div>
 
         <p
@@ -135,74 +135,74 @@
 
         <form class="grid gap-4 md:grid-cols-3" @submit.prevent="submitAddStudent">
           <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Core Details</legend>
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.coreDetails }}</legend>
             <div class="grid gap-3 md:grid-cols-3">
               <label class="text-sm text-slate-700">
-                Admission No *
-                <input v-model="createForm.index_no" type="text" :class="inputClass('index_no')" placeholder="e.g. 1234" required />
+                {{ text.admissionNo }} <span class="text-red-600">*</span>
+                <input v-model="createForm.index_no" type="text" :class="inputClass('index_no')" :placeholder="text.admissionNoExample" required />
                 <p v-if="fieldErrors.index_no" class="mt-1 text-xs text-red-600">{{ fieldErrors.index_no }}</p>
               </label>
 
               <label class="text-sm text-slate-700 md:col-span-2">
-                Full Name *
+                {{ text.fullName }} <span class="text-red-600">*</span>
                 <input v-model="createForm.full_name" type="text" :class="inputClass('full_name')" required />
                 <p v-if="fieldErrors.full_name" class="mt-1 text-xs text-red-600">{{ fieldErrors.full_name }}</p>
               </label>
 
               <label class="text-sm text-slate-700 md:col-span-2">
-                Name with Initials *
+                {{ text.nameWithInitials }} <span class="text-red-600">*</span>
                 <input v-model="createForm.name_with_initials" type="text" :class="inputClass('name_with_initials')" required />
                 <p v-if="fieldErrors.name_with_initials" class="mt-1 text-xs text-red-600">{{ fieldErrors.name_with_initials }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Gender *
+                {{ text.gender }} <span class="text-red-600">*</span>
                 <select v-model.number="createForm.gender_id" :class="inputClass('gender_id')" required>
-                  <option :value="0" disabled>Select gender</option>
-                  <option :value="2">Female</option>
-                  <option :value="1">Male</option>
+                  <option :value="0" disabled>{{ text.selectGender }}</option>
+                  <option :value="2">{{ text.female }}</option>
+                  <option :value="1">{{ text.male }}</option>
                 </select>
                 <p v-if="fieldErrors.gender_id" class="mt-1 text-xs text-red-600">{{ fieldErrors.gender_id }}</p>
               </label>
 
               <label v-if="isAdmin" class="text-sm text-slate-700">
-                School *
+                {{ text.school }} <span class="text-red-600">*</span>
                 <select v-model.number="createForm.census_id" :class="inputClass('census_id')" required>
-                  <option :value="0" disabled>Select school</option>
+                  <option :value="0" disabled>{{ text.selectSchool }}</option>
                   <option v-for="row in schools" :key="row.id" :value="row.id">{{ row.label }}</option>
                 </select>
                 <p v-if="fieldErrors.census_id" class="mt-1 text-xs text-red-600">{{ fieldErrors.census_id }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Admission Date
+                {{ text.admissionDate }}
                 <input v-model="createForm.d_o_admission" type="date" :class="inputClass('d_o_admission')" />
                 <p v-if="fieldErrors.d_o_admission" class="mt-1 text-xs text-red-600">{{ fieldErrors.d_o_admission }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Academic Year *
-                <select v-model.number="createForm.year" :class="inputClass('year')" :disabled="!isAdminSchoolSelected" required>
-                  <option :value="0" disabled>Select academic year</option>
+                {{ text.academicYear }}
+                <select v-model.number="createForm.year" :class="inputClass('year')" :disabled="!isAdminSchoolSelected">
+                  <option :value="0">{{ text.selectAcademicYear }}</option>
                   <option v-for="year in academicYears" :key="year" :value="year">{{ year }}</option>
                 </select>
                 <p v-if="fieldErrors.year" class="mt-1 text-xs text-red-600">{{ fieldErrors.year }}</p>
-                <p v-else-if="isAdmin && !isAdminSchoolSelected" class="mt-1 text-xs text-slate-500">Select school first.</p>
+                <p v-else-if="isAdmin && !isAdminSchoolSelected" class="mt-1 text-xs text-slate-500">{{ text.selectSchoolFirst }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Grade
+                {{ text.grade }}
                 <select v-model.number="createForm.grade_id" :class="inputClass('grade_id')" :disabled="!isAdminSchoolSelected || createForm.year <= 0">
-                  <option :value="0">Select grade</option>
+                  <option :value="0">{{ text.selectGrade }}</option>
                   <option v-for="grade in grades" :key="grade.grade_id" :value="grade.grade_id">{{ grade.grade }}</option>
                 </select>
                 <p v-if="fieldErrors.grade_id" class="mt-1 text-xs text-red-600">{{ fieldErrors.grade_id }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Class
+                {{ text.classLabel }}
                 <select v-model.number="createForm.class_id" :class="inputClass('class_id')" :disabled="!isAdminSchoolSelected || createForm.year <= 0 || createForm.grade_id <= 0">
-                  <option :value="0">Select class</option>
+                  <option :value="0">{{ text.selectClass }}</option>
                   <option v-for="row in classes" :key="row.class_id" :value="row.class_id">{{ row.class }}</option>
                 </select>
                 <p v-if="fieldErrors.class_id" class="mt-1 text-xs text-red-600">{{ fieldErrors.class_id }}</p>
@@ -211,40 +211,40 @@
           </fieldset>
 
           <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Contact & Address (Optional)</legend>
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.contactAddressOptional }}</legend>
             <div class="grid gap-3 md:grid-cols-3">
               <label class="text-sm text-slate-700">
-                Mobile
+                {{ text.mobile }}
                 <input v-model="createForm.phone_no" type="text" :class="inputClass('phone_no')" />
                 <p v-if="fieldErrors.phone_no" class="mt-1 text-xs text-red-600">{{ fieldErrors.phone_no }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                WhatsApp
+                {{ text.whatsapp }}
                 <input v-model="createForm.whatsapp_no" type="text" :class="inputClass('whatsapp_no')" />
                 <p v-if="fieldErrors.whatsapp_no" class="mt-1 text-xs text-red-600">{{ fieldErrors.whatsapp_no }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Home Phone
+                {{ text.homePhone }}
                 <input v-model="createForm.phone_home" type="text" :class="inputClass('phone_home')" />
                 <p v-if="fieldErrors.phone_home" class="mt-1 text-xs text-red-600">{{ fieldErrors.phone_home }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Address Line 1
+                {{ text.addressLine1 }}
                 <input v-model="createForm.address1" type="text" :class="inputClass('address1')" />
                 <p v-if="fieldErrors.address1" class="mt-1 text-xs text-red-600">{{ fieldErrors.address1 }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Address Line 2
+                {{ text.addressLine2 }}
                 <input v-model="createForm.address2" type="text" :class="inputClass('address2')" />
                 <p v-if="fieldErrors.address2" class="mt-1 text-xs text-red-600">{{ fieldErrors.address2 }}</p>
               </label>
 
               <label class="text-sm text-slate-700">
-                Email
+                {{ text.email }}
                 <input v-model="createForm.email" type="email" :class="inputClass('email')" />
                 <p v-if="fieldErrors.email" class="mt-1 text-xs text-red-600">{{ fieldErrors.email }}</p>
               </label>
@@ -252,26 +252,26 @@
           </fieldset>
 
           <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Demographics (Optional)</legend>
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.demographicsOptional }}</legend>
             <div class="grid gap-3 md:grid-cols-3">
               <label class="text-sm text-slate-700">
-                Ethnic Group
+                {{ text.ethnicGroup }}
                 <select v-model.number="createForm.ethnic_group_id" :class="inputClass('ethnic_group_id')">
-                  <option :value="0">Select ethnic group</option>
+                  <option :value="0">{{ text.selectEthnicGroup }}</option>
                   <option v-for="row in ethnicGroups" :key="row.id" :value="row.id">{{ row.label }}</option>
                 </select>
               </label>
 
               <label class="text-sm text-slate-700">
-                Religion
+                {{ text.religion }}
                 <select v-model.number="createForm.religion_id" :class="inputClass('religion_id')">
-                  <option :value="0">Select religion</option>
+                  <option :value="0">{{ text.selectReligion }}</option>
                   <option v-for="row in religions" :key="row.id" :value="row.id">{{ row.label }}</option>
                 </select>
               </label>
 
               <label class="text-sm text-slate-700">
-                DOB
+                {{ text.dob }}
                 <input v-model="createForm.dob" type="date" :class="inputClass('dob')" />
                 <p v-if="fieldErrors.dob" class="mt-1 text-xs text-red-600">{{ fieldErrors.dob }}</p>
               </label>
@@ -279,50 +279,50 @@
           </fieldset>
 
           <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">Parents / Guardian (Optional)</legend>
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.parentsGuardianOptional }}</legend>
             <div class="grid gap-3 md:grid-cols-3">
               <label class="text-sm text-slate-700">
-                Father Name
+                {{ text.fatherName }}
                 <input v-model="createForm.father_name" type="text" :class="inputClass('father_name')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Father Mobile
+                {{ text.fatherMobile }}
                 <input v-model="createForm.father_mobile" type="text" :class="inputClass('father_mobile')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Father Job
+                {{ text.fatherJob }}
                 <input v-model="createForm.father_job" type="text" :class="inputClass('father_job')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Mother Name
+                {{ text.motherName }}
                 <input v-model="createForm.mother_name" type="text" :class="inputClass('mother_name')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Mother Mobile
+                {{ text.motherMobile }}
                 <input v-model="createForm.mother_mobile" type="text" :class="inputClass('mother_mobile')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Mother Job
+                {{ text.motherJob }}
                 <input v-model="createForm.mother_job" type="text" :class="inputClass('mother_job')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Guardian Name
+                {{ text.guardianName }}
                 <input v-model="createForm.guardian_name" type="text" :class="inputClass('guardian_name')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Guardian Mobile
+                {{ text.guardianMobile }}
                 <input v-model="createForm.guardian_mobile" type="text" :class="inputClass('guardian_mobile')" />
               </label>
 
               <label class="text-sm text-slate-700">
-                Guardian Job
+                {{ text.guardianJob }}
                 <input v-model="createForm.guardian_job" type="text" :class="inputClass('guardian_job')" />
               </label>
             </div>
@@ -330,10 +330,10 @@
 
           <div class="md:col-span-3 flex justify-end gap-2">
             <button type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="closeAddDialog">
-              Cancel
+              {{ text.cancel }}
             </button>
             <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="creating">
-              {{ creating ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update Student' : 'Save Student') }}
+              {{ creating ? (isEditMode ? text.updating : text.saving) : (isEditMode ? text.updateStudent : text.saveStudent) }}
             </button>
           </div>
         </form>
@@ -346,6 +346,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import api from '../services/api'
 import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
+import { useUiStore } from '../stores/ui'
 
 interface Student {
   std_id: number
@@ -391,7 +392,7 @@ interface StudentDetail {
   religion_id: number
   grade_id: number
   class_id: number
-  year: number
+  year?: number
   father_name: string
   father_job: string
   father_mobile: string
@@ -457,7 +458,7 @@ interface CreateStudentPayload {
   census_id?: number
   grade_id?: number
   class_id?: number
-  year: number
+  year?: number
   father_name?: string
   father_job?: string
   father_mobile?: string
@@ -473,6 +474,186 @@ interface ValidationErrors {
   [key: string]: string
 }
 
+const ui = useUiStore()
+const text = computed(() => {
+  if (ui.language === 'si') {
+    return {
+      studentsModule: 'සිසුන් මොඩියුලය',
+      studentsTitle: 'සිසුන්',
+      searchPlaceholder: 'ඇතුළත් අංකය හෝ නම අනුව සොයන්න',
+      allSchools: 'සියලු පාසල්',
+      search: 'සොයන්න',
+      addStudent: 'සිසුවෙකු එක්කරන්න',
+      admissionNoShort: 'ඇතුළත් අංකය',
+      school: 'පාසල',
+      nameWithInitials: 'මුලකුරු සහිත නම',
+      gradeClass: 'ශ්‍රේණිය/පංතිය',
+      phone: 'දුරකථන',
+      dob: 'උපන්දිනය',
+      actions: 'ක්‍රියා',
+      censusId: 'සංගණන අංකය',
+      notAvailable: 'නැත',
+      edit: 'සංස්කරණය',
+      delete: 'මකන්න',
+      deleting: 'මකමින්...',
+      noStudentsFound: 'සිසුන් හමු නොවීය.',
+      total: 'එකතුව',
+      prev: 'පෙර',
+      page: 'පිටුව',
+      next: 'ඊළඟ',
+      editStudentManual: 'සිසුවා සංස්කරණය (අතින්)',
+      addStudentManual: 'සිසුවා එක්කරන්න (අතින්)',
+      close: 'වසන්න',
+      coreDetails: 'මූලික තොරතුරු',
+      admissionNo: 'ඇතුළත් අංකය',
+      admissionNoExample: 'උදා: 1234',
+      fullName: 'සම්පූර්ණ නම',
+      gender: 'ස්ත්‍රී/පුරුෂ භාවය',
+      selectGender: 'ස්ත්‍රී/පුරුෂ භාවය තෝරන්න',
+      female: 'ගැහැණු',
+      male: 'පිරිමි',
+      selectSchool: 'පාසල තෝරන්න',
+      admissionDate: 'ඇතුළත් වූ දිනය',
+      academicYear: 'අධ්‍යයන වර්ෂය',
+      selectAcademicYear: 'අධ්‍යයන වර්ෂය තෝරන්න',
+      selectSchoolFirst: 'පළමුව පාසල තෝරන්න.',
+      grade: 'ශ්‍රේණිය',
+      classLabel: 'පංතිය',
+      selectGrade: 'ශ්‍රේණිය තෝරන්න',
+      selectClass: 'පංතිය තෝරන්න',
+      contactAddressOptional: 'සම්බන්ධතා සහ ලිපිනය (විකල්ප)',
+      mobile: 'ජංගම',
+      whatsapp: 'වට්ස්ඇප්',
+      homePhone: 'නිවසේ දුරකථන',
+      addressLine1: 'ලිපිනය 1',
+      addressLine2: 'ලිපිනය 2',
+      email: 'ඊමේල්',
+      demographicsOptional: 'ජනගහන තොරතුරු (විකල්ප)',
+      ethnicGroup: 'ජාතික කණ්ඩායම',
+      selectEthnicGroup: 'ජාතික කණ්ඩායම තෝරන්න',
+      religion: 'ආගම',
+      selectReligion: 'ආගම තෝරන්න',
+      parentsGuardianOptional: 'මව්පියන් / භාරකරු (විකල්ප)',
+      fatherName: 'පියාගේ නම',
+      fatherMobile: 'පියාගේ ජංගම',
+      fatherJob: 'පියාගේ රැකියාව',
+      motherName: 'මවගේ නම',
+      motherMobile: 'මවගේ ජංගම',
+      motherJob: 'මවගේ රැකියාව',
+      guardianName: 'භාරකරුගේ නම',
+      guardianMobile: 'භාරකරුගේ ජංගම',
+      guardianJob: 'භාරකරුගේ රැකියාව',
+      cancel: 'අවලංගු කරන්න',
+      updating: 'යාවත්කාලීන කරමින්...',
+      saving: 'සුරකිමින්...',
+      updateStudent: 'සිසුවා යාවත්කාලීන කරන්න',
+      saveStudent: 'සිසුවා සුරකින්න',
+      unableToLoadStudentDetails: 'සිසුවාගේ විස්තර පූරණය කළ නොහැකි විය.',
+      studentDeletedSuccessfully: 'සිසුවා සාර්ථකව මකා දමන ලදී.',
+      unableToDeleteStudent: 'සිසුවා මකා දැමිය නොහැකි විය.',
+      selectGradeAndClassTogether: 'ශ්‍රේණිය සහ පංතිය දෙකම තෝරන්න, නැතිනම් දෙකම හිස් තබන්න.',
+      selectSchoolForStudent: 'මෙම සිසුවා සඳහා පාසල තෝරන්න.',
+      selectSchoolShort: 'පාසල තෝරන්න.',
+      selectValidAcademicYear: 'වලංගු අධ්‍යයන වර්ෂයක් තෝරන්න.',
+      academicYearRequired: 'අධ්‍යයන වර්ෂය අනිවාර්යය.',
+      correctHighlightedFields: 'ඉස්මතු කළ ක්ෂේත්‍ර නිවැරදි කර නැවත උත්සාහ කරන්න.',
+      unableToSaveStudent: 'සිසුවා සුරැකිය නොහැකි විය. නැවත උත්සාහ කරන්න.',
+    }
+  }
+
+  return {
+    studentsModule: 'Students Module',
+    studentsTitle: 'Students',
+    searchPlaceholder: 'Search by admission number or name',
+    allSchools: 'All schools',
+    search: 'Search',
+    addStudent: 'Add Student',
+    admissionNoShort: 'Adm No',
+    school: 'School',
+    nameWithInitials: 'Name with Initials',
+    gradeClass: 'Grade/Class',
+    phone: 'Phone',
+    dob: 'DOB',
+    actions: 'Actions',
+    censusId: 'Census ID',
+    notAvailable: 'N/A',
+    edit: 'Edit',
+    delete: 'Delete',
+    deleting: 'Deleting...',
+    noStudentsFound: 'No students found.',
+    total: 'Total',
+    prev: 'Prev',
+    page: 'Page',
+    next: 'Next',
+    editStudentManual: 'Edit Student (Manual)',
+    addStudentManual: 'Add Student (Manual)',
+    close: 'Close',
+    coreDetails: 'Core Details',
+    admissionNo: 'Admission No',
+    admissionNoExample: 'e.g. 1234',
+    fullName: 'Full Name',
+    gender: 'Gender',
+    selectGender: 'Select gender',
+    female: 'Female',
+    male: 'Male',
+    selectSchool: 'Select school',
+    admissionDate: 'Admission Date',
+    academicYear: 'Academic Year',
+    selectAcademicYear: 'Select academic year',
+    selectSchoolFirst: 'Select school first.',
+    grade: 'Grade',
+    classLabel: 'Class',
+    selectGrade: 'Select grade',
+    selectClass: 'Select class',
+    contactAddressOptional: 'Contact & Address (Optional)',
+    mobile: 'Mobile',
+    whatsapp: 'WhatsApp',
+    homePhone: 'Home Phone',
+    addressLine1: 'Address Line 1',
+    addressLine2: 'Address Line 2',
+    email: 'Email',
+    demographicsOptional: 'Demographics (Optional)',
+    ethnicGroup: 'Ethnic Group',
+    selectEthnicGroup: 'Select ethnic group',
+    religion: 'Religion',
+    selectReligion: 'Select religion',
+    parentsGuardianOptional: 'Parents / Guardian (Optional)',
+    fatherName: 'Father Name',
+    fatherMobile: 'Father Mobile',
+    fatherJob: 'Father Job',
+    motherName: 'Mother Name',
+    motherMobile: 'Mother Mobile',
+    motherJob: 'Mother Job',
+    guardianName: 'Guardian Name',
+    guardianMobile: 'Guardian Mobile',
+    guardianJob: 'Guardian Job',
+    cancel: 'Cancel',
+    updating: 'Updating...',
+    saving: 'Saving...',
+    updateStudent: 'Update Student',
+    saveStudent: 'Save Student',
+    unableToLoadStudentDetails: 'Unable to load student details.',
+    studentDeletedSuccessfully: 'Student deleted successfully.',
+    unableToDeleteStudent: 'Unable to delete student.',
+    selectGradeAndClassTogether: 'Please select both grade and class, or leave both empty.',
+    selectSchoolForStudent: 'Please select a school for this student.',
+    selectSchoolShort: 'Please select a school.',
+    selectValidAcademicYear: 'Please select a valid academic year.',
+    academicYearRequired: 'Academic year is required.',
+    correctHighlightedFields: 'Please correct the highlighted fields and try again.',
+    unableToSaveStudent: 'Unable to save student. Please try again.',
+  }
+})
+
+const censusTooltip = (censusId: number | null | undefined): string => {
+  return `${text.value.censusId}: ${censusId ?? text.value.notAvailable}`
+}
+
+const deleteStudentConfirmText = (admissionNo: string): string => {
+  return ui.language === 'si'
+    ? `ඇතුළත් අංකය ${admissionNo} සහිත සිසුවා මකා දමන්නද?`
+    : `Delete student ${admissionNo}?`
+}
 const search = ref('')
 const loading = ref(false)
 const creating = ref(false)
@@ -704,7 +885,7 @@ const openEditDialog = async (student: Student): Promise<void> => {
     editStudentId.value = student.std_id
     showAddDialog.value = true
   } catch (error) {
-    errorMessage.value = extractApiMessage(error) || 'Unable to load student details.'
+    errorMessage.value = extractApiMessage(error) || text.value.unableToLoadStudentDetails
   } finally {
     loadingEditStudentId.value = null
   }
@@ -715,7 +896,7 @@ const deleteStudent = async (student: Student): Promise<void> => {
     return
   }
 
-  if (!window.confirm(`Delete student ${student.index_no}?`)) {
+  if (!window.confirm(deleteStudentConfirmText(student.index_no))) {
     return
   }
 
@@ -726,10 +907,10 @@ const deleteStudent = async (student: Student): Promise<void> => {
     const { data } = await api.delete(`/students/${student.std_id}`)
     createSuccessMessage.value = typeof data?.message === 'string' && data.message.trim() !== ''
       ? data.message
-      : 'Student deleted successfully.'
+      : text.value.studentDeletedSuccessfully
     await loadStudents(meta.value.current_page)
   } catch (error) {
-    errorMessage.value = extractApiMessage(error) || 'Unable to delete student.'
+    errorMessage.value = extractApiMessage(error) || text.value.unableToDeleteStudent
   } finally {
     deletingStudentId.value = null
   }
@@ -948,27 +1129,28 @@ const submitAddStudent = async (): Promise<void> => {
   const hasClass = Number(createForm.value.class_id) > 0
 
   if (hasGrade !== hasClass) {
-    createErrorMessage.value = 'Please select both grade and class, or leave both empty.'
+    createErrorMessage.value = text.value.selectGradeAndClassTogether
     fieldErrors.value = { ...fieldErrors.value, grade_id: createErrorMessage.value, class_id: createErrorMessage.value }
     await scrollToCreateErrorMessage()
     return
   }
 
   if (isAdmin.value && Number(createForm.value.census_id) <= 0) {
-    createErrorMessage.value = 'Please select a school for this student.'
-    fieldErrors.value = { ...fieldErrors.value, census_id: 'Please select a school.' }
+    createErrorMessage.value = text.value.selectSchoolForStudent
+    fieldErrors.value = { ...fieldErrors.value, census_id: text.value.selectSchoolShort }
     await scrollToCreateErrorMessage()
     return
   }
 
   const selectedYear = Number(createForm.value.year)
-  if (!Number.isFinite(selectedYear) || selectedYear < 2000 || selectedYear > 2100) {
-    createErrorMessage.value = 'Please select a valid academic year.'
-    fieldErrors.value = { ...fieldErrors.value, year: 'Academic year is required.' }
+  const hasSelectedYear = Number.isFinite(selectedYear) && selectedYear >= 2000 && selectedYear <= 2100
+
+  if (selectedYear > 0 && !hasSelectedYear) {
+    createErrorMessage.value = text.value.selectValidAcademicYear
+    fieldErrors.value = { ...fieldErrors.value, year: text.value.academicYearRequired }
     await scrollToCreateErrorMessage()
     return
   }
-
   creating.value = true
 
   const payload: CreateStudentPayload = {
@@ -990,7 +1172,7 @@ const submitAddStudent = async (): Promise<void> => {
   if (isAdmin.value && Number(createForm.value.census_id) > 0) payload.census_id = Number(createForm.value.census_id)
   if (hasGrade) payload.grade_id = Number(createForm.value.grade_id)
   if (hasClass) payload.class_id = Number(createForm.value.class_id)
-  payload.year = selectedYear
+  if (hasSelectedYear) payload.year = selectedYear
 
   if (createForm.value.father_name.trim() !== '') payload.father_name = createForm.value.father_name.trim()
   if (createForm.value.father_job.trim() !== '') payload.father_job = createForm.value.father_job.trim()
@@ -1025,8 +1207,8 @@ const submitAddStudent = async (): Promise<void> => {
     createErrorMessage.value =
       apiMessage ||
       (Object.keys(validationErrors).length > 0
-        ? 'Please correct the highlighted fields and try again.'
-        : 'Unable to save student. Please try again.')
+        ? text.value.correctHighlightedFields
+        : text.value.unableToSaveStudent)
     await scrollToCreateErrorMessage()
   } finally {
     creating.value = false
@@ -1038,12 +1220,3 @@ onMounted(async () => {
   await loadStudents(1)
 })
 </script>
-
-
-
-
-
-
-
-
-
