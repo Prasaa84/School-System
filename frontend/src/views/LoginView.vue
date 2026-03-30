@@ -1,13 +1,21 @@
 <template>
   <div class="min-h-screen bg-slate-100">
-    <header class="bg-[#550100] py-4 text-center text-slate-200 shadow-sm">
-      <h1 class="font-display text-2xl font-bold tracking-wide">RICHMOND COLLEGE - GALLE</h1>
-      <p class="mt-1 text-sm">SDS Payments Management System</p>
+    <header class="bg-gradient-to-r from-cyan-700 via-cyan-600 to-teal-600 py-4 text-center text-white shadow-sm">
+      <h1 class="font-display text-2xl font-bold tracking-wide">SCHOOL DATA SYSTEM</h1>
+      <p class="mt-1 text-sm">Multi-School Management Portal</p>
     </header>
 
     <main class="mx-auto grid w-full max-w-6xl gap-6 px-4 py-10 md:grid-cols-[1.1fr_1fr] md:items-center">
-      <section class="hidden justify-center md:flex">
-        <img src="/images/richmond_logo.png" alt="Richmond College logo" class="max-h-[360px] w-auto drop-shadow-lg" />
+      <section class="hidden items-center justify-center md:flex">
+        <div class="max-w-md rounded-2xl border border-slate-200 bg-white/80 p-8 text-slate-700 shadow-lg">
+          <h3 class="font-display text-2xl font-bold text-slate-900">Welcome to SDS</h3>
+          <p class="mt-3 text-sm leading-6">
+            Manage student records, staff information, classes, and reports in one place.
+          </p>
+          <p class="mt-2 text-sm leading-6">
+            Sign in with your account to continue.
+          </p>
+        </div>
       </section>
 
       <section class="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
@@ -26,21 +34,8 @@
               type="text"
               autocomplete="username"
               required
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-[#550100] focus:ring-2"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-600 focus:ring-2"
             />
-          </div>
-
-          <div>
-            <label for="school_census_id" class="mb-1 block text-sm font-semibold text-slate-700">School Census ID (Optional)</label>
-            <input
-              id="school_census_id"
-              v-model="form.school_census_id"
-              type="text"
-              inputmode="numeric"
-              placeholder="e.g. 06397"
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-[#550100] focus:ring-2"
-            />
-            <p class="mt-1 text-xs text-slate-500">Use this when same student admission number exists in more than one school.</p>
           </div>
 
           <div>
@@ -51,12 +46,12 @@
               type="password"
               autocomplete="current-password"
               required
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-[#550100] focus:ring-2"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-600 focus:ring-2"
             />
           </div>
 
           <label class="flex items-center gap-2 text-sm text-slate-600">
-            <input v-model="form.remember" type="checkbox" class="rounded border-slate-300 text-[#550100] focus:ring-[#550100]" />
+            <input v-model="form.remember" type="checkbox" class="rounded border-slate-300 text-cyan-700 focus:ring-cyan-600" />
             Remember me
           </label>
 
@@ -67,7 +62,7 @@
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-[#0b5ed7] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0a53be] disabled:cursor-not-allowed disabled:opacity-60"
+            class="w-full rounded-lg bg-[#0f8ea8] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0d7c93] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {{ loading ? 'Signing in...' : 'Sign in' }}
           </button>
@@ -75,8 +70,8 @@
       </section>
     </main>
 
-    <footer class="bg-[#03084D] py-5 text-center text-xs text-slate-300">
-      © {{ year }} Richmond College, Galle / Coded by Richmond College IT Society
+    <footer class="border-t border-slate-800 bg-slate-900 py-5 text-center text-xs text-slate-300">
+      © {{ year }} School Data System
     </footer>
   </div>
 </template>
@@ -102,7 +97,6 @@ const errorMessage = ref('')
 
 const form = reactive({
   username: '',
-  school_census_id: '',
   password: '',
   remember: false,
 })
@@ -121,7 +115,6 @@ const submitLogin = async (): Promise<void> => {
   try {
     const { data } = await api.post<LoginResponse>('/auth/login', {
       username: form.username,
-      school_census_id: form.school_census_id.trim() || null,
       password: form.password,
       remember: form.remember,
     })
@@ -137,3 +130,5 @@ const submitLogin = async (): Promise<void> => {
   }
 }
 </script>
+
+

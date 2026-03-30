@@ -19,7 +19,7 @@ class LoginRequest extends FormRequest
         return [
             'username' => ['required', 'string', 'max:50'],
             'password' => ['required', 'string', 'max:100'],
-            'school_census_id' => ['nullable', 'string', 'regex:/^[0-9]{4,7}$/'],
         ];
     }
 }
+
