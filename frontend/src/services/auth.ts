@@ -3,6 +3,7 @@ export interface AuthUser {
   username: string
   role_id: number | null
   role_name: string | null
+  school_census_id?: number | null
 }
 
 const TOKEN_KEY = 'sds_auth_token'
@@ -60,4 +61,3 @@ export const isAuthenticated = (): boolean => {
   const token = getToken()
   return typeof token === 'string' && token.trim().length > 0
 }
-

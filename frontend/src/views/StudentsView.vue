@@ -351,7 +351,7 @@ import { useUiStore } from '../stores/ui'
 interface Student {
   std_id: number
   index_no: string
-  census_id?: number | null
+  census_id?: string | null
   school_name?: string | null
   name_with_initials: string
   grade_class: string
@@ -455,7 +455,7 @@ interface CreateStudentPayload {
   d_o_admission?: string
   ethnic_group_id?: number
   religion_id?: number
-  census_id?: number
+  census_id?: string
   grade_id?: number
   class_id?: number
   year?: number
@@ -921,13 +921,26 @@ const loadStudents = async (page = 1): Promise<void> => {
   errorMessage.value = ''
 
   try {
-    const { data } = await api.get<StudentsResponse>('/students', {
-      params: {
-        q: search.value,
-        page,
-        per_page: meta.value.per_page,
-      },
-    })
+    const params: Record<string, string | number> = {
+      q: search.value,
+      page,
+      per_page: meta.value.per_page,
+    }
+
+    const requestConfig: {
+      params: Record<string, string | number>
+      headers?: Record<string, string>
+    } = { params }
+
+    if (isAdmin.value && adminSchoolContextCensusId.value > 0) {
+      const selectedSchoolCensusId = String(adminSchoolContextCensusId.value)
+      params.school_census_id = selectedSchoolCensusId
+      requestConfig.headers = {
+        'X-School-Census-Id': selectedSchoolCensusId,
+      }
+    }
+
+    const { data } = await api.get<StudentsResponse>('/students', requestConfig)
 
     students.value = data.data
     meta.value = data.meta
@@ -1169,7 +1182,7 @@ const submitAddStudent = async (): Promise<void> => {
   if (createForm.value.dob.trim() !== '') payload.dob = createForm.value.dob.trim()
   if (createForm.value.d_o_admission.trim() !== '') payload.d_o_admission = createForm.value.d_o_admission.trim()
   if (Number(createForm.value.ethnic_group_id) > 0) payload.ethnic_group_id = Number(createForm.value.ethnic_group_id)
-  if (isAdmin.value && Number(createForm.value.census_id) > 0) payload.census_id = Number(createForm.value.census_id)
+  if (isAdmin.value && Number(createForm.value.census_id) > 0) payload.census_id = String(createForm.value.census_id)
   if (hasGrade) payload.grade_id = Number(createForm.value.grade_id)
   if (hasClass) payload.class_id = Number(createForm.value.class_id)
   if (hasSelectedYear) payload.year = selectedYear
@@ -1220,3 +1233,4 @@ onMounted(async () => {
   await loadStudents(1)
 })
 </script>
+

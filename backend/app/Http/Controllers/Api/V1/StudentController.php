@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StudentIndexRequest;
 use App\Http\Requests\Api\V1\StudentStoreRequest;
+use App\Models\Guardian;
 use App\Models\SchoolDetail;
 use App\Models\SdsUser;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +25,8 @@ class StudentController extends Controller
         $perPage = (int) ($validated['per_page'] ?? 20);
         $search = isset($validated['q']) ? trim((string) $validated['q']) : '';
 
+        $hasSchoolTable = Schema::hasTable('school_details_tbl');
+
         $studentsQuery = DB::table('student_tbl as st')
             ->select([
                 'st.std_id',
@@ -38,17 +41,23 @@ class StudentController extends Controller
                 DB::raw('st.date_updated as last_update'),
             ])
             ->where('st.is_deleted', 0)
-            ->when($search !== '', function ($builder) use ($search): void {
-                $builder->where(function ($inner) use ($search): void {
+            ->when($search !== '', function ($builder) use ($search, $hasSchoolTable): void {
+                $builder->where(function ($inner) use ($search, $hasSchoolTable): void {
                     $inner
                         ->where('st.index_no', 'like', "%{$search}%")
                         ->orWhere('st.name_with_initials', 'like', "%{$search}%")
                         ->orWhere('st.fullname', 'like', "%{$search}%");
+
+                    if ($hasSchoolTable) {
+                        $inner
+                            ->orWhere('st.census_id', 'like', "%{$search}%")
+                            ->orWhere('sc.sch_name', 'like', "%{$search}%");
+                    }
                 });
             })
-            ->orderBy('st.index_no');
+            ->orderBy('st.census_id')->orderBy('st.index_no');
 
-        if (Schema::hasTable('school_details_tbl')) {
+        if ($hasSchoolTable) {
             $schoolHasIsDeleted = Schema::hasColumn('school_details_tbl', 'is_deleted');
             $studentsQuery
                 ->leftJoin('school_details_tbl as sc', function ($join) use ($schoolHasIsDeleted): void {
@@ -120,7 +129,7 @@ class StudentController extends Controller
                 'index_no' => (string) $student->index_no,
                 'name_with_initials' => (string) ($student->name_with_initials ?? ''),
                 'full_name' => (string) ($student->full_name ?? ''),
-                'census_id' => isset($student->census_id) ? (int) $student->census_id : null,
+                'census_id' => isset($student->census_id) ? (string) $student->census_id : null,
                 'school_name' => $student->school_name ?? null,
                 'phone_no' => $student->phone_no,
                 'whatsapp_no' => $student->whatsapp_no,
@@ -205,8 +214,9 @@ class StudentController extends Controller
 
         $isAdmin = $this->isAdministrator($user);
         $adminScopedCensusId = $this->resolveRequestedSchoolCensusId($user);
+        $requestedCensusId = isset($validated['census_id']) ? trim((string) $validated['census_id']) : '';
         $censusId = $isAdmin
-            ? (is_numeric($validated['census_id'] ?? null) ? (int) $validated['census_id'] : $adminScopedCensusId)
+            ? ($requestedCensusId !== '' ? $this->resolveCanonicalSchoolCensusId($requestedCensusId) : $adminScopedCensusId)
             : $this->resolveUserCensusId($user);
 
         if ($censusId === null) {
@@ -341,7 +351,7 @@ class StudentController extends Controller
                 ])->contains(fn ($value): bool => trim((string) $value) !== '');
 
                 if ($hasGuardianData && Schema::hasTable('guardian_tbl')) {
-                    DB::table('guardian_tbl')->insert([
+                    Guardian::query()->insert([
                         'index_no' => $indexNo,
                         'census_id' => $censusId,
                         'f_name' => $validated['father_name'] ?? '',
@@ -402,7 +412,7 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
-        $censusId = is_numeric($student->census_id ?? null) ? (int) $student->census_id : null;
+        $censusId = $this->normalizeCensusId($student->census_id ?? null);
         if ($censusId === null) {
             return response()->json(['message' => __('messages.students.census_required')], 422);
         }
@@ -428,7 +438,7 @@ class StudentController extends Controller
 
         $guardian = null;
         if (Schema::hasTable('guardian_tbl')) {
-            $guardianQuery = DB::table('guardian_tbl as g')
+            $guardianQuery = Guardian::query()->from('guardian_tbl as g')
                 ->select([
                     DB::raw('g.f_name as father_name'),
                     DB::raw('g.f_job as father_job'),
@@ -503,17 +513,18 @@ class StudentController extends Controller
         }
 
         $validated = $request->validated();
-        $originalCensusId = is_numeric($student->census_id ?? null) ? (int) $student->census_id : null;
+        $originalCensusId = $this->normalizeCensusId($student->census_id ?? null);
         if ($originalCensusId === null) {
             return response()->json(['message' => __('messages.students.census_required')], 422);
         }
 
         $isAdmin = $this->isAdministrator($user);
         $censusId = $originalCensusId;
-        if ($isAdmin && is_numeric($validated['census_id'] ?? null)) {
-            $requestedCensusId = (int) $validated['census_id'];
-            if ($this->schoolExists($requestedCensusId)) {
-                $censusId = $requestedCensusId;
+        $requestedCensusId = isset($validated['census_id']) ? trim((string) $validated['census_id']) : '';
+        if ($isAdmin && $requestedCensusId !== '') {
+            $resolvedCensusId = $this->resolveCanonicalSchoolCensusId($requestedCensusId);
+            if ($resolvedCensusId !== null) {
+                $censusId = $resolvedCensusId;
             }
         }
 
@@ -646,14 +657,14 @@ class StudentController extends Controller
                             $updates['date_updated'] = $now;
                         }
 
-                        DB::table('guardian_tbl')
+                        Guardian::query()
                             ->where('index_no', $oldIndexNo)
                             ->where('census_id', $originalCensusId)
                             ->update($updates);
                     }
 
                     if ($oldIndexNo !== '' && $oldIndexNo !== $indexNo) {
-                        $query = DB::table('guardian_tbl')->where('index_no', $oldIndexNo);
+                        $query = Guardian::query()->where('index_no', $oldIndexNo);
                         if (Schema::hasColumn('guardian_tbl', 'census_id')) {
                             $query->where('census_id', $censusId);
                         }
@@ -690,9 +701,9 @@ class StudentController extends Controller
                         $guardianUpdates['date_updated'] = $now;
                     }
 
-                    $exists = DB::table('guardian_tbl')->where($guardianBase)->exists();
+                    $exists = Guardian::query()->where($guardianBase)->exists();
                     if ($exists) {
-                        DB::table('guardian_tbl')->where($guardianBase)->update($guardianUpdates);
+                        Guardian::query()->where($guardianBase)->update($guardianUpdates);
                     } else {
                         $hasData = collect($guardianUpdates)->except(['is_deleted', 'date_updated'])->contains(fn ($v): bool => trim((string) $v) !== '');
                         if ($hasData) {
@@ -700,7 +711,7 @@ class StudentController extends Controller
                             if (Schema::hasColumn('guardian_tbl', 'date_added')) {
                                 $insert['date_added'] = $now;
                             }
-                            DB::table('guardian_tbl')->insert($insert);
+                            Guardian::query()->insert($insert);
                         }
                     }
                 }
@@ -744,7 +755,7 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
-        $censusId = is_numeric($student->census_id ?? null) ? (int) $student->census_id : null;
+        $censusId = $this->normalizeCensusId($student->census_id ?? null);
         if ($censusId === null) {
             return response()->json(['message' => __('messages.students.census_required')], 422);
         }
@@ -779,7 +790,7 @@ class StudentController extends Controller
                 }
 
                 if (Schema::hasTable('guardian_tbl')) {
-                    $query = DB::table('guardian_tbl')->where('index_no', $indexNo);
+                    $query = Guardian::query()->where('index_no', $indexNo);
                     if (Schema::hasColumn('guardian_tbl', 'census_id')) {
                         $query->where('census_id', $censusId);
                     }
@@ -893,7 +904,7 @@ class StudentController extends Controller
                 ->push(str_pad($asNumber, 7, '0', STR_PAD_LEFT));
         }
 
-        return $candidates->unique()->values()->all();
+        return $candidates->uniqueStrict()->values()->all();
     }
 
     /**

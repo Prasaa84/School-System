@@ -31,6 +31,19 @@
           </div>
 
           <div>
+            <label for="school_census_id" class="mb-1 block text-sm font-semibold text-slate-700">School Census ID (Optional)</label>
+            <input
+              id="school_census_id"
+              v-model="form.school_census_id"
+              type="text"
+              inputmode="numeric"
+              placeholder="e.g. 06397"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-[#550100] focus:ring-2"
+            />
+            <p class="mt-1 text-xs text-slate-500">Use this when same student admission number exists in more than one school.</p>
+          </div>
+
+          <div>
             <label for="password" class="mb-1 block text-sm font-semibold text-slate-700">Password</label>
             <input
               id="password"
@@ -89,9 +102,17 @@ const errorMessage = ref('')
 
 const form = reactive({
   username: '',
+  school_census_id: '',
   password: '',
   remember: false,
 })
+
+const extractApiMessage = (error: unknown): string | null => {
+  const payload = (error as { response?: { data?: { message?: unknown } } })?.response?.data
+  const message = payload?.message
+
+  return typeof message === 'string' && message.trim() !== '' ? message : null
+}
 
 const submitLogin = async (): Promise<void> => {
   loading.value = true
@@ -100,6 +121,7 @@ const submitLogin = async (): Promise<void> => {
   try {
     const { data } = await api.post<LoginResponse>('/auth/login', {
       username: form.username,
+      school_census_id: form.school_census_id.trim() || null,
       password: form.password,
       remember: form.remember,
     })
@@ -109,7 +131,7 @@ const submitLogin = async (): Promise<void> => {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     await router.push(redirect)
   } catch (error: unknown) {
-    errorMessage.value = 'Invalid username or password.'
+    errorMessage.value = extractApiMessage(error) || 'Invalid username or password.'
   } finally {
     loading.value = false
   }

@@ -37,7 +37,7 @@ class StudentStoreRequest extends FormRequest
             'grade_id' => ['nullable', 'integer', 'exists:grade_tbl,grade_id'],
             'class_id' => ['nullable', 'integer', 'exists:class_tbl,class_id'],
             'year' => ['nullable', 'integer', 'between:2000,2100'],
-            'census_id' => ['nullable', 'integer'],
+            'census_id' => ['nullable', 'string', 'regex:/^[0-9]{4,7}$/'],
             'father_name' => ['nullable', 'string', 'max:255'],
             'father_job' => ['nullable', 'string', 'max:255'],
             'father_mobile' => ['nullable', 'string', 'max:12'],
