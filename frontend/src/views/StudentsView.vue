@@ -30,7 +30,7 @@
           <button class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700" @click="loadStudents(1)">
             {{ text.search }}
           </button>
-          <button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddDialog">
+          <button v-if="canCreateStudents" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddDialog">
             {{ text.addStudent }}
           </button>
         </div>
@@ -66,7 +66,7 @@
               <td v-if="showActionColumn" class="px-3 py-2">
                 <div class="flex gap-2">
                   <button
-                    v-if="student.can_edit || canManageStudents"
+                    v-if="student.can_edit || canEditStudents"
                     class="rounded bg-cyan-600 px-3 py-1 text-xs font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="loadingEditStudentId === student.std_id || deletingStudentId === student.std_id"
                     @click="openEditDialog(student)"
@@ -74,7 +74,7 @@
                     {{ text.edit }}
                   </button>
                   <button
-                    v-if="student.can_delete || canManageStudents"
+                    v-if="student.can_delete || canDeleteStudents"
                     class="rounded bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="deletingStudentId === student.std_id || loadingEditStudentId === student.std_id"
                     @click="deleteStudent(student)"
@@ -558,6 +558,9 @@ const text = computed(() => {
       academicYearRequired: 'අධ්‍යයන වර්ෂය අනිවාර්යය.',
       correctHighlightedFields: 'ඉස්මතු කළ ක්ෂේත්‍ර නිවැරදි කර නැවත උත්සාහ කරන්න.',
       unableToSaveStudent: 'සිසුවා සුරැකිය නොහැකි විය. නැවත උත්සාහ කරන්න.',
+      noCreatePermission: 'ඔබට සිසුන් එක් කිරීමට අවසර නැත.',
+      noEditPermission: 'ඔබට සිසුන් සංස්කරණය කිරීමට අවසර නැත.',
+      noDeletePermission: 'ඔබට සිසුන් මකා දැමීමට අවසර නැත.',
     }
   }
 
@@ -642,6 +645,9 @@ const text = computed(() => {
     academicYearRequired: 'Academic year is required.',
     correctHighlightedFields: 'Please correct the highlighted fields and try again.',
     unableToSaveStudent: 'Unable to save student. Please try again.',
+    noCreatePermission: 'You do not have permission to add students.',
+    noEditPermission: 'You do not have permission to edit students.',
+    noDeletePermission: 'You do not have permission to delete students.',
   }
 })
 
@@ -675,13 +681,37 @@ const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
-const canManageStudents = computed(() => {
+const fallbackStudentPermissions = computed<Record<string, boolean>>(() => {
   const roleId = currentUser?.role_id ?? 0
-  return roleId === 1 || roleId === 2 || roleId === 4 || roleName === 'admin' || roleName === 'administrator' || roleName === 'principal' || roleName === 'class teacher' || roleName === 'class_teacher'
+  const canManageByRole = roleId === 1 || roleId === 2 || roleId === 4 || roleName === 'admin' || roleName === 'administrator' || roleName === 'principal' || roleName === 'class teacher' || roleName === 'class_teacher'
+
+  return {
+    'student.create': canManageByRole,
+    'student.update': canManageByRole,
+    'student.delete': canManageByRole,
+  }
 })
+
+const sessionStudentPermissions = computed<Record<string, boolean>>(() => {
+  const raw = currentUser?.feature_permissions
+  if (!raw || typeof raw !== 'object') {
+    return fallbackStudentPermissions.value
+  }
+
+  return {
+    'student.create': Boolean(raw['student.create']),
+    'student.update': Boolean(raw['student.update']),
+    'student.delete': Boolean(raw['student.delete']),
+  }
+})
+
+const canCreateStudents = computed(() => sessionStudentPermissions.value['student.create'] ?? false)
+const canEditStudents = computed(() => sessionStudentPermissions.value['student.update'] ?? false)
+const canDeleteStudents = computed(() => sessionStudentPermissions.value['student.delete'] ?? false)
+
 const editStudentId = ref<number | null>(null)
 const isEditMode = computed(() => editStudentId.value !== null)
-const showActionColumn = computed(() => canManageStudents.value || students.value.some((row) => !!row.can_edit || !!row.can_delete))
+const showActionColumn = computed(() => canEditStudents.value || canDeleteStudents.value || students.value.some((row) => !!row.can_edit || !!row.can_delete))
 const loadingEditStudentId = ref<number | null>(null)
 const deletingStudentId = ref<number | null>(null)
 const buildSchoolScopedRequestHeaders = (): Record<string, string> | undefined => {
@@ -824,6 +854,11 @@ const applyStudentDetailToForm = async (detail: StudentDetail): Promise<void> =>
   }
 }
 const openAddDialog = async (): Promise<void> => {
+  if (!canCreateStudents.value) {
+    errorMessage.value = text.value.noCreatePermission
+    return
+  }
+
   editStudentId.value = null
   resetCreateForm()
   createErrorMessage.value = ''
@@ -871,7 +906,8 @@ const onAdminSchoolContextChange = async (): Promise<void> => {
   await Promise.all([loadStudents(1), loadGrades()])
 }
 const openEditDialog = async (student: Student): Promise<void> => {
-  if (!(student.can_edit || canManageStudents.value)) {
+  if (!(student.can_edit || canEditStudents.value)) {
+    errorMessage.value = text.value.noEditPermission
     return
   }
 
@@ -892,7 +928,8 @@ const openEditDialog = async (student: Student): Promise<void> => {
 }
 
 const deleteStudent = async (student: Student): Promise<void> => {
-  if (!(student.can_delete || canManageStudents.value)) {
+  if (!(student.can_delete || canDeleteStudents.value)) {
+    errorMessage.value = text.value.noDeletePermission
     return
   }
 
@@ -1138,6 +1175,17 @@ const submitAddStudent = async (): Promise<void> => {
   createSuccessMessage.value = ''
   fieldErrors.value = {}
 
+  if (isEditMode.value && !canEditStudents.value) {
+    createErrorMessage.value = text.value.noEditPermission
+    await scrollToCreateErrorMessage()
+    return
+  }
+
+  if (!isEditMode.value && !canCreateStudents.value) {
+    createErrorMessage.value = text.value.noCreatePermission
+    await scrollToCreateErrorMessage()
+    return
+  }
   const hasGrade = Number(createForm.value.grade_id) > 0
   const hasClass = Number(createForm.value.class_id) > 0
 
@@ -1233,4 +1281,10 @@ onMounted(async () => {
   await loadStudents(1)
 })
 </script>
+
+
+
+
+
+
 

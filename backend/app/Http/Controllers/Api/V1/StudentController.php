@@ -9,6 +9,7 @@ use App\Http\Requests\Api\V1\StudentStoreRequest;
 use App\Models\Guardian;
 use App\Models\SchoolDetail;
 use App\Models\SdsUser;
+use App\Services\FeatureAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +19,10 @@ use Throwable;
 class StudentController extends Controller
 {
     use AppliesSchoolScope;
+
+    public function __construct(private readonly FeatureAccessService $featureAccess)
+    {
+    }
 
     public function index(StudentIndexRequest $request): JsonResponse
     {
@@ -225,6 +230,10 @@ class StudentController extends Controller
             ], 422);
         }
 
+        if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_CREATE)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
         $indexNo = trim((string) $validated['index_no']);
 
         $studentExists = DB::table('student_tbl')
@@ -408,13 +417,13 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.students.not_found')], 404);
         }
 
-        if (!$this->canManageStudentActions($user)) {
-            return response()->json(['message' => __('messages.auth.forbidden')], 403);
-        }
-
         $censusId = $this->normalizeCensusId($student->census_id ?? null);
         if ($censusId === null) {
             return response()->json(['message' => __('messages.students.census_required')], 422);
+        }
+
+        if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_UPDATE)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
         $gradeClass = null;
@@ -508,14 +517,14 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.students.not_found')], 404);
         }
 
-        if (!$this->canManageStudentActions($user)) {
-            return response()->json(['message' => __('messages.auth.forbidden')], 403);
-        }
-
         $validated = $request->validated();
         $originalCensusId = $this->normalizeCensusId($student->census_id ?? null);
         if ($originalCensusId === null) {
             return response()->json(['message' => __('messages.students.census_required')], 422);
+        }
+
+        if (!$this->featureAccess->hasFeature($user, $originalCensusId, FeatureAccessService::STUDENT_UPDATE)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
         $isAdmin = $this->isAdministrator($user);
@@ -751,13 +760,13 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.students.not_found')], 404);
         }
 
-        if (!$this->canManageStudentActions($user)) {
-            return response()->json(['message' => __('messages.auth.forbidden')], 403);
-        }
-
         $censusId = $this->normalizeCensusId($student->census_id ?? null);
         if ($censusId === null) {
             return response()->json(['message' => __('messages.students.census_required')], 422);
+        }
+
+        if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_DELETE)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
         $indexNo = (string) ($student->index_no ?? '');
@@ -825,16 +834,6 @@ class StudentController extends Controller
         }
     }
 
-    private function canManageStudentActions(?SdsUser $user): bool
-    {
-        if ($user === null) {
-            return false;
-        }
-
-        $roleId = (int) ($user->role_id ?? 0);
-
-        return in_array($roleId, [1, 2, 4], true);
-    }
 
     private function loadStudentForWrite(int $studentId, ?SdsUser $user): ?object
     {
@@ -918,4 +917,7 @@ class StudentController extends Controller
         ], 422);
     }
 }
+
+
+
 

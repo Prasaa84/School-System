@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\ClassController;
 use App\Http\Controllers\Api\V1\ClassLookupController;
 use App\Http\Controllers\Api\V1\ClassReportController;
 use App\Http\Controllers\Api\V1\DashboardSummaryController;
+use App\Http\Controllers\Api\V1\FeaturePermissionController;
 use App\Http\Controllers\Api\V1\GradeController;
 use App\Http\Controllers\Api\V1\GradeReportController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -23,6 +24,10 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/modules', ModuleCatalogController::class);
         Route::get('/dashboard/summary', DashboardSummaryController::class);
+
+        Route::get('/admin/feature-permissions', [FeaturePermissionController::class, 'index']);
+        Route::put('/admin/feature-permissions/roles/{roleId}', [FeaturePermissionController::class, 'updateRole'])
+            ->whereNumber('roleId');
 
         Route::get('/grades', GradeController::class);
         Route::post('/grades/initialize-year', [GradeController::class, 'initializeYear']);
@@ -48,5 +53,4 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/students/{studentId}', [StudentController::class, 'destroy'])->whereNumber('studentId');
     });
 });
-
 

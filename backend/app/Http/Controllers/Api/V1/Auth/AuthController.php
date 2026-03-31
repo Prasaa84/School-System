@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
 use App\Models\ApiToken;
 use App\Models\SdsUser;
+use App\Services\FeatureAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,6 +17,10 @@ use Illuminate\Support\Str;
 class AuthController extends Controller
 {
     use AppliesSchoolScope;
+
+    public function __construct(private readonly FeatureAccessService $featureAccess)
+    {
+    }
 
     public function login(LoginRequest $request): JsonResponse
     {
@@ -81,10 +86,9 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $resolvedCensusId = null;
-        if (!$this->isAdministrator($user)) {
-            $resolvedCensusId = $this->resolveUserCensusId($user);
-        }
+        $resolvedCensusId = $this->isAdministrator($user)
+            ? $this->resolveRequestedSchoolCensusId($user)
+            : $this->resolveUserCensusId($user);
 
         return response()->json([
             'user' => $this->formatUser($user, $resolvedCensusId),
@@ -118,7 +122,7 @@ class AuthController extends Controller
     }
 
     /**
-     * @return array<string, int|string|null>
+     * @return array<string, mixed>
      */
     private function formatUser(SdsUser $user, ?string $resolvedCensusId): array
     {
@@ -128,7 +132,7 @@ class AuthController extends Controller
             'role_id' => isset($user->role_id) ? (int) $user->role_id : null,
             'role_name' => $user->role?->role_name,
             'school_census_id' => $resolvedCensusId,
+            'feature_permissions' => $this->featureAccess->permissionMapForUser($user, $resolvedCensusId),
         ];
     }
 }
-

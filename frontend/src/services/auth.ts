@@ -4,6 +4,7 @@ export interface AuthUser {
   role_id: number | null
   role_name: string | null
   school_census_id?: number | null
+  feature_permissions?: Record<string, boolean> | null
 }
 
 const TOKEN_KEY = 'sds_auth_token'
