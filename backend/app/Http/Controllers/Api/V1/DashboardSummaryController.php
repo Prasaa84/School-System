@@ -21,24 +21,37 @@ class DashboardSummaryController extends Controller
         $classesLatestYear = null;
 
         $studentsTotal = 0;
-        if (Schema::hasTable('student_grade_class_tbl')) {
-            $sgcColumns = Schema::getColumnListing('student_grade_class_tbl');
-            $sgcSchoolColumn = $this->resolveSchoolColumn($sgcColumns);
+        if (Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
+            $sgctColumns = Schema::getColumnListing('school_grade_class_tbl');
+            $sgctSchoolColumn = $this->resolveSchoolColumn($sgctColumns);
 
-            $studentYearQuery = DB::table('student_grade_class_tbl as sgc');
+            $studentYearQuery = DB::table('student_grade_class_tbl as sgc')
+                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id');
+
             if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
                 $studentYearQuery->where('sgc.is_deleted', 0);
             }
-            $this->applySchoolScope($studentYearQuery, $user, 'sgc', $sgcSchoolColumn);
-            $studentsLatestYear = $studentYearQuery->max('year');
+            if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+                $studentYearQuery->where('sgct.is_deleted', 0);
+            }
+
+            $this->applySchoolScope($studentYearQuery, $user, 'sgct', $sgctSchoolColumn);
+            $studentsLatestYear = $studentYearQuery->max('sgct.year');
 
             if ($studentsLatestYear !== null) {
-                $studentCountQuery = DB::table('student_grade_class_tbl as sgc')->where('sgc.year', $studentsLatestYear);
+                $studentCountQuery = DB::table('student_grade_class_tbl as sgc')
+                    ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+                    ->where('sgct.year', $studentsLatestYear);
+
                 if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
                     $studentCountQuery->where('sgc.is_deleted', 0);
                 }
-                $this->applySchoolScope($studentCountQuery, $user, 'sgc', $sgcSchoolColumn);
-                $studentsTotal = (int) $studentCountQuery->distinct('sgc.index_no')->count('sgc.index_no');
+                if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+                    $studentCountQuery->where('sgct.is_deleted', 0);
+                }
+
+                $this->applySchoolScope($studentCountQuery, $user, 'sgct', $sgctSchoolColumn);
+                $studentsTotal = (int) $studentCountQuery->distinct('sgc.std_id')->count('sgc.std_id');
             }
         }
 

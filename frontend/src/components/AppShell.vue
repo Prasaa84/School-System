@@ -11,13 +11,13 @@
           <img src="/images/richmond_logo_28_32.png" alt="Richmond" class="h-10 w-10 rounded-lg object-contain" />
           <div v-if="showSidebarText" class="leading-tight">
             <p class="font-brand text-sm uppercase tracking-[0.2em] text-slate-500">SDS</p>
-            <p class="font-display text-lg font-bold">Admin Platform</p>
+            <p class="font-display text-lg font-bold">{{ shellText.adminPlatform }}</p>
           </div>
         </div>
 
         <nav class="p-3">
           <RouterLink
-            v-for="item in menu"
+            v-for="item in localizedMenu"
             :key="item.key"
             :to="item.to"
             class="mb-1 flex items-center rounded-xl px-3 py-3 text-sm font-medium transition"
@@ -83,19 +83,26 @@
               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               @click="ui.toggleMobileSidebar"
             >
-              Menu
+              {{ shellText.menu }}
             </button>
             <button
               v-else
               class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               @click="ui.toggleSidebar"
             >
-              {{ ui.sidebarOpen ? 'Collapse' : 'Expand' }}
+              {{ ui.sidebarOpen ? shellText.collapse : shellText.expand }}
             </button>
-            <p class="font-display text-sm sm:text-xl truncate">Richmond College SDS Records</p>
+            <p class="font-display text-sm sm:text-xl truncate">{{ shellText.headerTitle }}</p>
           </div>
 
           <div class="flex items-center gap-2 sm:gap-3">
+            <div class="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 md:flex">
+              <span class="text-xs font-semibold text-slate-600">{{ shellText.language }}</span>
+              <select v-model="selectedLanguage" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none ring-cyan-500 focus:ring-2">
+                <option value="en">English</option>
+                <option value="si">සිංහල</option>
+              </select>
+            </div>
             <div class="hidden rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 sm:block sm:text-sm">
               {{ userLabel }}
             </div>
@@ -103,7 +110,7 @@
               class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               @click="logout"
             >
-              Logout
+              {{ shellText.logout }}
             </button>
           </div>
         </header>
@@ -122,7 +129,7 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api'
 import { clearAuthSession, getUser } from '../services/auth'
 import { loadModuleCatalog, resolveModulePath } from '../services/modules'
-import { useUiStore } from '../stores/ui'
+import { useUiStore, type UiLanguage } from '../stores/ui'
 
 interface MenuItem {
   key: string
@@ -134,10 +141,56 @@ const ui = useUiStore()
 const route = useRoute()
 const router = useRouter()
 
+const shellText = computed(() => {
+  if (ui.language === 'si') {
+    return {
+      adminPlatform: 'පරිපාලන වේදිකාව',
+      menu: 'මෙනු',
+      collapse: 'සඟවන්න',
+      expand: 'විහිදුවන්න',
+      headerTitle: 'රිච්මන්ඩ් විද්‍යාල SDS වාර්තා',
+      logout: 'ඉවත්වන්න',
+      language: 'භාෂාව',
+      authenticatedUser: 'සත්‍යාපිත පරිශීලකයා',
+      dashboard: 'පුවරුව',
+    }
+  }
+
+  return {
+    adminPlatform: 'Admin Platform',
+    menu: 'Menu',
+    collapse: 'Collapse',
+    expand: 'Expand',
+    headerTitle: 'Richmond College SDS Records',
+    logout: 'Logout',
+    language: 'Language',
+    authenticatedUser: 'Authenticated User',
+    dashboard: 'Dashboard',
+  }
+})
+
+const selectedLanguage = computed<UiLanguage>({
+  get: () => ui.language,
+  set: (value) => ui.setLanguage(value),
+})
+
 const currentUser = getUser()
 const menu = ref<MenuItem[]>([
   { key: 'dashboard', label: 'Dashboard', to: '/' },
 ])
+
+const localizedMenu = computed(() => {
+  return menu.value.map((item) => {
+    if (item.key !== 'dashboard') {
+      return item
+    }
+
+    return {
+      ...item,
+      label: shellText.value.dashboard,
+    }
+  })
+})
 
 const isMobile = ref(false)
 let mediaQuery: MediaQueryList | null = null
@@ -164,7 +217,7 @@ const showSidebarText = computed(() => (isMobile.value ? ui.mobileSidebarOpen : 
 
 const userLabel = computed(() => {
   if (!currentUser) {
-    return 'Authenticated User'
+    return shellText.value.authenticatedUser
   }
 
   return currentUser.role_name ? `${currentUser.username} (${currentUser.role_name})` : currentUser.username

@@ -17,20 +17,26 @@ class GradeReportController extends Controller
         $year = is_numeric($year) ? (int) $year : null;
 
         try {
-            if (!Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('grade_tbl')) {
+            if (!Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('school_grade_class_tbl') || !Schema::hasTable('grade_tbl')) {
                 return response()->json(['data' => []]);
             }
 
             $query = DB::table('student_grade_class_tbl as sgc')
-                ->join('grade_tbl as gt', 'sgc.grade_id', '=', 'gt.grade_id')
-                ->where('sgc.is_deleted', 0)
-                ->selectRaw('sgc.grade_id, gt.grade, sgc.year, COUNT(DISTINCT sgc.index_no) as student_count')
-                ->groupBy('sgc.grade_id', 'gt.grade', 'sgc.year')
-                ->orderBy('sgc.year', 'desc')
-                ->orderBy('sgc.grade_id');
+                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+                ->join('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+                ->when(Schema::hasColumn('student_grade_class_tbl', 'is_deleted'), function ($q): void {
+                    $q->where('sgc.is_deleted', 0);
+                })
+                ->when(Schema::hasColumn('school_grade_class_tbl', 'is_deleted'), function ($q): void {
+                    $q->where('sgct.is_deleted', 0);
+                })
+                ->selectRaw('sgct.grade_id, gt.grade, sgct.year, COUNT(DISTINCT sgc.std_id) as student_count')
+                ->groupBy('sgct.grade_id', 'gt.grade', 'sgct.year')
+                ->orderBy('sgct.year', 'desc')
+                ->orderBy('sgct.grade_id');
 
             if ($year !== null) {
-                $query->where('sgc.year', $year);
+                $query->where('sgct.year', $year);
             }
 
             $rows = $query->get();

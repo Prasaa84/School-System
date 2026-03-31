@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Controller;
+use App\Models\SchoolGradeClass;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,16 +16,17 @@ class ClassController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        if (!Schema::hasTable('school_grade_class_tbl')) {
+        $gradeClassTable = (new SchoolGradeClass())->getTable();
+        if (!Schema::hasTable($gradeClassTable)) {
             return response()->json(['data' => []]);
         }
 
         $user = $this->authUser();
-        $gradeClassColumns = Schema::getColumnListing('school_grade_class_tbl');
+        $gradeClassColumns = Schema::getColumnListing($gradeClassTable);
         $hasIsDeleted = in_array('is_deleted', $gradeClassColumns, true);
         $schoolColumn = $this->resolveSchoolColumn($gradeClassColumns);
 
-        $latestYearQuery = DB::table('school_grade_class_tbl as sgct');
+        $latestYearQuery = DB::table("{$gradeClassTable} as sgct");
         if ($hasIsDeleted) {
             $latestYearQuery->where('sgct.is_deleted', 0);
         }
@@ -38,7 +40,7 @@ class ClassController extends Controller
         $gradeId = $request->query('grade_id');
         $gradeId = is_numeric($gradeId) ? (int) $gradeId : null;
 
-        $query = DB::table('school_grade_class_tbl as sgct')
+        $query = DB::table("{$gradeClassTable} as sgct")
             ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
             ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
             ->select([
@@ -80,8 +82,8 @@ class ClassController extends Controller
             $query->addSelect('sgct.std_count');
         }
 
-        if (Schema::hasTable('school_tbl') && $schoolColumn !== null) {
-            $query->leftJoin('school_tbl as sc', "sgct.{$schoolColumn}", '=', 'sc.census_id')
+        if (Schema::hasTable('school_details_tbl') && $schoolColumn !== null) {
+            $query->leftJoin('school_details_tbl as sc', "sgct.{$schoolColumn}", '=', 'sc.census_id')
                 ->addSelect(DB::raw('sc.sch_name as school_name'));
         }
 
@@ -124,10 +126,11 @@ class ClassController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        $columns = Schema::getColumnListing('school_grade_class_tbl');
+        $gradeClassTable = (new SchoolGradeClass())->getTable();
+        $columns = Schema::getColumnListing($gradeClassTable);
         $schoolColumn = $this->resolveSchoolColumn($columns);
 
-        $query = DB::table('school_grade_class_tbl as sgct')->where('sgct.sch_grd_cls_id', $classRowId);
+        $query = DB::table("{$gradeClassTable} as sgct")->where('sgct.sch_grd_cls_id', $classRowId);
         if (in_array('is_deleted', $columns, true)) {
             $query->where('sgct.is_deleted', 0);
         }
@@ -163,12 +166,9 @@ class ClassController extends Controller
         }
 
         if (!empty($updates)) {
-            DB::table('school_grade_class_tbl')->where('sch_grd_cls_id', $classRowId)->update($updates);
+            DB::table($gradeClassTable)->where('sch_grd_cls_id', $classRowId)->update($updates);
         }
 
         return response()->json(['message' => 'Class row updated.']);
     }
 }
-
-
-

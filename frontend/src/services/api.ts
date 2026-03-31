@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { clearAuthSession, getToken } from './auth'
+import { clearAuthSession, getSchoolContextCensusId, getToken } from './auth'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api/v1',
@@ -11,6 +11,12 @@ api.interceptors.request.use((config) => {
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+
+  const explicitSchoolHeader = (config.headers as Record<string, unknown> | undefined)?.['X-School-Census-Id']
+  const schoolContextCensusId = getSchoolContextCensusId()
+  if (explicitSchoolHeader === undefined && schoolContextCensusId !== null) {
+    config.headers['X-School-Census-Id'] = String(schoolContextCensusId)
   }
 
   return config
@@ -32,3 +38,5 @@ api.interceptors.response.use(
 )
 
 export default api
+
+
