@@ -75,7 +75,7 @@
 
     <ModuleQueuedNotice
       v-if="!supportsReports"
-      message="This module is queued for API rollout. Functional screens are enabled for Grades, Classes, and Staff first."
+      :message="text.queuedModuleMessage"
     />
   </ModuleShell>
 </template>
@@ -89,6 +89,7 @@ import ModuleShell from '../components/modules/ModuleShell.vue'
 import StaffModulePanel from '../components/modules/StaffModulePanel.vue'
 import api from '../services/api'
 import { getUser } from '../services/auth'
+import { useLocalizedText } from '../utils/uiText'
 
 const props = defineProps<{ moduleKey: string }>()
 
@@ -150,8 +151,99 @@ const isGrades = computed(() => props.moduleKey === 'grades')
 const isClasses = computed(() => props.moduleKey === 'classes')
 const isStaff = computed(() => props.moduleKey === 'staff')
 const supportsReports = computed(() => isGrades.value || isClasses.value || isStaff.value)
+const text = useLocalizedText({
+  en: {
+    moduleFallbackTitle: 'Module',
+    moduleFallbackSubtitle: 'This area is ready for the next rollout.',
+    gradesTitle: 'Grades Management',
+    gradesSubtitle: 'Manage grade assignments and view grade-based reports.',
+    classesTitle: 'Classes Management',
+    classesSubtitle: 'Manage class counts, class teachers, and class reports.',
+    staffTitle: 'Staff Management',
+    staffSubtitle: 'Search staff records and review update summaries.',
+    paymentsTitle: 'SDS Payments',
+    paymentsSubtitle: 'Payments screens will be connected in the next API rollout.',
+    reportsTitle: 'Reporting & Exports',
+    reportsSubtitle: 'Reporting tools are being prepared for a future release.',
+    queuedModuleMessage: 'This module is queued for API rollout. Functional screens are enabled for Grades, Classes, and Staff first.',
+    yearInitialized: 'Year initialized successfully.',
+    initializeYearError: 'Unable to initialize year data.',
+    gradeRowUpdated: 'Grade row updated.',
+    updateGradeError: 'Unable to update grade row.',
+    deleteGradeConfirm: 'Delete this grade row? Related classes for this grade/year will also be deleted.',
+    gradeRowDeleted: 'Grade row deleted.',
+    deleteGradeError: 'Unable to delete grade row.',
+    classRowUpdated: 'Class row updated.',
+    updateClassError: 'Unable to update class row.',
+    moduleLoadError: 'Unable to load module data right now.',
+  },
+  si: {
+    moduleFallbackTitle: 'මොඩියුලය',
+    moduleFallbackSubtitle: 'මෙම කොටස ඊළඟ නිකුතුව සඳහා සූදානම්ය.',
+    gradesTitle: 'ශ්‍රේණි කළමනාකරණය',
+    gradesSubtitle: 'ශ්‍රේණි පැවරීම් කළමනාකරණය කර ශ්‍රේණි පදනම් වූ වාර්තා බලන්න.',
+    classesTitle: 'පන්ති කළමනාකරණය',
+    classesSubtitle: 'පන්ති සංඛ්‍යාව, පන්ති භාර ගුරුවරු සහ පන්ති වාර්තා කළමනාකරණය කරන්න.',
+    staffTitle: 'කාර්ය මණ්ඩල කළමනාකරණය',
+    staffSubtitle: 'කාර්ය මණ්ඩල වාර්තා සොයා යාවත්කාලීන සාරාංශ බලන්න.',
+    paymentsTitle: 'SDS ගෙවීම්',
+    paymentsSubtitle: 'ගෙවීම් තිර ඊළඟ API නිකුතුවේ සම්බන්ධ වේ.',
+    reportsTitle: 'වාර්තා සහ අපනයන',
+    reportsSubtitle: 'අනාගත නිකුතුවක් සඳහා වාර්තා මෙවලම් සූදානම් වෙමින් ඇත.',
+    queuedModuleMessage: 'මෙම මොඩියුලය API නිකුතුව සඳහා පෝලිමේ ඇත. දැනට Grades, Classes, සහ Staff තිර පමණක් ක්‍රියාත්මක වේ.',
+    yearInitialized: 'වසර සාර්ථකව ආරම්භ කරන ලදී.',
+    initializeYearError: 'වසර දත්ත ආරම්භ කළ නොහැක.',
+    gradeRowUpdated: 'ශ්‍රේණි පේළිය යාවත්කාලීන කරන ලදී.',
+    updateGradeError: 'ශ්‍රේණි පේළිය යාවත්කාලීන කළ නොහැක.',
+    deleteGradeConfirm: 'මෙම ශ්‍රේණි පේළිය මකන්නද? මෙම ශ්‍රේණිය/වසරට අදාළ පන්තිද මකා දමනු ලැබේ.',
+    gradeRowDeleted: 'ශ්‍රේණි පේළිය මකා දමන ලදී.',
+    deleteGradeError: 'ශ්‍රේණි පේළිය මකා දැමිය නොහැක.',
+    classRowUpdated: 'පන්ති පේළිය යාවත්කාලීන කරන ලදී.',
+    updateClassError: 'පන්ති පේළිය යාවත්කාලීන කළ නොහැක.',
+    moduleLoadError: 'දැනට මොඩියුල දත්ත පූරණය කළ නොහැක.',
+  },
+  ta: {
+    moduleFallbackTitle: 'தொகுதி',
+    moduleFallbackSubtitle: 'இந்த பகுதி அடுத்த வெளியீட்டுக்கு தயாராக உள்ளது.',
+    gradesTitle: 'தர மேலாண்மை',
+    gradesSubtitle: 'தர ஒதுக்கீடுகளை நிர்வகித்து தர அடிப்படையிலான அறிக்கைகளை பாருங்கள்.',
+    classesTitle: 'வகுப்பு மேலாண்மை',
+    classesSubtitle: 'வகுப்பு எண்ணிக்கைகள், வகுப்பு ஆசிரியர்கள் மற்றும் வகுப்பு அறிக்கைகளை நிர்வகிக்கவும்.',
+    staffTitle: 'பணியாளர் மேலாண்மை',
+    staffSubtitle: 'பணியாளர் பதிவுகளை தேடி புதுப்பிப்பு சுருக்கங்களை பாருங்கள்.',
+    paymentsTitle: 'SDS கட்டணங்கள்',
+    paymentsSubtitle: 'கட்டண திரைகள் அடுத்த API வெளியீட்டில் இணைக்கப்படும்.',
+    reportsTitle: 'அறிக்கைகள் மற்றும் ஏற்றுமதிகள்',
+    reportsSubtitle: 'எதிர்கால வெளியீட்டிற்காக அறிக்கை கருவிகள் தயாராகின்றன.',
+    queuedModuleMessage: 'இந்த தொகுதி API வெளியீட்டுக்காக வரிசையில் உள்ளது. தற்போது Grades, Classes மற்றும் Staff திரைகள் மட்டுமே செயல்படுகின்றன.',
+    yearInitialized: 'ஆண்டு வெற்றிகரமாக தொடங்கப்பட்டது.',
+    initializeYearError: 'ஆண்டு தரவை தொடங்க முடியவில்லை.',
+    gradeRowUpdated: 'தர வரிசை புதுப்பிக்கப்பட்டது.',
+    updateGradeError: 'தர வரிசையை புதுப்பிக்க முடியவில்லை.',
+    deleteGradeConfirm: 'இந்த தர வரிசையை நீக்கவா? இந்த தரம்/ஆண்டுக்கான தொடர்புடைய வகுப்புகளும் நீக்கப்படும்.',
+    gradeRowDeleted: 'தர வரிசை நீக்கப்பட்டது.',
+    deleteGradeError: 'தர வரிசையை நீக்க முடியவில்லை.',
+    classRowUpdated: 'வகுப்பு வரிசை புதுப்பிக்கப்பட்டது.',
+    updateClassError: 'வகுப்பு வரிசையை புதுப்பிக்க முடியவில்லை.',
+    moduleLoadError: 'இப்போது தொகுதி தரவை ஏற்ற முடியவில்லை.',
+  },
+})
 
-const title = computed(() => ({ grades: 'Grades Management', classes: 'Classes Management', staff: 'Staff Management', payments: 'SDS Payments', reports: 'Reporting & Exports' }[props.moduleKey] ?? 'Module'))
+const title = computed(() => ({
+  grades: text.value.gradesTitle,
+  classes: text.value.classesTitle,
+  staff: text.value.staffTitle,
+  payments: text.value.paymentsTitle,
+  reports: text.value.reportsTitle,
+}[props.moduleKey] ?? text.value.moduleFallbackTitle))
+
+const subtitle = computed(() => ({
+  grades: text.value.gradesSubtitle,
+  classes: text.value.classesSubtitle,
+  staff: text.value.staffSubtitle,
+  payments: text.value.paymentsSubtitle,
+  reports: text.value.reportsSubtitle,
+}[props.moduleKey] ?? text.value.moduleFallbackSubtitle))
 
 const onUpdateGradeHead = (gradeRowId: number, stfId: number): void => {
   gradeEdits[gradeRowId] = stfId
@@ -223,10 +315,10 @@ const initializeYear = async (): Promise<void> => {
 
   try {
     const { data } = await api.post('/grades/initialize-year', { year: targetYear.value })
-    message.value = data?.message ?? 'Year initialized successfully.'
+    message.value = data?.message ?? text.value.yearInitialized
     await Promise.all([loadGrades(), loadClassesView()])
   } catch (e: any) {
-    error.value = e?.response?.data?.message ?? 'Unable to initialize year data.'
+    error.value = e?.response?.data?.message ?? text.value.initializeYearError
   }
 }
 
@@ -237,15 +329,15 @@ const saveGrade = async (gradeRowId: number): Promise<void> => {
   try {
     const stfId = gradeEdits[gradeRowId] && gradeEdits[gradeRowId] > 0 ? gradeEdits[gradeRowId] : null
     await api.put(`/grades/${gradeRowId}`, { stf_id: stfId })
-    message.value = 'Grade row updated.'
+    message.value = text.value.gradeRowUpdated
     await loadGrades()
   } catch (e: any) {
-    error.value = e?.response?.data?.message ?? 'Unable to update grade row.'
+    error.value = e?.response?.data?.message ?? text.value.updateGradeError
   }
 }
 
 const deleteGrade = async (gradeRowId: number): Promise<void> => {
-  if (!window.confirm('Delete this grade row? Related classes for this grade/year will also be deleted.')) {
+  if (!window.confirm(text.value.deleteGradeConfirm)) {
     return
   }
 
@@ -254,10 +346,10 @@ const deleteGrade = async (gradeRowId: number): Promise<void> => {
 
   try {
     await api.delete(`/grades/${gradeRowId}`)
-    message.value = 'Grade row deleted.'
+    message.value = text.value.gradeRowDeleted
     await Promise.all([loadGrades(), loadClassesView()])
   } catch (e: any) {
-    error.value = e?.response?.data?.message ?? 'Unable to delete grade row.'
+    error.value = e?.response?.data?.message ?? text.value.deleteGradeError
   }
 }
 
@@ -272,10 +364,10 @@ const saveClass = async (classRowId: number): Promise<void> => {
       approved_std_count: classApprovedEdits[classRowId],
       std_count: classCountEdits[classRowId],
     })
-    message.value = 'Class row updated.'
+    message.value = text.value.classRowUpdated
     await loadClassesView()
   } catch (e: any) {
-    error.value = e?.response?.data?.message ?? 'Unable to update class row.'
+    error.value = e?.response?.data?.message ?? text.value.updateClassError
   }
 }
 
@@ -336,7 +428,7 @@ watch(
         }
       }
     } catch {
-      error.value = 'Unable to load module data right now.'
+      error.value = text.value.moduleLoadError
     } finally {
       loading.value = false
     }

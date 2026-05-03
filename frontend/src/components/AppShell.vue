@@ -15,63 +15,83 @@
           </div>
         </div>
 
-        <nav class="p-3">
-          <RouterLink
-            v-for="item in localizedMenu"
-            :key="item.key"
-            :to="item.to"
-            class="mb-1 flex items-center rounded-xl px-3 py-3 text-sm font-medium transition"
-            :class="[
-              showSidebarText ? 'gap-3 justify-start' : 'justify-center',
-              isActive(item.to) ? 'bg-[#0f8ea8] text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100',
-            ]"
-            @click="onMenuClick"
-          >
-            <span class="inline-flex h-5 w-5 items-center justify-center">
-              <svg v-if="item.key === 'dashboard'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <rect x="2" y="2" width="7" height="7" rx="1.5" />
-                <rect x="11" y="2" width="7" height="4.5" rx="1.5" />
-                <rect x="11" y="8" width="7" height="10" rx="1.5" />
-                <rect x="2" y="11" width="7" height="7" rx="1.5" />
-              </svg>
-              <svg v-else-if="item.key === 'students'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <circle cx="10" cy="6" r="3" />
-                <path d="M3 17c0-3.1 3.1-5 7-5s7 1.9 7 5" />
-              </svg>
-              <svg v-else-if="item.key === 'grades'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <rect x="3" y="2" width="14" height="16" rx="2" />
-                <rect x="6" y="6" width="8" height="1.5" rx="0.7" fill="white" />
-                <rect x="6" y="9" width="8" height="1.5" rx="0.7" fill="white" />
-                <rect x="6" y="12" width="5" height="1.5" rx="0.7" fill="white" />
-              </svg>
-              <svg v-else-if="item.key === 'classes'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <rect x="2" y="4" width="16" height="12" rx="2" />
-                <rect x="5" y="7" width="10" height="1.5" rx="0.7" fill="white" />
-                <rect x="5" y="10" width="10" height="1.5" rx="0.7" fill="white" />
-              </svg>
-              <svg v-else-if="item.key === 'staff'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <circle cx="7" cy="7" r="2.5" />
-                <circle cx="13" cy="7" r="2.5" />
-                <path d="M2.5 16c0-2.5 2.2-4 4.5-4s4.5 1.5 4.5 4" />
-                <path d="M8.5 16c.2-2.2 2.1-3.5 4.2-3.5 2.3 0 4.3 1.4 4.8 3.5" />
-              </svg>
-              <svg v-else-if="item.key === 'payments'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <rect x="2" y="4" width="16" height="12" rx="2" />
-                <rect x="4.5" y="7" width="11" height="1.8" rx="0.8" fill="white" />
-                <circle cx="14" cy="12.5" r="1.5" fill="white" />
-              </svg>
-              <svg v-else-if="item.key === 'reports'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <rect x="3" y="2" width="14" height="16" rx="2" />
-                <rect x="6" y="11" width="2" height="4" fill="white" />
-                <rect x="9" y="8" width="2" height="7" fill="white" />
-                <rect x="12" y="6" width="2" height="9" fill="white" />
-              </svg>
-              <svg v-else viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <circle cx="10" cy="10" r="7" />
-              </svg>
-            </span>
-            <span v-if="showSidebarText" class="truncate">{{ item.label }}</span>
-          </RouterLink>
+                <nav class="p-3">
+          <div v-for="item in localizedMenu" :key="item.key" class="mb-1">
+            <RouterLink
+              :to="item.to"
+              class="flex items-center rounded-xl px-3 py-3 text-sm font-medium transition"
+              :class="[
+                showSidebarText ? 'gap-3 justify-start' : 'justify-center',
+                isItemActive(item) ? 'bg-[#0f8ea8] text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100',
+              ]"
+              @click="onMenuClick"
+            >
+              <span class="inline-flex h-5 w-5 items-center justify-center">
+                <svg v-if="item.key === 'dashboard'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="2" y="2" width="7" height="7" rx="1.5" />
+                  <rect x="11" y="2" width="7" height="4.5" rx="1.5" />
+                  <rect x="11" y="8" width="7" height="10" rx="1.5" />
+                  <rect x="2" y="11" width="7" height="7" rx="1.5" />
+                </svg>
+                <svg v-else-if="item.key === 'school'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="2" y="4" width="16" height="13" rx="2" />
+                  <rect x="5" y="7" width="2" height="2" fill="white" />
+                  <rect x="9" y="7" width="2" height="2" fill="white" />
+                  <rect x="13" y="7" width="2" height="2" fill="white" />
+                  <rect x="9" y="12" width="2" height="5" fill="white" />
+                </svg>
+                <svg v-else-if="item.key === 'students'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <circle cx="10" cy="6" r="3" />
+                  <path d="M3 17c0-3.1 3.1-5 7-5s7 1.9 7 5" />
+                </svg>
+                <svg v-else-if="item.key === 'grades'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="3" y="2" width="14" height="16" rx="2" />
+                  <rect x="6" y="6" width="8" height="1.5" rx="0.7" fill="white" />
+                  <rect x="6" y="9" width="8" height="1.5" rx="0.7" fill="white" />
+                  <rect x="6" y="12" width="5" height="1.5" rx="0.7" fill="white" />
+                </svg>
+                <svg v-else-if="item.key === 'classes'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="2" y="4" width="16" height="12" rx="2" />
+                  <rect x="5" y="7" width="10" height="1.5" rx="0.7" fill="white" />
+                  <rect x="5" y="10" width="10" height="1.5" rx="0.7" fill="white" />
+                </svg>
+                <svg v-else-if="item.key === 'staff'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <circle cx="7" cy="7" r="2.5" />
+                  <circle cx="13" cy="7" r="2.5" />
+                  <path d="M2.5 16c0-2.5 2.2-4 4.5-4s4.5 1.5 4.5 4" />
+                  <path d="M8.5 16c.2-2.2 2.1-3.5 4.2-3.5 2.3 0 4.3 1.4 4.8 3.5" />
+                </svg>
+                <svg v-else-if="item.key === 'payments'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="2" y="4" width="16" height="12" rx="2" />
+                  <rect x="4.5" y="7" width="11" height="1.8" rx="0.8" fill="white" />
+                  <circle cx="14" cy="12.5" r="1.5" fill="white" />
+                </svg>
+                <svg v-else-if="item.key === 'reports'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="3" y="2" width="14" height="16" rx="2" />
+                  <rect x="6" y="11" width="2" height="4" fill="white" />
+                  <rect x="9" y="8" width="2" height="7" fill="white" />
+                  <rect x="12" y="6" width="2" height="9" fill="white" />
+                </svg>
+                <svg v-else viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <circle cx="10" cy="10" r="7" />
+                </svg>
+              </span>
+              <span v-if="showSidebarText" class="truncate">{{ item.label }}</span>
+            </RouterLink>
+
+            <div v-if="showSidebarText && item.children && item.children.length > 0" class="ml-10 mt-1 space-y-1">
+              <RouterLink
+                v-for="child in item.children"
+                :key="child.key"
+                :to="child.to"
+                class="block rounded-lg px-3 py-2 text-xs font-semibold transition"
+                :class="isActive(child.to) ? 'bg-cyan-50 text-cyan-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'"
+                @click="onMenuClick"
+              >
+                {{ child.label }}
+              </RouterLink>
+            </div>
+          </div>
         </nav>
       </aside>
 
@@ -101,6 +121,7 @@
               <select v-model="selectedLanguage" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none ring-cyan-500 focus:ring-2">
                 <option value="en">English</option>
                 <option value="si">සිංහල</option>
+                <option value="ta">தமிழ்</option>
               </select>
             </div>
             <div class="hidden rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 sm:block sm:text-sm">
@@ -130,11 +151,13 @@ import api from '../services/api'
 import { clearAuthSession, getUser } from '../services/auth'
 import { loadModuleCatalog, resolveModulePath } from '../services/modules'
 import { useUiStore, type UiLanguage } from '../stores/ui'
+import { pickLocalizedText } from '../utils/uiText'
 
 interface MenuItem {
   key: string
   label: string
   to: string
+  children?: MenuItem[]
 }
 
 const ui = useUiStore()
@@ -153,6 +176,20 @@ const shellText = computed(() => {
       language: 'භාෂාව',
       authenticatedUser: 'සත්‍යාපිත පරිශීලකයා',
       dashboard: 'පුවරුව',
+    }
+  }
+
+  if (ui.language === 'ta') {
+    return {
+      adminPlatform: 'நிர்வாக தளம்',
+      menu: 'பட்டியல்',
+      collapse: 'சுருக்கு',
+      expand: 'விரிவு',
+      headerTitle: 'ரிச்மண்ட் கல்லூரி SDS பதிவுகள்',
+      logout: 'வெளியேறு',
+      language: 'மொழி',
+      authenticatedUser: 'உறுதிப்படுத்தப்பட்ட பயனர்',
+      dashboard: 'கட்டுப்பாட்டு பலகை',
     }
   }
 
@@ -181,13 +218,48 @@ const menu = ref<MenuItem[]>([
 
 const localizedMenu = computed(() => {
   return menu.value.map((item) => {
-    if (item.key !== 'dashboard') {
-      return item
-    }
-
     return {
       ...item,
-      label: shellText.value.dashboard,
+      label: pickLocalizedText(ui.language, {
+        en: {
+          dashboard: 'Dashboard',
+          school: 'School',
+          students: 'Students',
+          grades: 'Grades',
+          classes: 'Classes',
+          staff: 'Staff',
+          payments: 'Payments',
+          reports: 'Reports',
+        }[item.key] ?? item.label,
+        si: {
+          dashboard: 'පුවරුව',
+          school: 'පාසල',
+          students: 'සිසුන්',
+          grades: 'ශ්‍රේණි',
+          classes: 'පන්ති',
+          staff: 'කාර්ය මණ්ඩලය',
+          payments: 'ගෙවීම්',
+          reports: 'වාර්තා',
+        }[item.key] ?? item.label,
+        ta: {
+          dashboard: 'கட்டுப்பாட்டு பலகை',
+          school: 'பள்ளி',
+          students: 'மாணவர்கள்',
+          grades: 'தரங்கள்',
+          classes: 'வகுப்புகள்',
+          staff: 'பணியாளர்கள்',
+          payments: 'கட்டணங்கள்',
+          reports: 'அறிக்கைகள்',
+        }[item.key] ?? item.label,
+      }),
+      children: item.children?.map((child) => ({
+        ...child,
+        label: pickLocalizedText(ui.language, {
+          en: child.label,
+          si: child.label,
+          ta: child.label,
+        }),
+      })),
     }
   })
 })
@@ -231,19 +303,42 @@ const isActive = (to: string): boolean => {
   return route.path.startsWith(to)
 }
 
+const isItemActive = (item: MenuItem): boolean => {
+  if (isActive(item.to)) {
+    return true
+  }
+
+  return Array.isArray(item.children) && item.children.some((child) => isActive(child.to))
+}
+
 const loadMenu = async (): Promise<void> => {
   const modules = await loadModuleCatalog()
 
-  menu.value = [
-    { key: 'dashboard', label: 'Dashboard', to: '/' },
-    ...modules.map((module) => ({
+  const mappedModules: MenuItem[] = modules
+    .map((module) => ({
       key: module.key,
       label: module.label,
       to: resolveModulePath(module),
-    })),
+    }))
+    .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
+
+  const schoolMenu: MenuItem = {
+    key: 'school',
+    label: 'School',
+    to: '/school',
+  }
+
+  const gradesIndex = mappedModules.findIndex((item) => item.key === 'grades')
+
+  const orderedModules = gradesIndex >= 0
+    ? [...mappedModules.slice(0, gradesIndex), schoolMenu, ...mappedModules.slice(gradesIndex)]
+    : [...mappedModules, schoolMenu]
+
+  menu.value = [
+    { key: 'dashboard', label: 'Dashboard', to: '/' },
+    ...orderedModules,
   ]
 }
-
 const onMenuClick = (): void => {
   if (isMobile.value) {
     ui.closeMobileSidebar()
@@ -286,3 +381,7 @@ onUnmounted(() => {
   }
 })
 </script>
+
+
+
+

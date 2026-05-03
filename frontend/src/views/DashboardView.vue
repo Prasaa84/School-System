@@ -1,49 +1,49 @@
 <template>
   <div class="space-y-6">
     <header class="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-cyan-900 to-emerald-700 p-7 text-white shadow-xl">
-      <p class="font-brand text-xs uppercase tracking-[0.2em] text-cyan-200">School Management Dashboard</p>
-      <h1 class="mt-2 font-display text-3xl font-bold md:text-4xl">Welcome to the Control Center</h1>
+      <p class="font-brand text-xs uppercase tracking-[0.2em] text-cyan-200">{{ text.heroEyebrow }}</p>
+      <h1 class="mt-2 font-display text-3xl font-bold md:text-4xl">{{ text.heroTitle }}</h1>
       <p class="mt-2 max-w-3xl text-sm text-cyan-100 md:text-base"></p>
     </header>
 
     <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">Students</p>
-        <p class="mt-1 text-xs text-slate-400">Year: {{ summary.students_latest_year ?? 'N/A' }}</p>
+        <p class="text-sm font-semibold text-slate-500">{{ text.students }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ text.yearLabel }}: {{ summary.students_latest_year ?? text.notAvailable }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.students_total }}</p>
       </article>
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">Academic Staff</p>
-        <p class="mt-1 text-xs text-slate-400">All active</p>
+        <p class="text-sm font-semibold text-slate-500">{{ text.academicStaff }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ text.allActive }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.staff_total }}</p>
       </article>
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">Grades</p>
-        <p class="mt-1 text-xs text-slate-400">Year: {{ summary.grades_latest_year ?? 'N/A' }}</p>
+        <p class="text-sm font-semibold text-slate-500">{{ text.grades }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ text.yearLabel }}: {{ summary.grades_latest_year ?? text.notAvailable }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.grades_total }}</p>
       </article>
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">Classes</p>
-        <p class="mt-1 text-xs text-slate-400">Year: {{ summary.classes_latest_year ?? 'N/A' }}</p>
+        <p class="text-sm font-semibold text-slate-500">{{ text.classes }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ text.yearLabel }}: {{ summary.classes_latest_year ?? text.notAvailable }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.classes_total }}</p>
       </article>
     </section>
 
     <section class="grid gap-4 lg:grid-cols-2">
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 class="font-display text-xl font-bold">Data Status</h2>
+        <h2 class="font-display text-xl font-bold">{{ text.dataStatus }}</h2>
         <div class="mt-4 space-y-2 text-sm text-slate-700">
-          <p><strong>Students last updated:</strong> {{ formatDate(summary.students_last_updated) }}</p>
-          <p><strong>Staff last updated:</strong> {{ formatDate(summary.staff_last_updated) }}</p>
+          <p><strong>{{ text.studentsLastUpdated }}:</strong> {{ formatDate(summary.students_last_updated) }}</p>
+          <p><strong>{{ text.staffLastUpdated }}:</strong> {{ formatDate(summary.staff_last_updated) }}</p>
         </div>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 class="font-display text-xl font-bold">Available Modules</h2>
+        <h2 class="font-display text-xl font-bold">{{ text.availableModules }}</h2>
         <ul class="mt-4 space-y-2 text-sm text-slate-700">
-          <li>1. Students management (connected)</li>
-          <li>2. Grades and Classes lookup (connected)</li>
-          <li>3. Staff, Payments, Reports (next API rollout)</li>
+          <li>{{ text.availableModulesRow1 }}</li>
+          <li>{{ text.availableModulesRow2 }}</li>
+          <li>{{ text.availableModulesRow3 }}</li>
         </ul>
       </article>
     </section>
@@ -51,59 +51,38 @@
     <section v-if="isAdmin" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 class="font-display text-xl font-bold">Role Feature Access</h2>
-          <p class="mt-1 text-sm text-slate-600">Select a school first, then set feature access for each role. Users inherit role permissions automatically.</p>
+          <h2 class="font-display text-xl font-bold">{{ text.roleFeatureAccess }}</h2>
+          <p class="mt-1 text-sm text-slate-600">{{ text.roleFeatureAccessHelp }}</p>
         </div>
-
         <label class="text-sm text-slate-700">
-          School
-          <select
-            v-model.number="selectedPermissionSchoolCensusId"
-            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2 md:min-w-[240px]"
-            @change="onPermissionSchoolChange"
-          >
-            <option :value="0">Select school</option>
-            <option v-for="school in permissionSchools" :key="school.id" :value="school.id">{{ school.label }}</option>
+          {{ text.school }}
+          <select v-model.number="selectedPermissionSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2 md:min-w-[240px]" @change="onPermissionSchoolChange">
+            <option :value="0">{{ text.selectSchool }}</option>
+            <option v-for="schoolOption in permissionSchools" :key="schoolOption.id" :value="schoolOption.id">{{ schoolOption.label }}</option>
           </select>
         </label>
       </div>
-
-      <p v-if="permissionNotice" class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-        {{ permissionNotice }}
-      </p>
-      <p v-if="permissionError" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-        {{ permissionError }}
-      </p>
-
-      <p v-if="!permissionStorageReady" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-        Role permission table is missing. Run backend migrations to save feature permissions.
-      </p>
-      <p v-else-if="selectedPermissionSchoolCensusId <= 0" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        Select a school to load roles.
-      </p>
-      <p v-else-if="permissionLoading" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        Loading roles and permissions...
-      </p>
-      <p v-else-if="permissionRoles.length === 0" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        No editable roles found.
-      </p>
+      <p v-if="permissionNotice" class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{{ permissionNotice }}</p>
+      <p v-if="permissionError" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{{ permissionError }}</p>
+      <p v-if="!permissionStorageReady" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{{ text.permissionStorageMissing }}</p>
+      <p v-else-if="selectedPermissionSchoolCensusId <= 0" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ text.selectSchoolToLoadRoles }}</p>
+      <p v-else-if="permissionLoading" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ text.loadingRoles }}</p>
+      <p v-else-if="permissionRoles.length === 0" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ text.noEditableRoles }}</p>
 
       <div v-if="permissionStorageReady && selectedPermissionSchoolCensusId > 0 && !permissionLoading && permissionRoles.length > 0" class="mt-4 overflow-auto rounded-xl border border-slate-200">
         <table class="min-w-full divide-y divide-slate-200 text-sm">
           <thead class="bg-slate-50">
             <tr>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">Role</th>
-              <th v-for="feature in permissionFeatures" :key="feature.key" class="px-3 py-2 text-left font-semibold text-slate-600" :title="feature.description">
-                {{ feature.label }}
-              </th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">Save</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.role }}</th>
+              <th v-for="feature in permissionFeatures" :key="feature.key" class="px-3 py-2 text-left font-semibold text-slate-600" :title="feature.description">{{ feature.label }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.save }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-for="role in permissionRoles" :key="role.role_id" class="hover:bg-slate-50">
               <td class="px-3 py-2">
-                <p class="font-semibold text-slate-900">{{ role.role_name || 'Role not set' }}</p>
-                <p class="text-xs text-slate-500">Role ID: {{ role.role_id }}</p>
+                <p class="font-semibold text-slate-900">{{ role.role_name || text.roleNotSet }}</p>
+                <p class="text-xs text-slate-500">{{ text.roleId }}: {{ role.role_id }}</p>
               </td>
               <td v-for="feature in permissionFeatures" :key="`${role.role_id}-${feature.key}`" class="px-3 py-2">
                 <label class="inline-flex items-center gap-2 text-sm text-slate-700">
@@ -111,12 +90,8 @@
                 </label>
               </td>
               <td class="px-3 py-2">
-                <button
-                  class="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  :disabled="permissionSavingRoleId === role.role_id"
-                  @click="saveRolePermissions(role)"
-                >
-                  {{ permissionSavingRoleId === role.role_id ? 'Saving...' : 'Save' }}
+                <button class="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="permissionSavingRoleId === role.role_id" @click="saveRolePermissions(role)">
+                  {{ permissionSavingRoleId === role.role_id ? text.saving : text.save }}
                 </button>
               </td>
             </tr>
@@ -125,9 +100,7 @@
       </div>
     </section>
 
-    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {{ error }}
-    </p>
+    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ error }}</p>
   </div>
 </template>
 
@@ -135,6 +108,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import api from '../services/api'
 import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
+import { useLocalizedText } from '../utils/uiText'
 
 interface Summary {
   students_total: number
@@ -211,6 +185,116 @@ const permissionSavingRoleId = ref<number | null>(null)
 const permissionStorageReady = ref(true)
 const permissionError = ref('')
 const permissionNotice = ref('')
+const text = useLocalizedText({
+  en: {
+    heroEyebrow: 'School Management Dashboard',
+    heroTitle: 'Welcome to the Control Center',
+    students: 'Students',
+    academicStaff: 'Academic Staff',
+    grades: 'Grades',
+    classes: 'Classes',
+    yearLabel: 'Year',
+    notAvailable: 'N/A',
+    allActive: 'All active',
+    dataStatus: 'Data Status',
+    studentsLastUpdated: 'Students last updated',
+    staffLastUpdated: 'Staff last updated',
+    availableModules: 'Available Modules',
+    availableModulesRow1: '1. Students management (connected)',
+    availableModulesRow2: '2. Grades and Classes lookup (connected)',
+    availableModulesRow3: '3. Staff, Payments, Reports (next API rollout)',
+    roleFeatureAccess: 'Role Feature Access',
+    roleFeatureAccessHelp: 'Select a school first, then set feature access for each role. Users inherit role permissions automatically.',
+    school: 'School',
+    selectSchool: 'Select school',
+    permissionStorageMissing: 'Role permission table is missing. Run backend migrations to save feature permissions.',
+    selectSchoolToLoadRoles: 'Select a school to load roles.',
+    loadingRoles: 'Loading roles and permissions...',
+    noEditableRoles: 'No editable roles found.',
+    role: 'Role',
+    save: 'Save',
+    saving: 'Saving...',
+    roleNotSet: 'Role not set',
+    roleId: 'Role ID',
+    dashboardSummaryError: 'Unable to load dashboard summary right now.',
+    permissionLoadError: 'Unable to load role feature permissions right now.',
+    selectSchoolBeforeSaving: 'Select a school before saving permissions.',
+    permissionsUpdatedFor: 'Permissions updated for',
+    permissionUpdateError: 'Unable to update role feature permissions.',
+  },
+  si: {
+    heroEyebrow: 'පාසල් කළමනාකරණ පුවරුව',
+    heroTitle: 'පාලන මධ්‍යස්ථානයට සාදරයෙන් පිළිගනිමු',
+    students: 'සිසුන්',
+    academicStaff: 'ශාස්ත්‍රීය කාර්ය මණ්ඩලය',
+    grades: 'ශ්‍රේණි',
+    classes: 'පන්ති',
+    yearLabel: 'වසර',
+    notAvailable: 'නොමැත',
+    allActive: 'සියල්ල සක්‍රියයි',
+    dataStatus: 'දත්ත තත්ත්වය',
+    studentsLastUpdated: 'සිසුන් අවසන් වරට යාවත්කාලීන කළේ',
+    staffLastUpdated: 'කාර්ය මණ්ඩලය අවසන් වරට යාවත්කාලීන කළේ',
+    availableModules: 'ලභ්‍ය මොඩියුල',
+    availableModulesRow1: '1. සිසු කළමනාකරණය (සම්බන්ධිතයි)',
+    availableModulesRow2: '2. ශ්‍රේණි සහ පන්ති සෙවීම (සම්බන්ධිතයි)',
+    availableModulesRow3: '3. කාර්ය මණ්ඩලය, ගෙවීම්, වාර්තා (ඊළඟ API අදියර)',
+    roleFeatureAccess: 'භූමිකා විශේෂාංග ප්‍රවේශය',
+    roleFeatureAccessHelp: 'පළමුව පාසලක් තෝරන්න, ඉන්පසු එක් එක් භූමිකාව සඳහා විශේෂාංග ප්‍රවේශය සකසන්න. පරිශීලකයන්ට භූමිකා අවසර ස්වයංක්‍රීයව හිමිවේ.',
+    school: 'පාසල',
+    selectSchool: 'පාසල තෝරන්න',
+    permissionStorageMissing: 'භූමිකා අවසර වගුව නොමැත. විශේෂාංග අවසර සුරැකීමට backend migrations ධාවනය කරන්න.',
+    selectSchoolToLoadRoles: 'භූමිකා පූරණය කිරීමට පාසලක් තෝරන්න.',
+    loadingRoles: 'භූමිකා සහ අවසර පූරණය වෙමින් පවතී...',
+    noEditableRoles: 'සංස්කරණය කළ හැකි භූමිකා හමු නොවීය.',
+    role: 'භූමිකාව',
+    save: 'සුරකින්න',
+    saving: 'සුරකිමින්...',
+    roleNotSet: 'භූමිකාව සකසා නැත',
+    roleId: 'භූමිකා අංකය',
+    dashboardSummaryError: 'දැනට පුවරු සාරාංශය පූරණය කළ නොහැක.',
+    permissionLoadError: 'දැනට භූමිකා විශේෂාංග අවසර පූරණය කළ නොහැක.',
+    selectSchoolBeforeSaving: 'අවසර සුරැකීමට පෙර පාසලක් තෝරන්න.',
+    permissionsUpdatedFor: 'අවසර යාවත්කාලීන කරන ලදී',
+    permissionUpdateError: 'භූමිකා විශේෂාංග අවසර යාවත්කාලීන කළ නොහැක.',
+  },
+  ta: {
+    heroEyebrow: 'பள்ளி மேலாண்மை டாஷ்போர்ட்',
+    heroTitle: 'கட்டுப்பாட்டு மையத்திற்கு வரவேற்கிறோம்',
+    students: 'மாணவர்கள்',
+    academicStaff: 'கல்வி பணியாளர்கள்',
+    grades: 'தரங்கள்',
+    classes: 'வகுப்புகள்',
+    yearLabel: 'ஆண்டு',
+    notAvailable: 'இல்லை',
+    allActive: 'அனைத்தும் செயலில் உள்ளது',
+    dataStatus: 'தரவு நிலை',
+    studentsLastUpdated: 'மாணவர்கள் கடைசியாக புதுப்பிக்கப்பட்டது',
+    staffLastUpdated: 'பணியாளர்கள் கடைசியாக புதுப்பிக்கப்பட்டது',
+    availableModules: 'கிடைக்கும் தொகுதிகள்',
+    availableModulesRow1: '1. மாணவர் மேலாண்மை (இணைக்கப்பட்டுள்ளது)',
+    availableModulesRow2: '2. தரங்கள் மற்றும் வகுப்புகள் பார்வை (இணைக்கப்பட்டுள்ளது)',
+    availableModulesRow3: '3. பணியாளர்கள், கட்டணங்கள், அறிக்கைகள் (அடுத்த API வெளியீடு)',
+    roleFeatureAccess: 'பங்கு அம்ச அணுகல்',
+    roleFeatureAccessHelp: 'முதலில் ஒரு பள்ளியைத் தேர்ந்தெடுத்து, பின்னர் ஒவ்வொரு பங்கிற்கும் அம்ச அணுகலை அமைக்கவும். பயனர்கள் பங்கு அனுமதிகளை தானாக பெறுவார்கள்.',
+    school: 'பள்ளி',
+    selectSchool: 'பள்ளியைத் தேர்ந்தெடுக்கவும்',
+    permissionStorageMissing: 'பங்கு அனுமதி அட்டவணை இல்லை. அம்ச அனுமதிகளை சேமிக்க backend migrations இயக்கவும்.',
+    selectSchoolToLoadRoles: 'பங்குகளை ஏற்ற பள்ளியைத் தேர்ந்தெடுக்கவும்.',
+    loadingRoles: 'பங்குகள் மற்றும் அனுமதிகள் ஏற்றப்படுகின்றன...',
+    noEditableRoles: 'திருத்தக்கூடிய பங்குகள் எதுவும் இல்லை.',
+    role: 'பங்கு',
+    save: 'சேமி',
+    saving: 'சேமிக்கப்படுகிறது...',
+    roleNotSet: 'பங்கு அமைக்கப்படவில்லை',
+    roleId: 'பங்கு ஐடி',
+    dashboardSummaryError: 'இப்போது டாஷ்போர்ட் சுருக்கத்தை ஏற்ற முடியவில்லை.',
+    permissionLoadError: 'இப்போது பங்கு அம்ச அனுமதிகளை ஏற்ற முடியவில்லை.',
+    selectSchoolBeforeSaving: 'அனுமதிகளை சேமிப்பதற்கு முன் ஒரு பள்ளியைத் தேர்ந்தெடுக்கவும்.',
+    permissionsUpdatedFor: 'அனுமதிகள் புதுப்பிக்கப்பட்டது',
+    permissionUpdateError: 'பங்கு அம்ச அனுமதிகளை புதுப்பிக்க முடியவில்லை.',
+  },
+})
 
 const extractApiMessage = (reason: unknown): string => {
   if (typeof reason === 'object' && reason !== null && 'response' in reason) {
@@ -221,6 +305,19 @@ const extractApiMessage = (reason: unknown): string => {
   }
 
   return ''
+}
+
+const buildPermissionContextRequestConfig = (): { params?: Record<string, string>; headers?: Record<string, string> } | undefined => {
+  const selected = Number(selectedPermissionSchoolCensusId.value)
+  if (!Number.isFinite(selected) || selected <= 0) {
+    return undefined
+  }
+
+  const censusValue = String(selected)
+  return {
+    params: { school_census_id: censusValue },
+    headers: { 'X-School-Census-Id': censusValue },
+  }
 }
 
 const normalizePermissions = (raw: Record<string, boolean> | undefined): Record<string, boolean> => {
@@ -236,7 +333,7 @@ const loadSummary = async (): Promise<void> => {
     const { data } = await api.get<DashboardSummaryResponse>('/dashboard/summary')
     Object.assign(summary, data.summary)
   } catch {
-    error.value = 'Unable to load dashboard summary right now.'
+    error.value = text.value.dashboardSummaryError ?? 'Unable to load dashboard summary right now.'
   }
 }
 
@@ -250,21 +347,8 @@ const loadPermissionMatrix = async (): Promise<void> => {
   permissionNotice.value = ''
 
   try {
-    const selected = Number(selectedPermissionSchoolCensusId.value)
-    const hasSelectedSchool = selected > 0
-
-    const requestConfig: {
-      params?: Record<string, string>
-      headers?: Record<string, string>
-    } = {}
-
-    if (hasSelectedSchool) {
-      const censusValue = String(selected)
-      requestConfig.params = { school_census_id: censusValue }
-      requestConfig.headers = { 'X-School-Census-Id': censusValue }
-    }
-
-    const { data } = await api.get<PermissionResponse>('/admin/feature-permissions', Object.keys(requestConfig).length > 0 ? requestConfig : undefined)
+    const contextConfig = buildPermissionContextRequestConfig()
+    const { data } = await api.get<PermissionResponse>('/admin/feature-permissions', contextConfig)
 
     permissionSchools.value = Array.isArray(data.schools) ? data.schools : []
     permissionFeatures.value = Array.isArray(data.features) ? data.features : []
@@ -280,8 +364,9 @@ const loadPermissionMatrix = async (): Promise<void> => {
       permissions: normalizePermissions(role.permissions),
     }))
 
-    if (hasSelectedSchool) {
-      const hasSchoolInList = permissionSchools.value.some((school) => school.id === selected)
+    const selected = Number(selectedPermissionSchoolCensusId.value)
+    if (selected > 0) {
+      const hasSchoolInList = permissionSchools.value.some((schoolOption) => schoolOption.id === selected)
       if (!hasSchoolInList) {
         selectedPermissionSchoolCensusId.value = 0
         setSchoolContextCensusId(null)
@@ -291,7 +376,7 @@ const loadPermissionMatrix = async (): Promise<void> => {
   } catch (reason) {
     permissionRoles.value = []
     permissionStorageReady.value = false
-    permissionError.value = extractApiMessage(reason) || 'Unable to load role feature permissions right now.'
+    permissionError.value = extractApiMessage(reason) || text.value.permissionLoadError
   } finally {
     permissionLoading.value = false
   }
@@ -300,14 +385,13 @@ const loadPermissionMatrix = async (): Promise<void> => {
 const onPermissionSchoolChange = async (): Promise<void> => {
   const selected = Number(selectedPermissionSchoolCensusId.value)
   setSchoolContextCensusId(selected > 0 ? selected : null)
-
   await loadPermissionMatrix()
 }
 
 const saveRolePermissions = async (role: PermissionRoleRow): Promise<void> => {
   const selected = Number(selectedPermissionSchoolCensusId.value)
   if (selected <= 0) {
-    permissionError.value = 'Select a school before saving permissions.'
+    permissionError.value = text.value.selectSchoolBeforeSaving
     return
   }
 
@@ -329,16 +413,16 @@ const saveRolePermissions = async (role: PermissionRoleRow): Promise<void> => {
 
     permissionNotice.value = typeof data.message === 'string' && data.message.trim() !== ''
       ? data.message
-      : `Permissions updated for ${role.role_name || `role ${role.role_id}`}.`
+      : `${text.value.permissionsUpdatedFor} ${role.role_name || `${text.value.role.toLowerCase()} ${role.role_id}`}.`
   } catch (reason) {
-    permissionError.value = extractApiMessage(reason) || 'Unable to update role feature permissions.'
+    permissionError.value = extractApiMessage(reason) || text.value.permissionUpdateError
   } finally {
     permissionSavingRoleId.value = null
   }
 }
 
 const formatDate = (value: string | null): string => {
-  if (!value) return 'N/A'
+  if (!value) return text.value.notAvailable
 
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -354,3 +438,4 @@ onMounted(async () => {
   }
 })
 </script>
+

@@ -1,10 +1,10 @@
 <template>
   <section v-if="activeTab === 'view'" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <h2 class="font-display text-xl font-bold">Classes (Latest Year {{ latestYear ?? '-' }})</h2>
+      <h2 class="font-display text-xl font-bold">{{ text.classes }} ({{ text.latestYear }} {{ latestYear ?? '-' }})</h2>
       <div class="flex gap-2">
         <select :value="selectedGradeId" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onGradeFilterChange">
-          <option :value="0">All Grades</option>
+          <option :value="0">{{ text.allGrades }}</option>
           <option v-for="option in classGradeOptions" :key="option.grade_id" :value="option.grade_id">{{ option.grade }}</option>
         </select>
       </div>
@@ -14,14 +14,14 @@
       <table class="min-w-full divide-y divide-slate-200 text-sm">
         <thead class="bg-slate-50">
           <tr>
-            <th class="px-3 py-2 text-left">Year</th>
-            <th v-if="isAdmin" class="px-3 py-2 text-left">School</th>
-            <th class="px-3 py-2 text-left">Grade</th>
-            <th class="px-3 py-2 text-left">Class</th>
-            <th class="px-3 py-2 text-left">Approved</th>
-            <th class="px-3 py-2 text-left">Current</th>
-            <th class="px-3 py-2 text-left">Class Teacher</th>
-            <th v-if="canManage" class="px-3 py-2 text-left">Action</th>
+            <th class="px-3 py-2 text-left">{{ text.year }}</th>
+            <th v-if="isAdmin" class="px-3 py-2 text-left">{{ text.school }}</th>
+            <th class="px-3 py-2 text-left">{{ text.grade }}</th>
+            <th class="px-3 py-2 text-left">{{ text.class }}</th>
+            <th class="px-3 py-2 text-left">{{ text.approved }}</th>
+            <th class="px-3 py-2 text-left">{{ text.current }}</th>
+            <th class="px-3 py-2 text-left">{{ text.classTeacher }}</th>
+            <th v-if="canManage" class="px-3 py-2 text-left">{{ text.action }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -41,14 +41,14 @@
             <td class="px-3 py-2">
               <template v-if="canManage && item.sch_grd_cls_id">
                 <select :value="classTeacherEdits[item.sch_grd_cls_id] ?? 0" class="rounded border border-slate-300 px-2 py-1 text-sm" @change="onTeacherChange(item.sch_grd_cls_id, $event)">
-                  <option :value="0">-- None --</option>
+                  <option :value="0">{{ text.none }}</option>
                   <option v-for="staff in staffOptions" :key="staff.stf_id" :value="staff.stf_id">{{ staff.name_with_ini }}</option>
                 </select>
               </template>
               <template v-else>{{ item.class_teacher || '-' }}</template>
             </td>
             <td v-if="canManage" class="px-3 py-2">
-              <button v-if="item.sch_grd_cls_id" class="rounded bg-cyan-600 px-3 py-1 text-xs font-semibold text-white" @click="$emit('save-class', item.sch_grd_cls_id)">Save</button>
+              <button v-if="item.sch_grd_cls_id" class="rounded bg-cyan-600 px-3 py-1 text-xs font-semibold text-white" @click="$emit('save-class', item.sch_grd_cls_id)">{{ text.save }}</button>
             </td>
           </tr>
         </tbody>
@@ -58,15 +58,15 @@
 
   <section v-if="activeTab === 'reports'" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <h2 class="font-display text-xl font-bold">Class Reports</h2>
+      <h2 class="font-display text-xl font-bold">{{ text.classReports }}</h2>
       <div class="flex gap-2">
-        <select :value="reportYear" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportYearChange"><option :value="0">All Years</option><option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option></select>
-        <button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white" @click="$emit('load-report')">View</button>
+        <select :value="reportYear" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportYearChange"><option :value="0">{{ text.allYears }}</option><option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option></select>
+        <button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white" @click="$emit('load-report')">{{ text.view }}</button>
       </div>
     </div>
     <div class="overflow-auto rounded-xl border border-slate-200">
       <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50"><tr><th class="px-3 py-2 text-left">Year</th><th class="px-3 py-2 text-left">Grade</th><th class="px-3 py-2 text-left">Class</th><th class="px-3 py-2 text-left">Student Count</th></tr></thead>
+        <thead class="bg-slate-50"><tr><th class="px-3 py-2 text-left">{{ text.year }}</th><th class="px-3 py-2 text-left">{{ text.grade }}</th><th class="px-3 py-2 text-left">{{ text.class }}</th><th class="px-3 py-2 text-left">{{ text.studentCount }}</th></tr></thead>
         <tbody class="divide-y divide-slate-100"><tr v-for="row in classReport" :key="`${row.year}-${row.grade_id}-${row.class_id}`"><td class="px-3 py-2">{{ row.year }}</td><td class="px-3 py-2">{{ row.grade }}</td><td class="px-3 py-2">{{ row.class }}</td><td class="px-3 py-2">{{ row.student_count }}</td></tr></tbody>
       </table>
     </div>
@@ -74,6 +74,8 @@
 </template>
 
 <script setup lang="ts">
+import { useLocalizedText } from '../../utils/uiText'
+
 interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null }
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
@@ -105,6 +107,66 @@ const emit = defineEmits<{
   (e: 'save-class', classRowId: number): void
   (e: 'load-report'): void
 }>()
+
+const text = useLocalizedText({
+  en: {
+    classes: 'Classes',
+    latestYear: 'Latest Year',
+    allGrades: 'All Grades',
+    year: 'Year',
+    school: 'School',
+    grade: 'Grade',
+    class: 'Class',
+    approved: 'Approved',
+    current: 'Current',
+    classTeacher: 'Class Teacher',
+    action: 'Action',
+    none: '-- None --',
+    save: 'Save',
+    classReports: 'Class Reports',
+    allYears: 'All Years',
+    view: 'View',
+    studentCount: 'Student Count',
+  },
+  si: {
+    classes: 'පන්ති',
+    latestYear: 'නවතම වසර',
+    allGrades: 'සියලු ශ්‍රේණි',
+    year: 'වසර',
+    school: 'පාසල',
+    grade: 'ශ්‍රේණිය',
+    class: 'පන්තිය',
+    approved: 'අනුමත',
+    current: 'වර්තමාන',
+    classTeacher: 'පන්ති භාර ගුරු',
+    action: 'ක්‍රියාව',
+    none: '-- නැත --',
+    save: 'සුරකින්න',
+    classReports: 'පන්ති වාර්තා',
+    allYears: 'සියලු වසර',
+    view: 'දර්ශනය',
+    studentCount: 'සිසුන් ගණන',
+  },
+  ta: {
+    classes: 'வகுப்புகள்',
+    latestYear: 'சமீபத்திய ஆண்டு',
+    allGrades: 'அனைத்து தரங்கள்',
+    year: 'ஆண்டு',
+    school: 'பள்ளி',
+    grade: 'தரம்',
+    class: 'வகுப்பு',
+    approved: 'அங்கீகரிக்கப்பட்டது',
+    current: 'தற்போது',
+    classTeacher: 'வகுப்பு ஆசிரியர்',
+    action: 'செயல்',
+    none: '-- இல்லை --',
+    save: 'சேமி',
+    classReports: 'வகுப்பு அறிக்கைகள்',
+    allYears: 'அனைத்து ஆண்டுகள்',
+    view: 'பார்வை',
+    studentCount: 'மாணவர் எண்ணிக்கை',
+  },
+})
 
 const onGradeFilterChange = (event: Event): void => {
   const value = Number((event.target as HTMLSelectElement).value)
