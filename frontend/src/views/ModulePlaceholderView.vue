@@ -37,22 +37,32 @@
       :is-admin="isAdmin"
       :can-manage="canManage"
       :latest-year="latestClassYear"
+      :selected-year="classYear"
       :selected-grade-id="selectedGradeId"
-      :class-grade-options="classGradeOptions"
+      :class-grade-options="classCreateGradeOptions"
       :classes="classes"
       :class-teacher-edits="classTeacherEdits"
       :class-approved-edits="classApprovedEdits"
-      :class-count-edits="classCountEdits"
       :staff-options="staffOptions"
+      :create-grade-id="createClassGradeId"
+      :create-class-id="createClassId"
+      :create-approved-count="createApprovedCount"
+      :create-class-options="createClassOptions"
       :report-year="reportYear"
       :year-options="yearOptions"
       :class-report="classReport"
+      @update:selected-year="onUpdateClassYear"
       @update:selected-grade="onUpdateSelectedGrade"
+      @update:create-grade="createClassGradeId = $event"
+      @update:create-class="createClassId = $event"
+      @update:create-approved="createApprovedCount = $event"
       @update:report-year="reportYear = $event"
       @update-class-teacher="onUpdateClassTeacher"
       @update-class-approved="onUpdateClassApproved"
-      @update-class-current="onUpdateClassCurrent"
+      @add-class="addClass"
+      @quick-add-class="quickAddClass"
       @save-class="saveClass"
+      @delete-class="deleteClass"
       @load-report="loadClassReport"
     />
 
@@ -102,6 +112,8 @@ interface ClassReportRow { grade_id: number; grade: string; class_id: number; cl
 interface StaffRow { stf_id: number; name_with_ini: string; nic_no: string | null; phone_mobile1: string | null; designation: string | null }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
+interface ClassGradeOption { grade_id: number; grade: string }
+interface ClassOption { class_id: number; class: string }
 
 const currentUser = getUser()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1)
@@ -118,15 +130,19 @@ const staffOptions = ref<StaffOption[]>([])
 const gradeEdits = reactive<Record<number, number>>({})
 const classTeacherEdits = reactive<Record<number, number>>({})
 const classApprovedEdits = reactive<Record<number, number>>({})
-const classCountEdits = reactive<Record<number, number>>({})
-
 const grades = ref<Grade[]>([])
 const latestGradeYear = ref<number | null>(null)
 const gradeReport = ref<GradeReportRow[]>([])
 const classes = ref<ClassItem[]>([])
 const latestClassYear = ref<number | null>(null)
 const classReport = ref<ClassReportRow[]>([])
+const classYear = ref(new Date().getFullYear())
 const selectedGradeId = ref(0)
+const classCreateGradeOptions = ref<ClassGradeOption[]>([])
+const createClassGradeId = ref(0)
+const createClassId = ref(0)
+const createApprovedCount = ref(35)
+const createClassOptions = ref<ClassOption[]>([])
 const reportYear = ref(0)
 const reportMonth = ref(0)
 
@@ -136,17 +152,6 @@ const staffMeta = reactive<StaffMeta>({ current_page: 1, per_page: 20, total: 0,
 const staffSummary = reactive({ total_staff: 0, updated_staff: 0, not_updated_staff: 0 })
 
 const yearOptions = computed(() => { const now = new Date().getFullYear(); return Array.from({ length: 8 }, (_, i) => now - i) })
-const classGradeOptions = computed(() => {
-  const seen = new Set<number>()
-  return grades.value
-    .filter((g): g is Grade & { grade_id: number; grade: string } => typeof g.grade_id === 'number' && typeof g.grade === 'string' && g.grade.length > 0)
-    .filter((g) => {
-      if (seen.has(g.grade_id)) return false
-      seen.add(g.grade_id)
-      return true
-    })
-})
-
 const isGrades = computed(() => props.moduleKey === 'grades')
 const isClasses = computed(() => props.moduleKey === 'classes')
 const isStaff = computed(() => props.moduleKey === 'staff')
@@ -174,7 +179,13 @@ const text = useLocalizedText({
     gradeRowDeleted: 'Grade row deleted.',
     deleteGradeError: 'Unable to delete grade row.',
     classRowUpdated: 'Class row updated.',
+    classAdded: 'Class added successfully.',
+    classDeleted: 'Class row deleted.',
     updateClassError: 'Unable to update class row.',
+    addClassError: 'Unable to add class row.',
+    addNextClassError: 'No more classes available for this grade.',
+    deleteClassConfirm: 'Delete this class row?',
+    deleteClassError: 'Unable to delete class row.',
     moduleLoadError: 'Unable to load module data right now.',
   },
   si: {
@@ -199,7 +210,13 @@ const text = useLocalizedText({
     gradeRowDeleted: 'ශ්‍රේණි පේළිය මකා දමන ලදී.',
     deleteGradeError: 'ශ්‍රේණි පේළිය මකා දැමිය නොහැක.',
     classRowUpdated: 'පන්ති පේළිය යාවත්කාලීන කරන ලදී.',
+    classAdded: 'පන්තිය සාර්ථකව එක් කරන ලදී.',
+    classDeleted: 'පන්ති පේළිය මකා දමන ලදී.',
     updateClassError: 'පන්ති පේළිය යාවත්කාලීන කළ නොහැක.',
+    addClassError: 'පන්ති පේළිය එක් කළ නොහැක.',
+    addNextClassError: 'මෙම ශ්‍රේණිය සඳහා තවත් පන්ති නොමැත.',
+    deleteClassConfirm: 'මෙම පන්ති පේළිය මකන්නද?',
+    deleteClassError: 'පන්ති පේළිය මකා දැමිය නොහැක.',
     moduleLoadError: 'දැනට මොඩියුල දත්ත පූරණය කළ නොහැක.',
   },
   ta: {
@@ -224,7 +241,13 @@ const text = useLocalizedText({
     gradeRowDeleted: 'தர வரிசை நீக்கப்பட்டது.',
     deleteGradeError: 'தர வரிசையை நீக்க முடியவில்லை.',
     classRowUpdated: 'வகுப்பு வரிசை புதுப்பிக்கப்பட்டது.',
+    classAdded: 'வகுப்பு வெற்றிகரமாக சேர்க்கப்பட்டது.',
+    classDeleted: 'வகுப்பு வரிசை நீக்கப்பட்டது.',
     updateClassError: 'வகுப்பு வரிசையை புதுப்பிக்க முடியவில்லை.',
+    addClassError: 'வகுப்பு வரிசையை சேர்க்க முடியவில்லை.',
+    addNextClassError: 'இந்த தரத்திற்காக மேலும் வகுப்புகள் இல்லை.',
+    deleteClassConfirm: 'இந்த வகுப்பு வரிசையை நீக்கவா?',
+    deleteClassError: 'வகுப்பு வரிசையை நீக்க முடியவில்லை.',
     moduleLoadError: 'இப்போது தொகுதி தரவை ஏற்ற முடியவில்லை.',
   },
 })
@@ -253,16 +276,16 @@ const onUpdateSelectedGrade = (gradeId: number): void => {
   selectedGradeId.value = gradeId
 }
 
+const onUpdateClassYear = (year: number): void => {
+  classYear.value = year
+}
+
 const onUpdateClassTeacher = (classRowId: number, stfId: number): void => {
   classTeacherEdits[classRowId] = stfId
 }
 
 const onUpdateClassApproved = (classRowId: number, value: number): void => {
   classApprovedEdits[classRowId] = value
-}
-
-const onUpdateClassCurrent = (classRowId: number, value: number): void => {
-  classCountEdits[classRowId] = value
 }
 
 const loadStaffOptions = async (): Promise<void> => {
@@ -282,13 +305,11 @@ const hydrateGradeEdits = (): void => {
 const hydrateClassEdits = (): void => {
   Object.keys(classTeacherEdits).forEach((k) => delete classTeacherEdits[Number(k)])
   Object.keys(classApprovedEdits).forEach((k) => delete classApprovedEdits[Number(k)])
-  Object.keys(classCountEdits).forEach((k) => delete classCountEdits[Number(k)])
 
   for (const c of classes.value) {
     if (c.sch_grd_cls_id) {
       classTeacherEdits[c.sch_grd_cls_id] = c.stf_id ?? 0
       classApprovedEdits[c.sch_grd_cls_id] = c.approved_std_count ?? 0
-      classCountEdits[c.sch_grd_cls_id] = c.std_count ?? 0
     }
   }
 }
@@ -301,12 +322,38 @@ const loadGrades = async (): Promise<void> => {
 }
 
 const loadClassesView = async (): Promise<void> => {
-  const params: Record<string, number> = {}
+  const params: Record<string, number> = { year: classYear.value }
   if (selectedGradeId.value) params.grade_id = selectedGradeId.value
   const { data } = await api.get<{ year?: number; data: ClassItem[] }>('/classes', { params })
   classes.value = data.data
   latestClassYear.value = typeof data.year === 'number' ? data.year : null
   hydrateClassEdits()
+}
+
+const loadClassCreateOptions = async (): Promise<void> => {
+  const params: Record<string, number> = { year: classYear.value }
+  if (createClassGradeId.value) {
+    params.grade_id = createClassGradeId.value
+  }
+
+  const { data } = await api.get<{ grades: ClassGradeOption[]; classes: ClassOption[] }>('/classes/options', { params })
+  classCreateGradeOptions.value = data.grades
+  createClassOptions.value = data.classes
+
+  if (!classCreateGradeOptions.value.some((option) => option.grade_id === selectedGradeId.value)) {
+    selectedGradeId.value = 0
+  }
+
+  if (!classCreateGradeOptions.value.some((option) => option.grade_id === createClassGradeId.value)) {
+    createClassGradeId.value = 0
+    createClassId.value = 0
+    createClassOptions.value = []
+    return
+  }
+
+  if (!createClassOptions.value.some((option) => option.class_id === createClassId.value)) {
+    createClassId.value = 0
+  }
 }
 
 const initializeYear = async (): Promise<void> => {
@@ -362,12 +409,85 @@ const saveClass = async (classRowId: number): Promise<void> => {
     await api.put(`/classes/${classRowId}`, {
       stf_id: stfId,
       approved_std_count: classApprovedEdits[classRowId],
-      std_count: classCountEdits[classRowId],
     })
     message.value = text.value.classRowUpdated
     await loadClassesView()
   } catch (e: any) {
     error.value = e?.response?.data?.message ?? text.value.updateClassError
+  }
+}
+
+const addClass = async (): Promise<void> => {
+  message.value = ''
+  error.value = ''
+
+  try {
+    const { data } = await api.post('/classes', {
+      year: classYear.value,
+      grade_id: createClassGradeId.value,
+      class_id: createClassId.value,
+      approved_std_count: createApprovedCount.value,
+    })
+    message.value = data?.message ?? text.value.classAdded
+    createClassId.value = 0
+    await Promise.all([loadClassesView(), loadClassCreateOptions()])
+  } catch (e: any) {
+    error.value = e?.response?.data?.message ?? text.value.addClassError
+  }
+}
+
+const quickAddClass = async (classRowId: number): Promise<void> => {
+  message.value = ''
+  error.value = ''
+
+  const sourceRow = classes.value.find((item) => item.sch_grd_cls_id === classRowId)
+  if (!sourceRow || !sourceRow.grade_id || !sourceRow.year) {
+    error.value = text.value.addClassError
+    return
+  }
+
+  try {
+    const { data } = await api.get<{ classes: ClassOption[] }>('/classes/options', {
+      params: {
+        year: sourceRow.year,
+        grade_id: sourceRow.grade_id,
+      },
+    })
+
+    const nextClass = data.classes[0]
+    if (!nextClass) {
+      error.value = text.value.addNextClassError
+      return
+    }
+
+    const response = await api.post('/classes', {
+      year: sourceRow.year,
+      grade_id: sourceRow.grade_id,
+      class_id: nextClass.class_id,
+      approved_std_count: sourceRow.approved_std_count ?? 35,
+    })
+
+    message.value = response.data?.message ?? text.value.classAdded
+    await Promise.all([loadClassesView(), loadClassCreateOptions()])
+  } catch (e: any) {
+    error.value = e?.response?.data?.message ?? text.value.addClassError
+  }
+}
+
+const deleteClass = async (classRowId: number): Promise<void> => {
+  if (!window.confirm(text.value.deleteClassConfirm)) {
+    return
+  }
+
+  message.value = ''
+  error.value = ''
+
+  try {
+    const { data } = await api.delete(`/classes/${classRowId}`)
+    message.value = data?.message ?? text.value.classDeleted
+    await Promise.all([loadClassesView(), loadClassCreateOptions()])
+  } catch (e: any) {
+    error.value = e?.response?.data?.message ?? text.value.deleteClassError
   }
 }
 
@@ -404,7 +524,7 @@ const loadStaffReport = async (): Promise<void> => {
 }
 
 watch(
-  () => [props.moduleKey, activeTab.value, selectedGradeId.value],
+  () => [props.moduleKey, activeTab.value, selectedGradeId.value, classYear.value, createClassGradeId.value],
   async () => {
     loading.value = true
     error.value = ''
@@ -420,7 +540,7 @@ watch(
 
       if (isClasses.value) {
         if (activeTab.value === 'view') {
-          await loadClassesView()
+          await Promise.all([loadClassesView(), loadClassCreateOptions()])
         } else {
           await loadClassReport()
         }
@@ -447,6 +567,12 @@ watch(() => props.moduleKey, () => {
   reportYear.value = 0
   reportMonth.value = 0
   selectedGradeId.value = 0
+  classYear.value = new Date().getFullYear()
+  createClassGradeId.value = 0
+  createClassId.value = 0
+  createApprovedCount.value = 35
+  createClassOptions.value = []
+  classCreateGradeOptions.value = []
   message.value = ''
   error.value = ''
 })

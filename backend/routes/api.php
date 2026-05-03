@@ -43,7 +43,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/grades/report', GradeReportController::class);
 
         Route::get('/classes', [ClassController::class, 'index']);
+        Route::get('/classes/options', [ClassController::class, 'options']);
+        Route::post('/classes', [ClassController::class, 'store']);
         Route::put('/classes/{classRowId}', [ClassController::class, 'update'])->whereNumber('classRowId');
+        Route::delete('/classes/{classRowId}', [ClassController::class, 'destroy'])->whereNumber('classRowId');
         Route::get('/classes/by-grade/{gradeId}', [ClassLookupController::class, 'byGrade'])
             ->whereNumber('gradeId');
         Route::get('/classes/report', ClassReportController::class);
