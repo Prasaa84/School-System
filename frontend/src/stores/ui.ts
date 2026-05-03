@@ -1,11 +1,13 @@
 import { defineStore } from 'pinia'
 
-export type UiLanguage = 'en' | 'si'
+export type UiLanguage = 'en' | 'si' | 'ta'
 
 const LANGUAGE_STORAGE_KEY = 'sds.ui.language'
 
 const normalizeLanguage = (value: unknown): UiLanguage => {
-  return value === 'si' ? 'si' : 'en'
+  if (value === 'si') return 'si'
+  if (value === 'ta') return 'ta'
+  return 'en'
 }
 
 const readStoredLanguage = (): UiLanguage => {

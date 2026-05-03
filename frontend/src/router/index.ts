@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '../views/DashboardView.vue'
+import SchoolView from '../views/SchoolView.vue'
 import LoginView from '../views/LoginView.vue'
 import ModulePlaceholderView from '../views/ModulePlaceholderView.vue'
 import StudentsView from '../views/StudentsView.vue'
@@ -20,6 +21,21 @@ const router = createRouter({
       component: DashboardView,
       meta: { requiresAuth: true },
     },
+    {
+      path: '/school',
+      name: 'school',
+      component: SchoolView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/school/add',
+      redirect: '/school',
+    },
+    {
+      path: '/school/delete',
+      redirect: '/school',
+    },
+
     {
       path: '/students',
       name: 'students',
@@ -58,4 +74,6 @@ router.beforeEach((to) => {
 })
 
 export default router
+
+
 

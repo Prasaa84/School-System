@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\GradeController;
 use App\Http\Controllers\Api\V1\GradeReportController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\ModuleCatalogController;
+use App\Http\Controllers\Api\V1\SchoolController;
 use App\Http\Controllers\Api\V1\StaffController;
 use App\Http\Controllers\Api\V1\StudentController;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +29,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/admin/feature-permissions', [FeaturePermissionController::class, 'index']);
         Route::put('/admin/feature-permissions/roles/{roleId}', [FeaturePermissionController::class, 'updateRole'])
             ->whereNumber('roleId');
+
+        Route::get('/school/details', [SchoolController::class, 'show']);
+        Route::get('/school/details/options', [SchoolController::class, 'options']);
+        Route::post('/school/details', [SchoolController::class, 'store']);
+        Route::put('/school/details', [SchoolController::class, 'update']);
+        Route::delete('/school/details', [SchoolController::class, 'destroy']);
 
         Route::get('/grades', GradeController::class);
         Route::post('/grades/initialize-year', [GradeController::class, 'initializeYear']);
@@ -53,4 +60,6 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/students/{studentId}', [StudentController::class, 'destroy'])->whereNumber('studentId');
     });
 });
+
+
 
