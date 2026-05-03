@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,25 +12,33 @@ use Throwable;
 
 class ClassReportController extends Controller
 {
+    use AppliesSchoolScope;
+
     public function __invoke(Request $request): JsonResponse
     {
         $year = $request->query('year');
         $year = is_numeric($year) ? (int) $year : null;
 
         try {
-            if (!Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('school_grade_class_tbl') || !Schema::hasTable('grade_tbl') || !Schema::hasTable('class_tbl')) {
+            if (!Schema::hasTable('school_grade_class_tbl') || !Schema::hasTable('grade_tbl') || !Schema::hasTable('class_tbl')) {
                 return response()->json(['data' => []]);
             }
 
-            $query = DB::table('student_grade_class_tbl as sgc')
-                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+            $user = $this->authUser();
+            $classColumns = Schema::getColumnListing('school_grade_class_tbl');
+            $classSchoolColumn = $this->resolveSchoolColumn($classColumns);
+            $classHasIsDeleted = in_array('is_deleted', $classColumns, true);
+            $studentHasIsDeleted = Schema::hasColumn('student_grade_class_tbl', 'is_deleted');
+
+            $query = DB::table('school_grade_class_tbl as sgct')
                 ->join('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
                 ->join('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
-                ->when(Schema::hasColumn('student_grade_class_tbl', 'is_deleted'), function ($q): void {
-                    $q->where('sgc.is_deleted', 0);
-                })
-                ->when(Schema::hasColumn('school_grade_class_tbl', 'is_deleted'), function ($q): void {
-                    $q->where('sgct.is_deleted', 0);
+                ->leftJoin('student_grade_class_tbl as sgc', function ($join) use ($studentHasIsDeleted): void {
+                    $join->on('sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id');
+
+                    if ($studentHasIsDeleted) {
+                        $join->where('sgc.is_deleted', 0);
+                    }
                 })
                 ->selectRaw('sgct.grade_id, gt.grade, sgct.class_id, ct.class, sgct.year, COUNT(DISTINCT sgc.std_id) as student_count')
                 ->groupBy('sgct.grade_id', 'gt.grade', 'sgct.class_id', 'ct.class', 'sgct.year')
@@ -37,9 +46,15 @@ class ClassReportController extends Controller
                 ->orderBy('sgct.grade_id')
                 ->orderBy('sgct.class_id');
 
+            if ($classHasIsDeleted) {
+                $query->where('sgct.is_deleted', 0);
+            }
+
             if ($year !== null) {
                 $query->where('sgct.year', $year);
             }
+
+            $this->applySchoolScope($query, $user, 'sgct', $classSchoolColumn);
 
             $rows = $query->get();
 
