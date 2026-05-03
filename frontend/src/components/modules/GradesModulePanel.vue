@@ -16,6 +16,7 @@
             <th v-if="isAdmin" class="px-3 py-2 text-left">{{ text.school }}</th>
             <th class="px-3 py-2 text-left">{{ text.grade }}</th>
             <th class="px-3 py-2 text-left">{{ text.gradeHead }}</th>
+            <th class="px-3 py-2 text-left">{{ text.updatedDateTime }}</th>
             <th v-if="canManage" class="px-3 py-2 text-left">{{ text.action }}</th>
             <th v-if="canManage" class="px-3 py-2 text-left">{{ text.delete }}</th>
           </tr>
@@ -29,13 +30,14 @@
               <template v-if="canManage && grade.sch_grd_id">
                 <select :value="gradeEdits[grade.sch_grd_id] ?? 0" class="rounded border border-slate-300 px-2 py-1 text-sm" @change="onGradeHeadChange(grade.sch_grd_id, $event)">
                   <option :value="0">{{ text.none }}</option>
-                  <option v-for="staff in staffOptions" :key="staff.stf_id" :value="staff.stf_id">{{ staff.name_with_ini }}</option>
+                  <option v-for="staff in availableStaffOptions(grade)" :key="staff.stf_id" :value="staff.stf_id">{{ staff.name_with_ini }}</option>
                 </select>
               </template>
               <template v-else>
                 {{ grade.grade_head || '-' }}
               </template>
             </td>
+            <td class="px-3 py-2">{{ grade.date_updated || '-' }}</td>
             <td v-if="canManage" class="px-3 py-2">
               <button v-if="grade.sch_grd_id" class="rounded bg-cyan-600 px-3 py-1 text-xs font-semibold text-white" @click="$emit('save-grade', grade.sch_grd_id)">{{ text.save }}</button>
             </td>
@@ -73,7 +75,7 @@
 <script setup lang="ts">
 import { useLocalizedText } from '../../utils/uiText'
 
-interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; grade_head: string | null }
+interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; grade_head: string | null; date_updated: string | null }
 interface GradeReportRow { grade_id: number; grade: string; year: number; student_count: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
 
@@ -111,6 +113,7 @@ const text = useLocalizedText({
     school: 'School',
     grade: 'Grade',
     gradeHead: 'Grade Head',
+    updatedDateTime: 'Updated At',
     action: 'Action',
     delete: 'Delete',
     none: '-- None --',
@@ -128,6 +131,7 @@ const text = useLocalizedText({
     school: 'පාසල',
     grade: 'ශ්‍රේණිය',
     gradeHead: 'ශ්‍රේණි ප්‍රධානියා',
+    updatedDateTime: 'යාවත්කාලීන වෙලාව',
     action: 'ක්‍රියාව',
     delete: 'මකන්න',
     none: '-- නැත --',
@@ -145,6 +149,7 @@ const text = useLocalizedText({
     school: 'பள்ளி',
     grade: 'தரம்',
     gradeHead: 'தரத் தலைவர்',
+    updatedDateTime: 'புதுப்பித்த நேரம்',
     action: 'செயல்',
     delete: 'நீக்கு',
     none: '-- இல்லை --',
@@ -169,6 +174,28 @@ const onReportYearChange = (event: Event): void => {
 const onGradeHeadChange = (gradeRowId: number, event: Event): void => {
   const value = Number((event.target as HTMLSelectElement).value)
   emit('update-grade-head', gradeRowId, Number.isFinite(value) ? value : 0)
+}
+
+const availableStaffOptions = (grade: Grade): StaffOption[] => {
+  if (!grade.sch_grd_id) {
+    return props.staffOptions
+  }
+
+  const currentStaffId = props.gradeEdits[grade.sch_grd_id] ?? 0
+  const usedStaffIds = new Set<number>()
+
+  for (const row of props.grades) {
+    if (!row.sch_grd_id || row.sch_grd_id === grade.sch_grd_id) {
+      continue
+    }
+
+    const selectedStaffId = props.gradeEdits[row.sch_grd_id] ?? row.stf_id ?? 0
+    if (selectedStaffId > 0) {
+      usedStaffIds.add(selectedStaffId)
+    }
+  }
+
+  return props.staffOptions.filter((staff) => staff.stf_id === currentStaffId || !usedStaffIds.has(staff.stf_id))
 }
 </script>
 
