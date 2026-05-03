@@ -3,7 +3,7 @@
     <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <h2 class="font-display text-xl font-bold">{{ text.grades }} ({{ text.latestYear }} {{ latestYear ?? '-' }})</h2>
       <div v-if="isPrincipal" class="flex items-center gap-2">
-        <input :value="targetYear" type="number" min="2000" max="2100" class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm" @input="onYearInput" />
+        <input :value="targetYear" type="number" min="2000" :max="currentYear" class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm" @input="onYearInput" />
         <button class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" @click="$emit('initialize-year')">{{ text.initializeYear }}</button>
       </div>
     </div>
@@ -66,6 +66,9 @@
         <thead class="bg-slate-50"><tr><th class="px-3 py-2 text-left">{{ text.year }}</th><th class="px-3 py-2 text-left">{{ text.grade }}</th><th class="px-3 py-2 text-left">{{ text.studentCount }}</th></tr></thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="row in gradeReport" :key="`${row.year}-${row.grade_id}`"><td class="px-3 py-2">{{ row.year }}</td><td class="px-3 py-2">{{ row.grade }}</td><td class="px-3 py-2">{{ row.student_count }}</td></tr>
+          <tr v-if="gradeReport.length === 0">
+            <td colspan="3" class="px-3 py-6 text-center text-slate-500">{{ text.noReportData }}</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -122,6 +125,7 @@ const text = useLocalizedText({
     allYears: 'All Years',
     view: 'View',
     studentCount: 'Student Count',
+    noReportData: 'No data found for the selected year.',
   },
   si: {
     grades: 'ශ්‍රේණි',
@@ -140,6 +144,7 @@ const text = useLocalizedText({
     allYears: 'සියලු වසර',
     view: 'දර්ශනය',
     studentCount: 'සිසුන් ගණන',
+    noReportData: 'තෝරාගත් වසර සඳහා දත්ත හමු නොවීය.',
   },
   ta: {
     grades: 'தரங்கள்',
@@ -158,12 +163,26 @@ const text = useLocalizedText({
     allYears: 'அனைத்து ஆண்டுகள்',
     view: 'பார்வை',
     studentCount: 'மாணவர் எண்ணிக்கை',
+    noReportData: 'தேர்ந்தெடுக்கப்பட்ட ஆண்டிற்கான தரவு இல்லை.',
   },
 })
 
+const currentYear = new Date().getFullYear()
+
 const onYearInput = (event: Event): void => {
-  const value = Number((event.target as HTMLInputElement).value)
-  emit('update:target-year', Number.isFinite(value) ? value : props.targetYear)
+  const input = event.target as HTMLInputElement
+  const value = Number(input.value)
+  if (!Number.isFinite(value)) {
+    emit('update:target-year', props.targetYear)
+    return
+  }
+
+  const nextYear = Math.min(currentYear, Math.max(2000, Math.trunc(value)))
+  if (String(nextYear) !== input.value) {
+    input.value = String(nextYear)
+  }
+
+  emit('update:target-year', nextYear)
 }
 
 const onReportYearChange = (event: Event): void => {
@@ -198,4 +217,3 @@ const availableStaffOptions = (grade: Grade): StaffOption[] => {
   return props.staffOptions.filter((staff) => staff.stf_id === currentStaffId || !usedStaffIds.has(staff.stf_id))
 }
 </script>
-

@@ -372,12 +372,16 @@ const saveClass = async (classRowId: number): Promise<void> => {
 }
 
 const loadGradeReport = async (): Promise<void> => {
+  message.value = ''
+  error.value = ''
   const params = reportYear.value ? { year: reportYear.value } : {}
   const { data } = await api.get<{ data: GradeReportRow[] }>('/grades/report', { params })
   gradeReport.value = data.data
 }
 
 const loadClassReport = async (): Promise<void> => {
+  message.value = ''
+  error.value = ''
   const params = reportYear.value ? { year: reportYear.value } : {}
   const { data } = await api.get<{ data: ClassReportRow[] }>('/classes/report', { params })
   classReport.value = data.data
@@ -390,6 +394,8 @@ const loadStaff = async (page = 1): Promise<void> => {
 }
 
 const loadStaffReport = async (): Promise<void> => {
+  message.value = ''
+  error.value = ''
   const params: Record<string, number> = {}
   if (reportYear.value) params.year = reportYear.value
   if (reportMonth.value) params.month = reportMonth.value
@@ -441,6 +447,11 @@ watch(() => props.moduleKey, () => {
   reportYear.value = 0
   reportMonth.value = 0
   selectedGradeId.value = 0
+  message.value = ''
+  error.value = ''
+})
+
+watch(() => activeTab.value, () => {
   message.value = ''
   error.value = ''
 })
