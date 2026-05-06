@@ -655,6 +655,110 @@ const text = computed(() => {
     }
   }
 
+  if (ui.language === 'ta') {
+    return {
+      studentsModule: 'மாணவர்கள் தொகுதி',
+      studentsTitle: 'மாணவர்கள்',
+      searchPlaceholder: 'அனுமதி இலக்கம் அல்லது பெயரால் தேடவும்',
+      allSchools: 'அனைத்து பாடசாலைகள்',
+      search: 'தேடுக',
+      downloadTemplate: 'Template பதிவிறக்கு',
+      downloadingTemplate: 'பதிவிறக்கப்படுகிறது...',
+      importStudents: 'Excel மூலம் சேர்க்கவும்',
+      addStudent: 'மாணவரை சேர்க்கவும்',
+      admissionNoShort: 'அனுமதி இல.',
+      school: 'பாடசாலை',
+      nameWithInitials: 'முதற் எழுத்துகளுடன் பெயர்',
+      gradeClass: 'தரம்/வகுப்பு',
+      phone: 'தொலைபேசி',
+      dob: 'பிறந்த தேதி',
+      actions: 'செயல்கள்',
+      censusId: 'கணக்கெடுப்பு இலக்கம்',
+      notAvailable: 'இல்லை',
+      edit: 'திருத்து',
+      delete: 'நீக்கு',
+      deleting: 'நீக்கப்படுகிறது...',
+      noStudentsFound: 'மாணவர்கள் எவரும் கிடைக்கவில்லை.',
+      total: 'மொத்தம்',
+      prev: 'முந்தைய',
+      page: 'பக்கம்',
+      next: 'அடுத்தது',
+      editStudentManual: 'மாணவரை திருத்து (கைமுறை)',
+      addStudentManual: 'மாணவரை சேர்க்கவும் (கைமுறை)',
+      close: 'மூடு',
+      coreDetails: 'அடிப்படை விவரங்கள்',
+      admissionNo: 'அனுமதி இலக்கம்',
+      admissionNoExample: 'உதா: 1234',
+      fullName: 'முழு பெயர்',
+      gender: 'பால்',
+      selectGender: 'பாலினத்தைத் தேர்ந்தெடுக்கவும்',
+      female: 'பெண்',
+      male: 'ஆண்',
+      selectSchool: 'பாடசாலையைத் தேர்ந்தெடுக்கவும்',
+      admissionDate: 'சேர்க்கை தேதி',
+      academicYear: 'கல்வியாண்டு',
+      selectAcademicYear: 'கல்வியாண்டைத் தேர்ந்தெடுக்கவும்',
+      selectSchoolFirst: 'முதலில் பாடசாலையைத் தேர்ந்தெடுக்கவும்.',
+      grade: 'தரம்',
+      classLabel: 'வகுப்பு',
+      selectGrade: 'தரத்தைத் தேர்ந்தெடுக்கவும்',
+      selectClass: 'வகுப்பைத் தேர்ந்தெடுக்கவும்',
+      contactAddressOptional: 'தொடர்பு மற்றும் முகவரி (விருப்பம்)',
+      mobile: 'கைபேசி',
+      whatsapp: 'WhatsApp',
+      homePhone: 'வீட்டு தொலைபேசி',
+      addressLine1: 'முகவரி 1',
+      addressLine2: 'முகவரி 2',
+      email: 'மின்னஞ்சல்',
+      demographicsOptional: 'மக்கள்தொகை விவரங்கள் (விருப்பம்)',
+      ethnicGroup: 'இனக்குழு',
+      selectEthnicGroup: 'இனக்குழுவைத் தேர்ந்தெடுக்கவும்',
+      religion: 'மதம்',
+      selectReligion: 'மதத்தைத் தேர்ந்தெடுக்கவும்',
+      parentsGuardianOptional: 'பெற்றோர் / பாதுகாவலர் (விருப்பம்)',
+      fatherName: 'தந்தையின் பெயர்',
+      fatherMobile: 'தந்தையின் கைபேசி',
+      fatherJob: 'தந்தையின் தொழில்',
+      motherName: 'தாயின் பெயர்',
+      motherMobile: 'தாயின் கைபேசி',
+      motherJob: 'தாயின் தொழில்',
+      guardianName: 'பாதுகாவலரின் பெயர்',
+      guardianMobile: 'பாதுகாவலரின் கைபேசி',
+      guardianJob: 'பாதுகாவலரின் தொழில்',
+      cancel: 'ரத்து செய்',
+      updating: 'புதுப்பிக்கப்படுகிறது...',
+      saving: 'சேமிக்கப்படுகிறது...',
+      updateStudent: 'மாணவரை புதுப்பிக்கவும்',
+      saveStudent: 'மாணவரை சேமிக்கவும்',
+      unableToLoadStudentDetails: 'மாணவர் விவரங்களை ஏற்ற முடியவில்லை.',
+      studentDeletedSuccessfully: 'மாணவர் வெற்றிகரமாக நீக்கப்பட்டார்.',
+      unableToDeleteStudent: 'மாணவரை நீக்க முடியவில்லை.',
+      selectGradeAndClassTogether: 'தரமும் வகுப்பும் இரண்டையும் தேர்ந்தெடுக்கவும், இல்லையெனில் இரண்டையும் காலியாக விடவும்.',
+      selectSchoolForStudent: 'இந்த மாணவருக்கான பாடசாலையைத் தேர்ந்தெடுக்கவும்.',
+      selectSchoolShort: 'பாடசாலையைத் தேர்ந்தெடுக்கவும்.',
+      selectValidAcademicYear: 'செல்லுபடியாகும் கல்வியாண்டைத் தேர்ந்தெடுக்கவும்.',
+      academicYearRequired: 'கல்வியாண்டு அவசியம்.',
+      correctHighlightedFields: 'குறிப்பிடப்பட்ட புலங்களைச் சரிசெய்து மீண்டும் முயற்சிக்கவும்.',
+      unableToSaveStudent: 'மாணவரை சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+      noCreatePermission: 'மாணவர்களைச் சேர்க்க உங்களுக்கான அனுமதி இல்லை.',
+      noEditPermission: 'மாணவர்களைத் திருத்த உங்களுக்கான அனுமதி இல்லை.',
+      noDeletePermission: 'மாணவர்களை நீக்க உங்களுக்கான அனுமதி இல்லை.',
+      importHelp: 'மாணவர்களை தொகுதியாகச் சேர்க்க வழங்கப்பட்ட Excel template ஐ பயன்படுத்தவும்.',
+      chooseFile: 'கோப்பைத் தேர்ந்தெடுக்கவும்',
+      upload: 'பதிவேற்று',
+      uploading: 'பதிவேற்றப்படுகிறது...',
+      selectSchoolBeforeImport: 'Bulk upload செய்வதற்கு முன் பாடசாலையைத் தேர்ந்தெடுக்கவும்.',
+      importSummary: 'இறக்குமதி சுருக்கம்',
+      importedCount: 'வெற்றிகரமாக சேர்க்கப்பட்டது',
+      skippedCount: 'தவிர்க்கப்பட்ட காலி வரிகள்',
+      failedCount: 'தோல்வியுற்ற வரிகள்',
+      failedRows: 'தோல்வியுற்ற வரி விவரங்கள்',
+      row: 'வரி',
+      unableToImportStudents: 'மாணவர்களை import செய்ய முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+      unableToDownloadTemplate: 'Template கோப்பை பதிவிறக்க முடியவில்லை.',
+    }
+  }
+
   return {
     studentsModule: 'Students Module',
     studentsTitle: 'Students',
@@ -763,9 +867,15 @@ const censusTooltip = (censusId: number | null | undefined): string => {
 }
 
 const deleteStudentConfirmText = (admissionNo: string): string => {
-  return ui.language === 'si'
-    ? `ඇතුළත් අංකය ${admissionNo} සහිත සිසුවා මකා දමන්නද?`
-    : `Delete student ${admissionNo}?`
+  if (ui.language === 'si') {
+    return `ඇතුළත් අංකය ${admissionNo} සහිත සිසුවා මකා දමන්නද?`
+  }
+
+  if (ui.language === 'ta') {
+    return `அனுமதி இலக்கம் ${admissionNo} கொண்ட மாணவரை நீக்க வேண்டுமா?`
+  }
+
+  return `Delete student ${admissionNo}?`
 }
 const search = ref('')
 const loading = ref(false)
