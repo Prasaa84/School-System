@@ -8,6 +8,24 @@ use Illuminate\Support\Facades\Schema;
 trait ResolvesLocalizedLookupLabels
 {
     /**
+     * @param  array<int, string>  $candidates
+     */
+    protected function buildLocalizedLabelSelect(string $tableAlias, array $candidates, string $alias = 'label'): string
+    {
+        $orderedColumns = $this->orderedLookupColumns($candidates);
+        if ($orderedColumns === []) {
+            return "'' as {$alias}";
+        }
+
+        $parts = array_map(
+            fn (string $column): string => "NULLIF(TRIM({$tableAlias}.{$column}), '')",
+            $orderedColumns,
+        );
+
+        return 'COALESCE(' . implode(', ', $parts) . ") as {$alias}";
+    }
+
+    /**
      * @param  array<int, string>  $labelColumns
      * @return array<string, int>
      */
@@ -54,21 +72,7 @@ trait ResolvesLocalizedLookupLabels
      */
     protected function resolveLookupLabelColumn(string $table, array $candidates): ?string
     {
-        $language = $this->resolveRequestLanguage();
-
-        $preferred = match ($language) {
-            'si' => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_si'))),
-            'ta' => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_ta'))),
-            default => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_en'))),
-        };
-
-        foreach ($preferred as $column) {
-            if (Schema::hasColumn($table, $column)) {
-                return $column;
-            }
-        }
-
-        foreach ($candidates as $column) {
+        foreach ($this->orderedLookupColumns($candidates) as $column) {
             if (Schema::hasColumn($table, $column)) {
                 return $column;
             }
@@ -110,5 +114,27 @@ trait ResolvesLocalizedLookupLabels
         return function_exists('mb_strtolower')
             ? mb_strtolower($text, 'UTF-8')
             : strtolower($text);
+    }
+
+    /**
+     * @param  array<int, string>  $candidates
+     * @return array<int, string>
+     */
+    private function orderedLookupColumns(array $candidates): array
+    {
+        $language = $this->resolveRequestLanguage();
+
+        $preferred = match ($language) {
+            'si' => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_si'))),
+            'ta' => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_ta'))),
+            default => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_en'))),
+        };
+
+        $fallback = array_values(array_filter(
+            $candidates,
+            fn (string $column): bool => !in_array($column, $preferred, true),
+        ));
+
+        return array_values(array_unique(array_merge($preferred, $fallback)));
     }
 }

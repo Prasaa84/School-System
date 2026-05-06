@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Models\Grade;
 use App\Models\SchoolClass;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Schema;
 class ClassController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
     public function index(Request $request): JsonResponse
     {
@@ -60,6 +62,17 @@ class ClassController extends Controller
 
         $gradeId = $request->query('grade_id');
         $gradeId = is_numeric($gradeId) ? (int) $gradeId : null;
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+            'grade_en',
+            'grade_si',
+            'grade_ta',
+        ]);
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+            'class_en',
+            'class_si',
+            'class_ta',
+            'class',
+        ]);
 
         $studentCountQuery = null;
         if (Schema::hasTable('student_grade_class_tbl')) {
@@ -79,12 +92,18 @@ class ClassController extends Controller
                 'sgct.grade_id',
                 'sgct.class_id',
                 'sgct.year',
-                DB::raw('gt.grade as grade'),
-                DB::raw('ct.class as class'),
             ])
             ->where('sgct.year', $selectedYear)
             ->orderBy('sgct.grade_id')
             ->orderBy('sgct.class_id');
+
+        if ($gradeLabelColumn !== null) {
+            $query->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));
+        }
+
+        if ($classLabelColumn !== null) {
+            $query->addSelect(DB::raw("ct.{$classLabelColumn} as class"));
+        }
 
         if ($studentCountQuery !== null) {
             $query->leftJoinSub($studentCountQuery, 'student_counts', function ($join): void {
@@ -174,11 +193,21 @@ class ClassController extends Controller
 
         $grades = [];
         if ($year !== null && Schema::hasTable('school_grade_tbl')) {
+            $gradeOptionLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+                'grade_en',
+                'grade_si',
+                'grade_ta',
+            ]);
+
             $gradeQuery = DB::table('school_grade_tbl as sgt')
                 ->join('grade_tbl as gt', 'sgt.grade_id', '=', 'gt.grade_id')
-                ->select(['sgt.grade_id', 'gt.grade'])
+                ->select(['sgt.grade_id'])
                 ->where('sgt.year', $year)
                 ->orderBy('sgt.grade_id');
+
+            if ($gradeOptionLabelColumn !== null) {
+                $gradeQuery->addSelect(DB::raw("gt.{$gradeOptionLabelColumn} as grade"));
+            }
 
             if (Schema::hasColumn('school_grade_tbl', 'is_deleted')) {
                 $gradeQuery->where('sgt.is_deleted', 0);
@@ -198,10 +227,21 @@ class ClassController extends Controller
             $streamId = is_numeric($streamId) ? (int) $streamId : null;
 
             if ($streamId !== null) {
+                $classOptionLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+                    'class_en',
+                    'class_si',
+                    'class_ta',
+                    'class',
+                ]);
+
                 $classQuery = SchoolClass::query()
-                    ->select(['class_id', 'class'])
+                    ->select(['class_id'])
                     ->where('stream_id', $streamId)
                     ->orderBy('class_id');
+
+                if ($classOptionLabelColumn !== null) {
+                    $classQuery->addSelect(DB::raw("{$classOptionLabelColumn} as class"));
+                }
 
                 $existingClassIds = [];
                 if (Schema::hasTable($gradeClassTable)) {

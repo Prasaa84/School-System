@@ -216,15 +216,15 @@ class StudentController extends Controller
 
         $ethnicGroups = [];
         if (Schema::hasTable('ethnic_group_tbl')) {
-            $ethnicLabelColumn = $this->resolveLookupLabelColumn('ethnic_group_tbl', [
+            $ethnicLabelColumns = [
                 'ethnic_group_en',
                 'ethnic_group_si',
                 'ethnic_group_ta',
-            ]);
+            ];
 
             $query = DB::table('ethnic_group_tbl')->select(['ethnic_group_id']);
-            if ($ethnicLabelColumn !== null) {
-                $query->addSelect(DB::raw("{$ethnicLabelColumn} as label"));
+            if ($this->resolveLookupLabelColumn('ethnic_group_tbl', $ethnicLabelColumns) !== null) {
+                $query->addSelect(DB::raw($this->buildLocalizedLabelSelect('ethnic_group_tbl', $ethnicLabelColumns)));
             }
             if (Schema::hasColumn('ethnic_group_tbl', 'is_deleted')) {
                 $query->where('is_deleted', 0);
@@ -237,15 +237,15 @@ class StudentController extends Controller
 
         $religions = [];
         if (Schema::hasTable('religion_tbl')) {
-            $religionLabelColumn = $this->resolveLookupLabelColumn('religion_tbl', [
+            $religionLabelColumns = [
                 'religion_en',
                 'religion_si',
                 'religion_ta',
-            ]);
+            ];
 
             $query = DB::table('religion_tbl')->select(['religion_id']);
-            if ($religionLabelColumn !== null) {
-                $query->addSelect(DB::raw("{$religionLabelColumn} as label"));
+            if ($this->resolveLookupLabelColumn('religion_tbl', $religionLabelColumns) !== null) {
+                $query->addSelect(DB::raw($this->buildLocalizedLabelSelect('religion_tbl', $religionLabelColumns)));
             }
             if (Schema::hasColumn('religion_tbl', 'is_deleted')) {
                 $query->where('is_deleted', 0);

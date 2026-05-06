@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use Throwable;
 class GradeReportController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -31,6 +33,15 @@ class GradeReportController extends Controller
             $gradeClassColumns = Schema::getColumnListing('school_grade_class_tbl');
             $classHasIsDeleted = in_array('is_deleted', $gradeClassColumns, true);
             $studentHasIsDeleted = Schema::hasColumn('student_grade_class_tbl', 'is_deleted');
+            $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+                'grade_en',
+                'grade_si',
+                'grade_ta',
+            ]);
+
+            if ($gradeLabelColumn === null) {
+                return response()->json(['data' => []]);
+            }
 
             $query = DB::table('school_grade_tbl as sgt')
                 ->join('grade_tbl as gt', 'sgt.grade_id', '=', 'gt.grade_id')
@@ -50,8 +61,8 @@ class GradeReportController extends Controller
                         $join->where('sgc.is_deleted', 0);
                     }
                 })
-                ->selectRaw('sgt.grade_id, gt.grade, sgt.year, COUNT(DISTINCT sgc.std_id) as student_count')
-                ->groupBy('sgt.grade_id', 'gt.grade', 'sgt.year')
+                ->selectRaw("sgt.grade_id, gt.{$gradeLabelColumn} as grade, sgt.year, COUNT(DISTINCT sgc.std_id) as student_count")
+                ->groupBy('sgt.grade_id', DB::raw("gt.{$gradeLabelColumn}"), 'sgt.year')
                 ->orderBy('sgt.year', 'desc')
                 ->orderBy('sgt.grade_id');
 

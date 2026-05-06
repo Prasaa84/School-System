@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use Throwable;
 class ClassReportController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -29,6 +31,21 @@ class ClassReportController extends Controller
             $classSchoolColumn = $this->resolveSchoolColumn($classColumns);
             $classHasIsDeleted = in_array('is_deleted', $classColumns, true);
             $studentHasIsDeleted = Schema::hasColumn('student_grade_class_tbl', 'is_deleted');
+            $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+                'grade_en',
+                'grade_si',
+                'grade_ta',
+            ]);
+            $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+                'class_en',
+                'class_si',
+                'class_ta',
+                'class',
+            ]);
+
+            if ($gradeLabelColumn === null || $classLabelColumn === null) {
+                return response()->json(['data' => []]);
+            }
 
             $query = DB::table('school_grade_class_tbl as sgct')
                 ->join('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
@@ -40,8 +57,8 @@ class ClassReportController extends Controller
                         $join->where('sgc.is_deleted', 0);
                     }
                 })
-                ->selectRaw('sgct.grade_id, gt.grade, sgct.class_id, ct.class, sgct.year, COUNT(DISTINCT sgc.std_id) as student_count')
-                ->groupBy('sgct.grade_id', 'gt.grade', 'sgct.class_id', 'ct.class', 'sgct.year')
+                ->selectRaw("sgct.grade_id, gt.{$gradeLabelColumn} as grade, sgct.class_id, ct.{$classLabelColumn} as class, sgct.year, COUNT(DISTINCT sgc.std_id) as student_count")
+                ->groupBy('sgct.grade_id', DB::raw("gt.{$gradeLabelColumn}"), 'sgct.class_id', DB::raw("ct.{$classLabelColumn}"), 'sgct.year')
                 ->orderBy('sgct.year', 'desc')
                 ->orderBy('sgct.grade_id')
                 ->orderBy('sgct.class_id');

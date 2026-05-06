@@ -13,30 +13,30 @@
           :placeholder="text.searchPlaceholder"
           :class="[
             'w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none ring-cyan-500 focus:ring-2',
-            isAdmin ? 'md:max-w-[180px] lg:max-w-[220px]' : 'md:max-w-[260px] lg:max-w-[300px]',
+            isAdmin ? 'md:max-w-[150px] lg:max-w-[180px]' : 'md:max-w-[220px] lg:max-w-[260px]',
           ]"
           @keyup.enter="loadStudents(1)"
         />
-        <div class="flex flex-wrap items-center gap-2 md:justify-end">
+        <div class="flex flex-wrap items-center gap-2 md:justify-end xl:flex-nowrap">
           <select
             v-if="isAdmin"
             v-model.number="adminSchoolContextCensusId"
-            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2"
+            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 xl:max-w-[220px]"
             @change="onAdminSchoolContextChange"
           >
             <option :value="0">{{ text.allSchools }}</option>
             <option v-for="row in schools" :key="row.id" :value="row.id">{{ row.label }}</option>
           </select>
-          <button class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700" @click="loadStudents(1)">
+          <button class="whitespace-nowrap rounded-xl bg-cyan-600 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-700" @click="loadStudents(1)">
             {{ text.search }}
           </button>
-          <button class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="downloadingTemplate" @click="downloadTemplate">
+          <button class="whitespace-nowrap rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="downloadingTemplate" @click="downloadTemplate">
             {{ downloadingTemplate ? text.downloadingTemplate : text.downloadTemplate }}
           </button>
-          <button v-if="canCreateStudents" class="rounded-xl border border-cyan-300 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100" @click="openImportDialog">
+          <button v-if="canCreateStudents" class="whitespace-nowrap rounded-xl border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100" @click="openImportDialog">
             {{ text.importStudents }}
           </button>
-          <button v-if="canCreateStudents" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddDialog">
+          <button v-if="canCreateStudents" class="whitespace-nowrap rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddDialog">
             {{ text.addStudent }}
           </button>
         </div>
