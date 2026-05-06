@@ -3,24 +3,58 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\StudentImportRequest;
 use App\Http\Requests\Api\V1\StudentIndexRequest;
 use App\Http\Requests\Api\V1\StudentStoreRequest;
 use App\Models\Guardian;
 use App\Models\SchoolDetail;
 use App\Models\SdsUser;
+use App\Models\StudentGradeClass;
 use App\Services\FeatureAccessService;
+use App\Services\StudentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 class StudentController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
-    public function __construct(private readonly FeatureAccessService $featureAccess)
+    /**
+     * Column positions in the shared student import template.
+     *
+     * @var array<string, int>
+     */
+    private const IMPORT_COLUMNS = [
+        'index_no' => 0,
+        'full_name' => 1,
+        'name_with_initials' => 2,
+        'address1' => 3,
+        'address2' => 4,
+        'phone_no' => 5,
+        'whatsapp_no' => 6,
+        'phone_home' => 7,
+        'dob' => 8,
+        'gender_id' => 9,
+        'ethnic_group_id' => 10,
+        'religion_id' => 11,
+        'd_o_admission' => 12,
+    ];
+
+    public function __construct(
+        private readonly FeatureAccessService $featureAccess,
+        private readonly StudentService $studentService,
+    )
     {
     }
 
@@ -87,9 +121,20 @@ class StudentController extends Controller
             ->all();
 
         $currentGradeClasses = collect();
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+            'grade_en',
+            'grade_si',
+            'grade_ta',
+        ]);
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+            'class_en',
+            'class_si',
+            'class_ta',
+            'class',
+        ]);
 
         if (!empty($studentIds) && Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
-            $gradeClassRows = DB::table('student_grade_class_tbl as sgc')
+            $gradeClassQuery = DB::table('student_grade_class_tbl as sgc')
                 ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
                 ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
                 ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
@@ -104,12 +149,19 @@ class StudentController extends Controller
                     'sgc.std_id',
                     'sgc.st_gr_cl_id',
                     'sgct.year',
-                    'gt.grade',
-                    'ct.class',
                 ])
                 ->orderByDesc('sgct.year')
-                ->orderByDesc('sgc.st_gr_cl_id')
-                ->get();
+                ->orderByDesc('sgc.st_gr_cl_id');
+
+            if ($gradeLabelColumn !== null) {
+                $gradeClassQuery->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));
+            }
+
+            if ($classLabelColumn !== null) {
+                $gradeClassQuery->addSelect(DB::raw("ct.{$classLabelColumn} as class"));
+            }
+
+            $gradeClassRows = $gradeClassQuery->get();
 
             $currentGradeClasses = $gradeClassRows
                 ->unique(fn ($row): int => (int) ($row->std_id ?? 0))
@@ -164,25 +216,43 @@ class StudentController extends Controller
 
         $ethnicGroups = [];
         if (Schema::hasTable('ethnic_group_tbl')) {
-            $query = DB::table('ethnic_group_tbl')->select(['ethnic_group_id', 'ethnic_group']);
+            $ethnicLabelColumn = $this->resolveLookupLabelColumn('ethnic_group_tbl', [
+                'ethnic_group_en',
+                'ethnic_group_si',
+                'ethnic_group_ta',
+            ]);
+
+            $query = DB::table('ethnic_group_tbl')->select(['ethnic_group_id']);
+            if ($ethnicLabelColumn !== null) {
+                $query->addSelect(DB::raw("{$ethnicLabelColumn} as label"));
+            }
             if (Schema::hasColumn('ethnic_group_tbl', 'is_deleted')) {
                 $query->where('is_deleted', 0);
             }
             $ethnicGroups = $query->orderBy('ethnic_group_id')->get()->map(fn ($row): array => [
                 'id' => (int) $row->ethnic_group_id,
-                'label' => (string) $row->ethnic_group,
+                'label' => (string) ($row->label ?? ''),
             ])->all();
         }
 
         $religions = [];
         if (Schema::hasTable('religion_tbl')) {
-            $query = DB::table('religion_tbl')->select(['religion_id', 'religion']);
+            $religionLabelColumn = $this->resolveLookupLabelColumn('religion_tbl', [
+                'religion_en',
+                'religion_si',
+                'religion_ta',
+            ]);
+
+            $query = DB::table('religion_tbl')->select(['religion_id']);
+            if ($religionLabelColumn !== null) {
+                $query->addSelect(DB::raw("{$religionLabelColumn} as label"));
+            }
             if (Schema::hasColumn('religion_tbl', 'is_deleted')) {
                 $query->where('is_deleted', 0);
             }
             $religions = $query->orderBy('religion_id')->get()->map(fn ($row): array => [
                 'id' => (int) $row->religion_id,
-                'label' => (string) $row->religion,
+                'label' => (string) ($row->label ?? ''),
             ])->all();
         }
 
@@ -234,166 +304,27 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
-        $indexNo = trim((string) $validated['index_no']);
-
-        $studentExists = DB::table('student_tbl')
-            ->where('index_no', $indexNo)
-            ->where('census_id', $censusId)
-            ->where('is_deleted', 0)
-            ->exists();
-
-        if ($studentExists) {
-            Log::warning('Student store rejected: duplicate admission.', [
-                'index_no' => $indexNo,
-                'census_id' => $censusId,
-            ]);
-
-            return response()->json([
-                'message' => __('messages.students.already_exists', ['index_no' => $indexNo]),
-            ], 422);
-        }
-
-        $gradeId = is_numeric($validated['grade_id'] ?? null) ? (int) $validated['grade_id'] : null;
-        $classId = is_numeric($validated['class_id'] ?? null) ? (int) $validated['class_id'] : null;
-        $year = is_numeric($validated['year'] ?? null) ? (int) $validated['year'] : null;
-
-        if ($gradeId !== null && $classId !== null) {
-            $gradeStreamId = DB::table('grade_tbl')->where('grade_id', $gradeId)->value('stream_id');
-            $classStreamId = DB::table('class_tbl')->where('class_id', $classId)->value('stream_id');
-
-            if ($gradeStreamId === null || $classStreamId === null || (int) $gradeStreamId !== (int) $classStreamId) {
-                return response()->json([
-                    'message' => __('messages.students.grade_class_mismatch'),
-                ], 422);
-            }
-        }
-
-        $hasAnyAssignment = $gradeId !== null || $classId !== null || $year !== null;
-        $hasCompleteAssignment = $gradeId !== null && $classId !== null && $year !== null;
-        if ($hasAnyAssignment && !$hasCompleteAssignment) {
-            $errors = [];
-            if ($gradeId === null || $classId === null) {
-                $message = __('messages.students.validation.grade_class_required');
-                $errors['grade_id'] = [$message];
-                $errors['class_id'] = [$message];
-            }
-            if ($year === null) {
-                $errors['year'] = [__('messages.students.validation.year_invalid')];
-            }
-
-            return $this->invalidStudentAssignmentResponse($errors);
-        }
-
-        $schoolGradeClassId = null;
-        if ($hasCompleteAssignment) {
-            $schoolGradeClassId = $this->resolveSchoolGradeClassId($gradeId, $classId, $year, (string) $censusId);
-            if ($schoolGradeClassId === null) {
-                return response()->json([
-                    'message' => __('messages.students.grade_class_mismatch'),
-                ], 422);
-            }
-        }
-
         try {
-            Log::info('Student store transaction begin.', [
-                'index_no' => $indexNo,
-                'census_id' => $censusId,
-            ]);
-
-            DB::transaction(function () use ($validated, $indexNo, $censusId, $schoolGradeClassId): void {
-                $now = now();
-
-                $studentData = [
-                    'index_no' => $indexNo,
-                    'fullname' => $validated['full_name'],
-                    'name_with_initials' => $validated['name_with_initials'],
-                    'address1' => $validated['address1'] ?? '',
-                    'address2' => $validated['address2'] ?? '',
-                    'phone_no' => $validated['phone_no'] ?? '',
-                    'whatsapp_no' => $validated['whatsapp_no'] ?? '',
-                    'phone_home' => $validated['phone_home'] ?? '',
-                    'dob' => $validated['dob'] ?? null,
-                    'email' => $validated['email'] ?? '',
-                    'gender_id' => (int) $validated['gender_id'],
-                    'ethnic_group_id' => is_numeric($validated['ethnic_group_id'] ?? null) ? (int) $validated['ethnic_group_id'] : 0,
-                    'religion_id' => is_numeric($validated['religion_id'] ?? null) ? (int) $validated['religion_id'] : 0,
-                    'd_o_admission' => $validated['d_o_admission'] ?? null,
-                    'census_id' => $censusId,
-                    'st_status_id' => 1,
-                    'date_added' => $now,
-                    'date_updated' => $now,
-                    'is_deleted' => 0,
-                ];
-
-                $studentId = (int) DB::table('student_tbl')->insertGetId($studentData);
-                Log::info('Student store: student_tbl inserted.', [
-                    'std_id' => $studentId,
-                    'index_no' => $indexNo,
-                    'census_id' => $censusId,
-                ]);
-
-                if ($schoolGradeClassId !== null && Schema::hasTable('student_grade_class_tbl')) {
-                    DB::table('student_grade_class_tbl')->insert([
-                        'std_id' => $studentId,
-                        'sch_grd_cls_id' => $schoolGradeClassId,
-                        'date_added' => $now,
-                        'date_updated' => $now,
-                        'is_deleted' => 0,
-                    ]);
-
-                    Log::info('Student store: student_grade_class_tbl inserted.', [
-                        'std_id' => $studentId,
-                        'sch_grd_cls_id' => $schoolGradeClassId,
-                    ]);
-                }
-
-                $hasGuardianData = collect([
-                    $validated['father_name'] ?? null,
-                    $validated['father_job'] ?? null,
-                    $validated['father_mobile'] ?? null,
-                    $validated['mother_name'] ?? null,
-                    $validated['mother_job'] ?? null,
-                    $validated['mother_mobile'] ?? null,
-                    $validated['guardian_name'] ?? null,
-                    $validated['guardian_job'] ?? null,
-                    $validated['guardian_mobile'] ?? null,
-                ])->contains(fn ($value): bool => trim((string) $value) !== '');
-
-                if ($hasGuardianData && Schema::hasTable('guardian_tbl')) {
-                    Guardian::query()->insert([
-                        'index_no' => $indexNo,
-                        'census_id' => $censusId,
-                        'f_name' => $validated['father_name'] ?? '',
-                        'f_job' => $validated['father_job'] ?? '',
-                        'f_mobile' => $validated['father_mobile'] ?? '',
-                        'm_name' => $validated['mother_name'] ?? '',
-                        'm_job' => $validated['mother_job'] ?? '',
-                        'm_mobile' => $validated['mother_mobile'] ?? '',
-                        'g_name' => $validated['guardian_name'] ?? '',
-                        'g_job' => $validated['guardian_job'] ?? '',
-                        'g_mobile' => $validated['guardian_mobile'] ?? '',
-                        'date_added' => $now,
-                        'date_updated' => $now,
-                        'is_deleted' => 0,
-                    ]);
-
-                    Log::info('Student store: guardian_tbl inserted.', [
-                        'index_no' => $indexNo,
-                        'census_id' => $censusId,
-                    ]);
-                }
-            });
+            $saved = $this->studentService->createStudent($validated, $censusId);
 
             return response()->json([
                 'message' => __('messages.students.create_success'),
                 'data' => [
-                    'index_no' => $indexNo,
-                    'census_id' => $censusId,
+                    'std_id' => $saved['std_id'],
+                    'index_no' => $saved['index_no'],
+                    'census_id' => $saved['census_id'],
                 ],
             ], 201);
+        } catch (ValidationException $e) {
+            $errors = $e->errors();
+
+            return response()->json([
+                'message' => count($errors) > 0 ? collect($errors)->flatten()->first() : __('messages.request.validation_failed'),
+                'errors' => $errors,
+            ], 422);
         } catch (Throwable $e) {
             Log::error('Student store failed.', [
-                'index_no' => $indexNo ?? null,
+                'index_no' => $validated['index_no'] ?? null,
                 'census_id' => $censusId ?? null,
                 'error' => $e->getMessage(),
             ]);
@@ -403,6 +334,153 @@ class StudentController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function import(StudentImportRequest $request): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => __('messages.auth.unauthorized')], 401);
+        }
+
+        $validated = $request->validated();
+        $censusId = $this->resolveImportCensusId($user, $validated);
+
+        if ($censusId === null) {
+            return response()->json(['message' => __('messages.students.census_required')], 422);
+        }
+
+        if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_CREATE)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        try {
+            $sheets = Excel::toArray([], $request->file('file'));
+        } catch (Throwable $e) {
+            Log::warning('Student import file could not be read.', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'message' => __('messages.students.import_file_invalid'),
+            ], 422);
+        }
+
+        $sheet = $sheets[0] ?? [];
+        if (count($sheet) < 2) {
+            return response()->json([
+                'message' => __('messages.students.import_empty'),
+            ], 422);
+        }
+
+        Log::info('Student import started.', [
+            'census_id' => $censusId,
+            'file_name' => $request->file('file')?->getClientOriginalName(),
+            'sheet_row_count' => count($sheet),
+        ]);
+
+        $ethnicMap = $this->buildLookupMap('ethnic_group_tbl', 'ethnic_group_id', [
+            'ethnic_group_en',
+            'ethnic_group_si',
+            'ethnic_group_ta',
+        ]);
+        $religionMap = $this->buildLookupMap('religion_tbl', 'religion_id', [
+            'religion_en',
+            'religion_si',
+            'religion_ta',
+        ]);
+        $imported = [];
+        $failed = [];
+        $skipped = 0;
+
+        foreach ($sheet as $rowIndex => $row) {
+            if ($rowIndex === 0) {
+                continue;
+            }
+
+            if ($this->isImportRowEmpty($row)) {
+                $skipped++;
+                continue;
+            }
+
+            $rowNumber = $rowIndex + 1;
+            $rowData = $this->buildImportRow($row, $ethnicMap, $religionMap);
+
+            try {
+                $studentData = $this->validateImportRow($rowData);
+                $imported[] = $this->studentService->createStudent($studentData, $censusId);
+            } catch (ValidationException $e) {
+                Log::warning('Student import row validation failed.', [
+                    'row' => $rowNumber,
+                    'census_id' => $censusId,
+                    'index_no' => $rowData['index_no'] ?? null,
+                    'errors' => $e->errors(),
+                ]);
+
+                $failed[] = [
+                    'row' => $rowNumber,
+                    'message' => $this->firstValidationMessage($e),
+                    'errors' => $e->errors(),
+                ];
+            } catch (Throwable $e) {
+                Log::error('Student import row failed.', [
+                    'row' => $rowNumber,
+                    'census_id' => $censusId,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $failed[] = [
+                    'row' => $rowNumber,
+                    'message' => __('messages.students.import_failed'),
+                ];
+            }
+        }
+
+        if (count($imported) === 0 && count($failed) === 0) {
+            return response()->json([
+                'message' => __('messages.students.import_empty'),
+            ], 422);
+        }
+
+        Log::info('Student import completed.', [
+            'census_id' => $censusId,
+            'imported_count' => count($imported),
+            'failed_count' => count($failed),
+            'skipped_count' => $skipped,
+        ]);
+
+        return response()->json([
+            'message' => __('messages.students.import_success'),
+            'data' => [
+                'imported_count' => count($imported),
+                'failed_count' => count($failed),
+                'skipped_count' => $skipped,
+                'failed_rows' => $failed,
+            ],
+        ]);
+    }
+
+    public function downloadTemplate(): JsonResponse|BinaryFileResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => __('messages.auth.unauthorized')], 401);
+        }
+
+        $path = storage_path('app/templates/students-template.xlsx');
+        if (!is_file($path)) {
+            Log::warning('Student template download failed: file missing.', [
+                'path' => $path,
+            ]);
+
+            return response()->json([
+                'message' => __('messages.students.template_missing'),
+            ], 404);
+        }
+
+        Log::info('Student template download requested.', [
+            'path' => $path,
+        ]);
+
+        return response()->download($path, 'students-template.xlsx');
     }
 
     public function show(int $studentId): JsonResponse
@@ -428,21 +506,14 @@ class StudentController extends Controller
 
         $gradeClass = null;
         if (Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
-            $gradeClassQuery = DB::table('student_grade_class_tbl as sgc')
-                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
-                ->select(['sgct.grade_id', 'sgct.class_id', 'sgct.year', 'sgc.st_gr_cl_id'])
-                ->where('sgc.std_id', $studentId)
-                ->orderByDesc('sgct.year')
-                ->orderByDesc('sgc.st_gr_cl_id');
-
-            if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
-                $gradeClassQuery->where('sgc.is_deleted', 0);
-            }
-            if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
-                $gradeClassQuery->where('sgct.is_deleted', 0);
-            }
-
-            $gradeClass = $gradeClassQuery->first();
+            $gradeClass = StudentGradeClass::query()
+                ->with('schoolGradeClass')
+                ->where('std_id', $studentId)
+                ->when(Schema::hasColumn('student_grade_class_tbl', 'is_deleted'), function ($query): void {
+                    $query->where('is_deleted', 0);
+                })
+                ->orderByDesc('st_gr_cl_id')
+                ->first();
         }
 
         $guardian = null;
@@ -489,9 +560,9 @@ class StudentController extends Controller
                 'gender_id' => isset($student->gender_id) ? (int) $student->gender_id : 0,
                 'ethnic_group_id' => isset($student->ethnic_group_id) ? (int) $student->ethnic_group_id : 0,
                 'religion_id' => isset($student->religion_id) ? (int) $student->religion_id : 0,
-                'grade_id' => isset($gradeClass?->grade_id) ? (int) $gradeClass->grade_id : 0,
-                'class_id' => isset($gradeClass?->class_id) ? (int) $gradeClass->class_id : 0,
-                'year' => isset($gradeClass?->year) ? (int) $gradeClass->year : null,
+                'grade_id' => isset($gradeClass?->schoolGradeClass?->grade_id) ? (int) $gradeClass->schoolGradeClass->grade_id : 0,
+                'class_id' => isset($gradeClass?->schoolGradeClass?->class_id) ? (int) $gradeClass->schoolGradeClass->class_id : 0,
+                'year' => isset($gradeClass?->schoolGradeClass?->year) ? (int) $gradeClass->schoolGradeClass->year : null,
                 'father_name' => (string) ($guardian->father_name ?? ''),
                 'father_job' => (string) ($guardian->father_job ?? ''),
                 'father_mobile' => (string) ($guardian->father_mobile ?? ''),
@@ -537,203 +608,24 @@ class StudentController extends Controller
             }
         }
 
-        $indexNo = trim((string) $validated['index_no']);
-
-        $duplicateExists = DB::table('student_tbl')
-            ->where('index_no', $indexNo)
-            ->where('census_id', $censusId)
-            ->where('is_deleted', 0)
-            ->where('std_id', '<>', $studentId)
-            ->exists();
-
-        if ($duplicateExists) {
-            return response()->json([
-                'message' => __('messages.students.already_exists', ['index_no' => $indexNo]),
-            ], 422);
-        }
-
-        $gradeId = is_numeric($validated['grade_id'] ?? null) ? (int) $validated['grade_id'] : null;
-        $classId = is_numeric($validated['class_id'] ?? null) ? (int) $validated['class_id'] : null;
-        $year = is_numeric($validated['year'] ?? null) ? (int) $validated['year'] : null;
-
-        if ($gradeId !== null && $classId !== null) {
-            $gradeStreamId = DB::table('grade_tbl')->where('grade_id', $gradeId)->value('stream_id');
-            $classStreamId = DB::table('class_tbl')->where('class_id', $classId)->value('stream_id');
-
-            if ($gradeStreamId === null || $classStreamId === null || (int) $gradeStreamId !== (int) $classStreamId) {
-                return response()->json([
-                    'message' => __('messages.students.grade_class_mismatch'),
-                ], 422);
-            }
-        }
-
-        $hasAnyAssignment = $gradeId !== null || $classId !== null || $year !== null;
-        $hasCompleteAssignment = $gradeId !== null && $classId !== null && $year !== null;
-        if ($hasAnyAssignment && !$hasCompleteAssignment) {
-            $errors = [];
-            if ($gradeId === null || $classId === null) {
-                $message = __('messages.students.validation.grade_class_required');
-                $errors['grade_id'] = [$message];
-                $errors['class_id'] = [$message];
-            }
-            if ($year === null) {
-                $errors['year'] = [__('messages.students.validation.year_invalid')];
-            }
-
-            return $this->invalidStudentAssignmentResponse($errors);
-        }
-
-        $schoolGradeClassId = null;
-        if ($hasCompleteAssignment) {
-            $schoolGradeClassId = $this->resolveSchoolGradeClassId($gradeId, $classId, $year, (string) $censusId);
-            if ($schoolGradeClassId === null) {
-                return response()->json([
-                    'message' => __('messages.students.grade_class_mismatch'),
-                ], 422);
-            }
-        }
-
         try {
-            DB::transaction(function () use ($studentId, $student, $validated, $indexNo, $originalCensusId, $censusId, $hasCompleteAssignment, $schoolGradeClassId): void {
-                $now = now();
-                $oldIndexNo = (string) ($student->index_no ?? '');
-
-                DB::table('student_tbl')->where('std_id', $studentId)->update([
-                    'index_no' => $indexNo,
-                    'fullname' => $validated['full_name'],
-                    'name_with_initials' => $validated['name_with_initials'],
-                    'address1' => $validated['address1'] ?? '',
-                    'address2' => $validated['address2'] ?? '',
-                    'phone_no' => $validated['phone_no'] ?? '',
-                    'whatsapp_no' => $validated['whatsapp_no'] ?? '',
-                    'phone_home' => $validated['phone_home'] ?? '',
-                    'dob' => $validated['dob'] ?? null,
-                    'email' => $validated['email'] ?? '',
-                    'gender_id' => (int) $validated['gender_id'],
-                    'ethnic_group_id' => is_numeric($validated['ethnic_group_id'] ?? null) ? (int) $validated['ethnic_group_id'] : 0,
-                    'religion_id' => is_numeric($validated['religion_id'] ?? null) ? (int) $validated['religion_id'] : 0,
-                    'd_o_admission' => $validated['d_o_admission'] ?? null,
-                    'census_id' => $censusId,
-                    'date_updated' => $now,
-                ]);
-
-                if (Schema::hasTable('student_grade_class_tbl') && $originalCensusId !== $censusId) {
-                    $assignmentQuery = DB::table('student_grade_class_tbl')->where('std_id', $studentId);
-                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
-                        $assignmentUpdates = ['is_deleted' => 1];
-                        if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
-                            $assignmentUpdates['date_updated'] = $now;
-                        }
-                        $assignmentQuery->where('is_deleted', 0)->update($assignmentUpdates);
-                    } else {
-                        $assignmentQuery->delete();
-                    }
-                }
-
-                if ($hasCompleteAssignment && $schoolGradeClassId !== null && Schema::hasTable('student_grade_class_tbl')) {
-                    $assignmentQuery = DB::table('student_grade_class_tbl')->where('std_id', $studentId);
-                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
-                        $assignmentUpdates = ['is_deleted' => 1];
-                        if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
-                            $assignmentUpdates['date_updated'] = $now;
-                        }
-                        $assignmentQuery->where('is_deleted', 0)->update($assignmentUpdates);
-                    } else {
-                        $assignmentQuery->delete();
-                    }
-
-                    $insert = [
-                        'std_id' => $studentId,
-                        'sch_grd_cls_id' => $schoolGradeClassId,
-                    ];
-                    if (Schema::hasColumn('student_grade_class_tbl', 'date_added')) {
-                        $insert['date_added'] = $now;
-                    }
-                    if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
-                        $insert['date_updated'] = $now;
-                    }
-                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
-                        $insert['is_deleted'] = 0;
-                    }
-
-                    DB::table('student_grade_class_tbl')->insert($insert);
-                }
-
-                if (Schema::hasTable('guardian_tbl')) {
-                    if ($originalCensusId !== $censusId && Schema::hasColumn('guardian_tbl', 'census_id')) {
-                        $updates = ['census_id' => $censusId];
-                        if (Schema::hasColumn('guardian_tbl', 'date_updated')) {
-                            $updates['date_updated'] = $now;
-                        }
-
-                        Guardian::query()
-                            ->where('index_no', $oldIndexNo)
-                            ->where('census_id', $originalCensusId)
-                            ->update($updates);
-                    }
-
-                    if ($oldIndexNo !== '' && $oldIndexNo !== $indexNo) {
-                        $query = Guardian::query()->where('index_no', $oldIndexNo);
-                        if (Schema::hasColumn('guardian_tbl', 'census_id')) {
-                            $query->where('census_id', $censusId);
-                        }
-
-                        $updates = ['index_no' => $indexNo];
-                        if (Schema::hasColumn('guardian_tbl', 'date_updated')) {
-                            $updates['date_updated'] = $now;
-                        }
-
-                        $query->update($updates);
-                    }
-
-                    $guardianBase = ['index_no' => $indexNo];
-                    if (Schema::hasColumn('guardian_tbl', 'census_id')) {
-                        $guardianBase['census_id'] = $censusId;
-                    }
-
-                    $guardianUpdates = [
-                        'f_name' => trim((string) ($validated['father_name'] ?? '')),
-                        'f_job' => trim((string) ($validated['father_job'] ?? '')),
-                        'f_mobile' => trim((string) ($validated['father_mobile'] ?? '')),
-                        'm_name' => trim((string) ($validated['mother_name'] ?? '')),
-                        'm_job' => trim((string) ($validated['mother_job'] ?? '')),
-                        'm_mobile' => trim((string) ($validated['mother_mobile'] ?? '')),
-                        'g_name' => trim((string) ($validated['guardian_name'] ?? '')),
-                        'g_job' => trim((string) ($validated['guardian_job'] ?? '')),
-                        'g_mobile' => trim((string) ($validated['guardian_mobile'] ?? '')),
-                    ];
-
-                    if (Schema::hasColumn('guardian_tbl', 'is_deleted')) {
-                        $guardianUpdates['is_deleted'] = 0;
-                    }
-                    if (Schema::hasColumn('guardian_tbl', 'date_updated')) {
-                        $guardianUpdates['date_updated'] = $now;
-                    }
-
-                    $exists = Guardian::query()->where($guardianBase)->exists();
-                    if ($exists) {
-                        Guardian::query()->where($guardianBase)->update($guardianUpdates);
-                    } else {
-                        $hasData = collect($guardianUpdates)->except(['is_deleted', 'date_updated'])->contains(fn ($v): bool => trim((string) $v) !== '');
-                        if ($hasData) {
-                            $insert = array_merge($guardianBase, $guardianUpdates);
-                            if (Schema::hasColumn('guardian_tbl', 'date_added')) {
-                                $insert['date_added'] = $now;
-                            }
-                            Guardian::query()->insert($insert);
-                        }
-                    }
-                }
-            });
+            $saved = $this->studentService->updateStudent($student, $validated, $censusId);
 
             return response()->json([
                 'message' => __('messages.students.update_success'),
                 'data' => [
-                    'std_id' => $studentId,
-                    'index_no' => $indexNo,
-                    'census_id' => $censusId,
+                    'std_id' => $saved['std_id'],
+                    'index_no' => $saved['index_no'],
+                    'census_id' => $saved['census_id'],
                 ],
             ]);
+        } catch (ValidationException $e) {
+            $errors = $e->errors();
+
+            return response()->json([
+                'message' => count($errors) > 0 ? collect($errors)->flatten()->first() : __('messages.request.validation_failed'),
+                'errors' => $errors,
+            ], 422);
         } catch (Throwable $e) {
             Log::error('Student update failed.', [
                 'std_id' => $studentId,
@@ -772,49 +664,7 @@ class StudentController extends Controller
         $indexNo = (string) ($student->index_no ?? '');
 
         try {
-            DB::transaction(function () use ($studentId, $indexNo, $censusId): void {
-                $now = now();
-
-                if (Schema::hasColumn('student_tbl', 'is_deleted')) {
-                    $updates = ['is_deleted' => 1];
-                    if (Schema::hasColumn('student_tbl', 'date_updated')) {
-                        $updates['date_updated'] = $now;
-                    }
-                    DB::table('student_tbl')->where('std_id', $studentId)->update($updates);
-                } else {
-                    DB::table('student_tbl')->where('std_id', $studentId)->delete();
-                }
-
-                if (Schema::hasTable('student_grade_class_tbl')) {
-                    $query = DB::table('student_grade_class_tbl')->where('std_id', $studentId);
-                    if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
-                        $updates = ['is_deleted' => 1];
-                        if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
-                            $updates['date_updated'] = $now;
-                        }
-                        $query->update($updates);
-                    } else {
-                        $query->delete();
-                    }
-                }
-
-                if (Schema::hasTable('guardian_tbl')) {
-                    $query = Guardian::query()->where('index_no', $indexNo);
-                    if (Schema::hasColumn('guardian_tbl', 'census_id')) {
-                        $query->where('census_id', $censusId);
-                    }
-
-                    if (Schema::hasColumn('guardian_tbl', 'is_deleted')) {
-                        $updates = ['is_deleted' => 1];
-                        if (Schema::hasColumn('guardian_tbl', 'date_updated')) {
-                            $updates['date_updated'] = $now;
-                        }
-                        $query->update($updates);
-                    } else {
-                        $query->delete();
-                    }
-                }
-            });
+            $this->studentService->deleteStudent($student);
 
             return response()->json([
                 'message' => __('messages.students.delete_success'),
@@ -834,6 +684,262 @@ class StudentController extends Controller
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveImportCensusId(SdsUser $user, array $validated): ?string
+    {
+        $isAdmin = $this->isAdministrator($user);
+        $adminScopedCensusId = $this->resolveRequestedSchoolCensusId($user);
+        $requestedCensusId = isset($validated['census_id']) ? trim((string) $validated['census_id']) : '';
+
+        return $isAdmin
+            ? ($requestedCensusId !== '' ? $this->resolveCanonicalSchoolCensusId($requestedCensusId) : $adminScopedCensusId)
+            : $this->resolveUserCensusId($user);
+    }
+
+    /**
+     * @param  array<int, mixed>  $row
+     * @param  array<string, int>  $ethnicMap
+     * @param  array<string, int>  $religionMap
+     * @return array<string, mixed>
+     */
+    private function buildImportRow(array $row, array $ethnicMap, array $religionMap): array
+    {
+        $data = [];
+
+        foreach ([
+            'index_no',
+            'full_name',
+            'name_with_initials',
+            'address1',
+            'address2',
+            'phone_no',
+            'whatsapp_no',
+            'phone_home',
+            'email',
+            'year',
+            'grade_id',
+            'class_id',
+            'father_name',
+            'father_job',
+            'father_mobile',
+            'mother_name',
+            'mother_job',
+            'mother_mobile',
+            'guardian_name',
+            'guardian_job',
+            'guardian_mobile',
+        ] as $field) {
+            $value = $this->importText($row, self::IMPORT_COLUMNS[$field] ?? null);
+            if ($value !== '') {
+                $data[$field] = $value;
+            }
+        }
+
+        $dob = $this->importDate($row, self::IMPORT_COLUMNS['dob'] ?? null);
+        if ($dob !== null) {
+            $data['dob'] = $dob;
+        }
+
+        $admissionDate = $this->importDate($row, self::IMPORT_COLUMNS['d_o_admission'] ?? null);
+        if ($admissionDate !== null) {
+            $data['d_o_admission'] = $admissionDate;
+        }
+
+        $genderText = $this->importText($row, self::IMPORT_COLUMNS['gender_id'] ?? null);
+        if ($genderText !== '') {
+            $data['gender_text'] = $genderText;
+            $genderId = $this->mapGender($genderText);
+            if ($genderId !== null) {
+                $data['gender_id'] = $genderId;
+            }
+        }
+
+        $ethnicText = $this->importText($row, self::IMPORT_COLUMNS['ethnic_group_id'] ?? null);
+        if ($ethnicText !== '') {
+            $data['ethnic_group_text'] = $ethnicText;
+            $ethnicId = $this->resolveLookupId('ethnic_group_id', $ethnicText, $ethnicMap);
+            if ($ethnicId !== null) {
+                $data['ethnic_group_id'] = $ethnicId;
+            }
+        }
+
+        $religionText = $this->importText($row, self::IMPORT_COLUMNS['religion_id'] ?? null);
+        if ($religionText !== '') {
+            $data['religion_text'] = $religionText;
+            $religionId = $this->resolveLookupId('religion_id', $religionText, $religionMap);
+            if ($religionId !== null) {
+                $data['religion_id'] = $religionId;
+            }
+        }
+
+        foreach (['year', 'grade_id', 'class_id'] as $field) {
+            if (isset($data[$field]) && is_numeric($data[$field])) {
+                $data[$field] = (int) $data[$field];
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $rowData
+     * @return array<string, mixed>
+     */
+    private function validateImportRow(array $rowData): array
+    {
+        $validator = Validator::make($rowData, StudentStoreRequest::ruleSet(), StudentStoreRequest::messageSet());
+        StudentStoreRequest::addGradeClassCheck($validator, $rowData);
+        $validator->after(function ($validator) use ($rowData): void {
+            if (($rowData['gender_text'] ?? '') !== '' && !isset($rowData['gender_id'])) {
+                $validator->errors()->add('gender_id', __('messages.students.validation.gender_required'));
+            }
+
+            if (($rowData['ethnic_group_text'] ?? '') !== '' && !isset($rowData['ethnic_group_id'])) {
+                $validator->errors()->add('ethnic_group_id', __('messages.students.validation.ethnic_group_invalid'));
+            }
+
+            if (($rowData['religion_text'] ?? '') !== '' && !isset($rowData['religion_id'])) {
+                $validator->errors()->add('religion_id', __('messages.students.validation.religion_invalid'));
+            }
+        });
+
+        if ($validator->fails()) {
+            throw ValidationException::withMessages($validator->errors()->toArray());
+        }
+
+        return $validator->validated();
+    }
+
+    /**
+     * @param  array<int, mixed>  $row
+     */
+    private function isImportRowEmpty(array $row): bool
+    {
+        foreach ($row as $value) {
+            if (trim((string) $value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function importText(array $row, ?int $index): string
+    {
+        if ($index === null || !array_key_exists($index, $row)) {
+            return '';
+        }
+
+        $value = $row[$index];
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_float($value) && floor($value) === $value) {
+            return (string) (int) $value;
+        }
+
+        return trim((string) $value);
+    }
+
+    /**
+     * @param  array<string, int>  $lookupMap
+     */
+    private function resolveLookupId(string $field, string $value, array $lookupMap): ?int
+    {
+        $normalized = $this->normalizeLookupValue($value);
+        if ($normalized !== '' && isset($lookupMap[$normalized])) {
+            return $lookupMap[$normalized];
+        }
+
+        foreach ($this->lookupAliases($field, $normalized) as $alias) {
+            if (isset($lookupMap[$alias])) {
+                return $lookupMap[$alias];
+            }
+        }
+
+        return null;
+    }
+
+    private function importDate(array $row, ?int $index): ?string
+    {
+        if ($index === null || !array_key_exists($index, $row)) {
+            return null;
+        }
+
+        $value = $row[$index];
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        if (is_numeric($value) && (float) $value > 1000) {
+            try {
+                return ExcelDate::excelToDateTimeObject((float) $value)->format('Y-m-d');
+            } catch (Throwable) {
+                return trim((string) $value);
+            }
+        }
+
+        return trim((string) $value);
+    }
+
+    private function mapGender(string $value): ?int
+    {
+        $normalized = $this->normalizeLookupValue($value);
+        if ($normalized === '1' || $normalized === '2') {
+            return (int) $normalized;
+        }
+
+        $labels = config('student_lookup_labels.gender_id', []);
+        foreach ($labels as $id => $aliases) {
+            foreach ($aliases as $alias) {
+                if ($normalized === $this->normalizeLookupValue($alias)) {
+                    return (int) $id;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeHeaderName(mixed $value): string
+    {
+        return $this->normalizeLookupValue($value);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function lookupAliases(string $field, string $normalized): array
+    {
+        $labels = config("student_lookup_labels.{$field}", []);
+        if (!is_array($labels)) {
+            return [];
+        }
+
+        foreach ($labels as $aliases) {
+            if (!is_array($aliases)) {
+                continue;
+            }
+
+            $normalizedAliases = array_map(fn ($alias): string => $this->normalizeLookupValue($alias), $aliases);
+            if (in_array($normalized, $normalizedAliases, true)) {
+                return array_values(array_filter(
+                    $normalizedAliases,
+                    fn ($alias): bool => $alias !== '' && $alias !== $normalized,
+                ));
+            }
+        }
+
+        return [];
+    }
+
+    private function firstValidationMessage(ValidationException $e): string
+    {
+        return collect($e->errors())->flatten()->first() ?? __('messages.request.validation_failed');
+    }
 
     private function loadStudentForWrite(int $studentId, ?SdsUser $user): ?object
     {
@@ -863,61 +969,4 @@ class StudentController extends Controller
 
         return $query->first();
     }
-
-    private function resolveSchoolGradeClassId(int $gradeId, int $classId, int $year, string $censusId): ?int
-    {
-        if (!Schema::hasTable('school_grade_class_tbl')) {
-            return null;
-        }
-
-        $query = DB::table('school_grade_class_tbl')
-            ->where('grade_id', $gradeId)
-            ->where('class_id', $classId)
-            ->where('year', $year)
-            ->whereIn('census_id', $this->censusCandidates($censusId));
-
-        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
-            $query->where('is_deleted', 0);
-        }
-
-        $schoolGradeClassId = $query
-            ->orderByDesc('sch_grd_cls_id')
-            ->value('sch_grd_cls_id');
-
-        return is_numeric($schoolGradeClassId) ? (int) $schoolGradeClassId : null;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function censusCandidates(string $censusId): array
-    {
-        $raw = trim($censusId);
-        $candidates = collect([$raw])->filter(fn ($value): bool => $value !== '');
-
-        if (is_numeric($raw)) {
-            $asNumber = (string) ((int) $raw);
-            $candidates
-                ->push($asNumber)
-                ->push(str_pad($asNumber, 5, '0', STR_PAD_LEFT))
-                ->push(str_pad($asNumber, 7, '0', STR_PAD_LEFT));
-        }
-
-        return $candidates->uniqueStrict()->values()->all();
-    }
-
-    /**
-     * @param  array<string, array<int, string>>  $errors
-     */
-    private function invalidStudentAssignmentResponse(array $errors): JsonResponse
-    {
-        return response()->json([
-            'message' => __('messages.request.validation_failed'),
-            'errors' => $errors,
-        ], 422);
-    }
 }
-
-
-
-

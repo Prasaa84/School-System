@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Models\Grade;
 use App\Models\GradeSpan;
@@ -19,6 +20,7 @@ use Throwable;
 class GradeController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -66,16 +68,25 @@ class GradeController extends Controller
             ? $requestedYear
             : $availableYears[0];
 
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+            'grade_en',
+            'grade_si',
+            'grade_ta',
+        ]);
+
         $query = DB::table("{$gradeTable} as sgt")
             ->leftJoin('grade_tbl as gt', 'sgt.grade_id', '=', 'gt.grade_id')
             ->select([
                 'sgt.sch_grd_id',
                 'sgt.grade_id',
                 'sgt.year',
-                DB::raw('gt.grade as grade'),
             ])
             ->where('sgt.year', $selectedYear)
             ->orderBy('sgt.grade_id');
+
+        if ($gradeLabelColumn !== null) {
+            $query->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));
+        }
 
         if (in_array('stf_id', $gradeColumns, true)) {
             $query->addSelect('sgt.stf_id');
@@ -448,11 +459,15 @@ class GradeController extends Controller
         }
 
         return Grade::query()
-            ->select(['grade_id', 'grade'])
+            ->select(array_filter([
+                'grade_id',
+                $this->resolveLookupLabelColumn($gradeTable, ['grade_en', 'grade_si', 'grade_ta']),
+            ]))
             ->orderBy('grade_id')
             ->get()
             ->filter(function (object $row) use ($startGrade, $endGrade): bool {
-                $gradeNumber = $this->readGradeNumber((string) ($row->grade ?? ''));
+                $gradeName = (string) ($row->grade_en ?? $row->grade_si ?? $row->grade_ta ?? '');
+                $gradeNumber = $this->readGradeNumber($gradeName);
                 if ($gradeNumber === null) {
                     return false;
                 }

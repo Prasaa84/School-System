@@ -19,6 +19,14 @@ class StudentStoreRequest extends FormRequest
      */
     public function rules(): array
     {
+        return self::ruleSet();
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    public static function ruleSet(): array
+    {
         return [
             'index_no' => ['required', 'string', 'regex:/^[0-9]{4,5}$/'],
             'full_name' => ['required', 'string', 'max:255'],
@@ -55,6 +63,14 @@ class StudentStoreRequest extends FormRequest
      */
     public function messages(): array
     {
+        return self::messageSet();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function messageSet(): array
+    {
         return [
             'index_no.required' => __('messages.students.validation.index_no_required'),
             'index_no.regex' => __('messages.students.validation.index_no_format'),
@@ -71,9 +87,17 @@ class StudentStoreRequest extends FormRequest
 
     public function withValidator(Validator $validator): void
     {
-        $validator->after(function (Validator $validator): void {
-            $gradeId = $this->input('grade_id');
-            $classId = $this->input('class_id');
+        self::addGradeClassCheck($validator, $this->all());
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public static function addGradeClassCheck(Validator $validator, array $data): void
+    {
+        $validator->after(function (Validator $validator) use ($data): void {
+            $gradeId = $data['grade_id'] ?? null;
+            $classId = $data['class_id'] ?? null;
 
             $hasGrade = is_numeric($gradeId);
             $hasClass = is_numeric($classId);

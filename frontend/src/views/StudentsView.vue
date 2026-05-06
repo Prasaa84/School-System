@@ -13,7 +13,7 @@
           :placeholder="text.searchPlaceholder"
           :class="[
             'w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none ring-cyan-500 focus:ring-2',
-            isAdmin ? 'md:max-w-xs lg:max-w-sm' : 'md:max-w-md',
+            isAdmin ? 'md:max-w-[180px] lg:max-w-[220px]' : 'md:max-w-[260px] lg:max-w-[300px]',
           ]"
           @keyup.enter="loadStudents(1)"
         />
@@ -29,6 +29,12 @@
           </select>
           <button class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700" @click="loadStudents(1)">
             {{ text.search }}
+          </button>
+          <button class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50" :disabled="downloadingTemplate" @click="downloadTemplate">
+            {{ downloadingTemplate ? text.downloadingTemplate : text.downloadTemplate }}
+          </button>
+          <button v-if="canCreateStudents" class="rounded-xl border border-cyan-300 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100" @click="openImportDialog">
+            {{ text.importStudents }}
           </button>
           <button v-if="canCreateStudents" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddDialog">
             {{ text.addStudent }}
@@ -339,6 +345,58 @@
         </form>
       </section>
     </div>
+
+    <div v-if="showImportDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeImportDialog">
+      <section class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="font-display text-xl font-bold text-slate-900">{{ text.importStudents }}</h2>
+          <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" @click="closeImportDialog">{{ text.close }}</button>
+        </div>
+
+        <p class="text-sm text-slate-600">{{ text.importHelp }}</p>
+        <p v-if="isAdmin && adminSchoolContextCensusId <= 0" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {{ text.selectSchoolBeforeImport }}
+        </p>
+
+        <label class="mt-4 block text-sm text-slate-700">
+          {{ text.chooseFile }}
+          <input
+            class="mt-2 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            @change="onImportFileChange"
+          />
+        </label>
+
+        <p v-if="importFileName" class="mt-2 text-sm text-slate-600">{{ importFileName }}</p>
+
+        <p v-if="importErrorMessage" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {{ importErrorMessage }}
+        </p>
+
+        <div v-if="importResult" class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <p class="font-semibold text-slate-900">{{ text.importSummary }}</p>
+          <p class="mt-2">{{ text.importedCount }}: {{ importResult.imported_count }}</p>
+          <p>{{ text.skippedCount }}: {{ importResult.skipped_count }}</p>
+          <p>{{ text.failedCount }}: {{ importResult.failed_count }}</p>
+          <div v-if="importResult.failed_rows.length > 0" class="mt-3 space-y-1">
+            <p class="font-semibold text-slate-900">{{ text.failedRows }}</p>
+            <p v-for="row in importResult.failed_rows" :key="`${row.row}-${row.message}`">
+              {{ text.row }} {{ row.row }}: {{ row.message }}
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-5 flex justify-end gap-2">
+          <button type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="closeImportDialog">
+            {{ text.cancel }}
+          </button>
+          <button type="button" class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="importing" @click="submitImport">
+            {{ importing ? text.uploading : text.upload }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -474,6 +532,23 @@ interface ValidationErrors {
   [key: string]: string
 }
 
+interface ImportRow {
+  row: number
+  message: string
+}
+
+interface ImportResult {
+  imported_count: number
+  failed_count: number
+  skipped_count: number
+  failed_rows: ImportRow[]
+}
+
+interface StudentImportResponse {
+  message?: string
+  data?: ImportResult
+}
+
 const ui = useUiStore()
 const text = computed(() => {
   if (ui.language === 'si') {
@@ -483,6 +558,9 @@ const text = computed(() => {
       searchPlaceholder: 'ඇතුළත් අංකය හෝ නම අනුව සොයන්න',
       allSchools: 'සියලු පාසල්',
       search: 'සොයන්න',
+      downloadTemplate: 'Template බාගන්න',
+      downloadingTemplate: 'බාගත කරමින්...',
+      importStudents: 'Excel මගින් එක්කරන්න',
       addStudent: 'සිසුවෙකු එක්කරන්න',
       admissionNoShort: 'ඇතුළත් අංකය',
       school: 'පාසල',
@@ -561,6 +639,19 @@ const text = computed(() => {
       noCreatePermission: 'ඔබට සිසුන් එක් කිරීමට අවසර නැත.',
       noEditPermission: 'ඔබට සිසුන් සංස්කරණය කිරීමට අවසර නැත.',
       noDeletePermission: 'ඔබට සිසුන් මකා දැමීමට අවසර නැත.',
+      importHelp: 'සිසුන් එක් කිරීමට ලබා දුන් Excel සැකිල්ල භාවිතා කරන්න.',
+      chooseFile: 'ගොනුව තෝරන්න',
+      upload: 'උඩුගත කරන්න',
+      uploading: 'උඩුගත කරමින්...',
+      selectSchoolBeforeImport: 'Bulk upload කිරීමට පෙර පාසල තෝරන්න.',
+      importSummary: 'ආයාත සාරාංශය',
+      importedCount: 'සාර්ථකව එක් කළ ගණන',
+      skippedCount: 'හිස් පේළි',
+      failedCount: 'අසාර්ථක පේළි',
+      failedRows: 'අසාර්ථක පේළි විස්තර',
+      row: 'පේළිය',
+      unableToImportStudents: 'සිසුන් import කළ නොහැකි විය. නැවත උත්සාහ කරන්න.',
+      unableToDownloadTemplate: 'Template ගොනුව බාගත කළ නොහැකි විය.',
     }
   }
 
@@ -570,6 +661,9 @@ const text = computed(() => {
     searchPlaceholder: 'Search by admission number or name',
     allSchools: 'All schools',
     search: 'Search',
+    downloadTemplate: 'Download Template',
+    downloadingTemplate: 'Downloading...',
+    importStudents: 'Import Students',
     addStudent: 'Add Student',
     admissionNoShort: 'Adm No',
     school: 'School',
@@ -648,6 +742,19 @@ const text = computed(() => {
     noCreatePermission: 'You do not have permission to add students.',
     noEditPermission: 'You do not have permission to edit students.',
     noDeletePermission: 'You do not have permission to delete students.',
+    importHelp: 'Use the provided Excel template to add students in bulk.',
+    chooseFile: 'Choose File',
+    upload: 'Upload',
+    uploading: 'Uploading...',
+    selectSchoolBeforeImport: 'Please select a school before bulk upload.',
+    importSummary: 'Import Summary',
+    importedCount: 'Imported',
+    skippedCount: 'Skipped Empty Rows',
+    failedCount: 'Failed Rows',
+    failedRows: 'Failed Row Details',
+    row: 'Row',
+    unableToImportStudents: 'Unable to import students. Please try again.',
+    unableToDownloadTemplate: 'Unable to download template.',
   }
 })
 
@@ -663,10 +770,14 @@ const deleteStudentConfirmText = (admissionNo: string): string => {
 const search = ref('')
 const loading = ref(false)
 const creating = ref(false)
+const importing = ref(false)
+const downloadingTemplate = ref(false)
 const showAddDialog = ref(false)
+const showImportDialog = ref(false)
 const errorMessage = ref('')
 const createErrorMessage = ref('')
 const createSuccessMessage = ref('')
+const importErrorMessage = ref('')
 const students = ref<Student[]>([])
 const grades = ref<GradeRow[]>([])
 const classes = ref<ClassRow[]>([])
@@ -675,6 +786,9 @@ const religions = ref<OptionRow[]>([])
 const schools = ref<OptionRow[]>([])
 const academicYears = ref<number[]>([])
 const fieldErrors = ref<ValidationErrors>({})
+const importFile = ref<File | null>(null)
+const importFileName = ref('')
+const importResult = ref<ImportResult | null>(null)
 const createErrorMessageRef = ref<HTMLElement | null>(null)
 const currentUser = getUser()
 const initialSchoolContextCensusId = getSchoolContextCensusId()
@@ -879,11 +993,41 @@ const openAddDialog = async (): Promise<void> => {
 
   showAddDialog.value = true
 }
+
+const openImportDialog = (): void => {
+  if (!canCreateStudents.value) {
+    errorMessage.value = text.value.noCreatePermission
+    return
+  }
+
+  importErrorMessage.value = ''
+  importFile.value = null
+  importFileName.value = ''
+  importResult.value = null
+  showImportDialog.value = true
+}
+
 const closeAddDialog = (): void => {
   showAddDialog.value = false
   editStudentId.value = null
   createErrorMessage.value = ''
   fieldErrors.value = {}
+}
+
+const closeImportDialog = (): void => {
+  showImportDialog.value = false
+  importErrorMessage.value = ''
+  importFile.value = null
+  importFileName.value = ''
+  importResult.value = null
+}
+
+const onImportFileChange = (event: Event): void => {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  importFile.value = file
+  importFileName.value = file?.name ?? ''
+  importErrorMessage.value = ''
 }
 
 const onAdminSchoolContextChange = async (): Promise<void> => {
@@ -1273,6 +1417,90 @@ const submitAddStudent = async (): Promise<void> => {
     await scrollToCreateErrorMessage()
   } finally {
     creating.value = false
+  }
+}
+
+const submitImport = async (): Promise<void> => {
+  importErrorMessage.value = ''
+  importResult.value = null
+  createSuccessMessage.value = ''
+
+  if (!canCreateStudents.value) {
+    importErrorMessage.value = text.value.noCreatePermission
+    return
+  }
+
+  if (isAdmin.value && adminSchoolContextCensusId.value <= 0) {
+    importErrorMessage.value = text.value.selectSchoolBeforeImport
+    return
+  }
+
+  if (!importFile.value) {
+    importErrorMessage.value = text.value.chooseFile
+    return
+  }
+
+  importing.value = true
+
+  try {
+    const formData = new FormData()
+    formData.append('file', importFile.value)
+
+    if (isAdmin.value && adminSchoolContextCensusId.value > 0) {
+      formData.append('census_id', String(adminSchoolContextCensusId.value))
+    }
+
+    const { data } = await api.post<StudentImportResponse>('/students/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+
+    importResult.value = data.data ?? {
+      imported_count: 0,
+      failed_count: 0,
+      skipped_count: 0,
+      failed_rows: [],
+    }
+
+    createSuccessMessage.value = typeof data.message === 'string' && data.message.trim() !== ''
+      ? `${data.message} ${text.value.importedCount}: ${importResult.value.imported_count}, ${text.value.failedCount}: ${importResult.value.failed_count}.`
+      : ''
+
+    await loadStudents(meta.value.current_page)
+
+    if (importResult.value.failed_count === 0) {
+      closeImportDialog()
+    }
+  } catch (error) {
+    importErrorMessage.value = extractApiMessage(error) || text.value.unableToImportStudents
+  } finally {
+    importing.value = false
+  }
+}
+
+const downloadTemplate = async (): Promise<void> => {
+  errorMessage.value = ''
+  downloadingTemplate.value = true
+
+  try {
+    const response = await api.get('/students/template', {
+      responseType: 'blob',
+    })
+
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'students-template.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    errorMessage.value = extractApiMessage(error) || text.value.unableToDownloadTemplate
+  } finally {
+    downloadingTemplate.value = false
   }
 }
 

@@ -23,12 +23,21 @@ return [
         'already_exists' => 'Student with admission number :index_no already exists.',
         'census_required' => 'Unable to determine school census ID.',
         'grade_class_mismatch' => 'Selected grade and class do not match.',
+        'import_success' => 'Student import completed.',
+        'import_failed' => 'Unable to import students.',
+        'import_file_required' => 'Please choose an Excel file to import.',
+        'import_file_invalid' => 'The import file must be an Excel or CSV file.',
+        'import_empty' => 'The selected file does not contain any student rows.',
+        'import_template_invalid' => 'The file headers do not match the student template.',
+        'template_missing' => 'Student import template file was not found.',
         'validation' => [
             'index_no_required' => 'Admission number is required.',
             'index_no_format' => 'Admission number must be 4 to 5 digits.',
             'full_name_required' => 'Full name is required.',
             'name_with_initials_required' => 'Name with initials is required.',
             'gender_required' => 'Gender is required.',
+            'ethnic_group_invalid' => 'Selected ethnic group is invalid.',
+            'religion_invalid' => 'Selected religion is invalid.',
             'grade_invalid' => 'Selected grade is invalid.',
             'class_invalid' => 'Selected class is invalid.',
             'year_invalid' => 'Academic year must be between 2000 and 2100.',
@@ -52,7 +61,4 @@ return [
         'server_error' => 'Something went wrong. Please try again.',
     ],
 ];
-
-
-
 
