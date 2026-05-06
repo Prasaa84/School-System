@@ -1285,6 +1285,25 @@ watch(
     setSchoolContextCensusId(null)
   },
 )
+
+watch(
+  () => ui.language,
+  async () => {
+    await loadStudentOptions()
+
+    const selectedYear = Number(createForm.value.year)
+    const selectedGradeId = Number(createForm.value.grade_id)
+
+    if (Number.isFinite(selectedYear) && selectedYear >= 2000 && selectedYear <= 2100) {
+      await loadGrades(selectedYear)
+    }
+
+    if (selectedGradeId > 0) {
+      await loadClasses(selectedGradeId, selectedYear)
+    }
+  },
+)
+
 const extractApiMessage = (error: unknown): string => {
   if (typeof error === 'object' && error !== null && 'response' in error) {
     const response = (error as { response?: { data?: { message?: string } } }).response

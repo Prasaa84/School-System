@@ -124,17 +124,27 @@ trait ResolvesLocalizedLookupLabels
     {
         $language = $this->resolveRequestLanguage();
 
-        $preferred = match ($language) {
-            'si' => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_si'))),
-            'ta' => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_ta'))),
-            default => array_values(array_filter($candidates, fn (string $column): bool => str_ends_with($column, '_en'))),
+        $suffixOrder = match ($language) {
+            'si' => ['_si', '_en', '_ta'],
+            'ta' => ['_ta', '_en', '_si'],
+            default => ['_en', '_si', '_ta'],
         };
+
+        $ordered = [];
+
+        foreach ($suffixOrder as $suffix) {
+            foreach ($candidates as $column) {
+                if (str_ends_with($column, $suffix) && !in_array($column, $ordered, true)) {
+                    $ordered[] = $column;
+                }
+            }
+        }
 
         $fallback = array_values(array_filter(
             $candidates,
-            fn (string $column): bool => !in_array($column, $preferred, true),
+            fn (string $column): bool => !in_array($column, $ordered, true),
         ));
 
-        return array_values(array_unique(array_merge($preferred, $fallback)));
+        return array_values(array_unique(array_merge($ordered, $fallback)));
     }
 }

@@ -68,11 +68,11 @@ class GradeController extends Controller
             ? $requestedYear
             : $availableYears[0];
 
-        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+        $gradeLabelColumns = [
             'grade_en',
             'grade_si',
             'grade_ta',
-        ]);
+        ];
 
         $query = DB::table("{$gradeTable} as sgt")
             ->leftJoin('grade_tbl as gt', 'sgt.grade_id', '=', 'gt.grade_id')
@@ -84,8 +84,8 @@ class GradeController extends Controller
             ->where('sgt.year', $selectedYear)
             ->orderBy('sgt.grade_id');
 
-        if ($gradeLabelColumn !== null) {
-            $query->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));
+        if ($this->resolveLookupLabelColumn('grade_tbl', $gradeLabelColumns) !== null) {
+            $query->addSelect(DB::raw($this->buildLocalizedLabelSelect('gt', $gradeLabelColumns, 'grade')));
         }
 
         if (in_array('stf_id', $gradeColumns, true)) {
@@ -459,14 +459,15 @@ class GradeController extends Controller
         }
 
         return Grade::query()
-            ->select(array_filter([
-                'grade_id',
-                $this->resolveLookupLabelColumn($gradeTable, ['grade_en', 'grade_si', 'grade_ta']),
-            ]))
+            ->select(['grade_id'])
+            ->when(
+                $this->resolveLookupLabelColumn($gradeTable, ['grade_en', 'grade_si', 'grade_ta']) !== null,
+                fn ($query) => $query->addSelect(DB::raw($this->buildLocalizedLabelSelect($gradeTable, ['grade_en', 'grade_si', 'grade_ta'], 'grade')))
+            )
             ->orderBy('grade_id')
             ->get()
             ->filter(function (object $row) use ($startGrade, $endGrade): bool {
-                $gradeName = (string) ($row->grade_en ?? $row->grade_si ?? $row->grade_ta ?? '');
+                $gradeName = (string) ($row->grade ?? '');
                 $gradeNumber = $this->readGradeNumber($gradeName);
                 if ($gradeNumber === null) {
                     return false;
