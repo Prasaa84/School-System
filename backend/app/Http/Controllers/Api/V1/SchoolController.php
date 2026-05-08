@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolDetail;
 use App\Models\SdsUser;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 class SchoolController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
     public function show(Request $request): JsonResponse
     {
@@ -95,24 +97,24 @@ class SchoolController extends Controller
 
         $gradeSpans = [];
         if (Schema::hasTable('grade_span_tbl')) {
-            $gradeSpans = DB::table('grade_span_tbl')
-                ->select(['grd_span_id', 'grd_span', 'grd_span_desc'])
+            $gradeSpanLabelColumns = ['grd_span_en', 'grd_span_si', 'grd_span_ta', 'grd_span'];
+            $availableGradeSpanLabelColumns = $this->availableLookupColumns('grade_span_tbl', $gradeSpanLabelColumns);
+            $gradeSpanQuery = DB::table('grade_span_tbl')
+                ->select(['grd_span_id'])
                 ->orderBy('grd_span_id')
+                ->when(
+                    $availableGradeSpanLabelColumns !== [],
+                    fn ($query) => $query->addSelect(DB::raw($this->buildLocalizedLabelSelect('grade_span_tbl', $availableGradeSpanLabelColumns)))
+                );
+
+            $gradeSpans = $gradeSpanQuery
                 ->get()
-                ->map(function (object $row): array {
-                    $span = trim((string) ($row->grd_span ?? ''));
-                    $description = trim((string) ($row->grd_span_desc ?? ''));
-                    $label = $span !== '' ? $span : (string) ($row->grd_span_id ?? '');
-
-                    if ($description !== '') {
-                        $label = "{$label} - {$description}";
-                    }
-
-                    return [
-                        'id' => (int) $row->grd_span_id,
-                        'label' => $label,
-                    ];
-                })
+                ->map(fn (object $row): array => [
+                    'id' => (int) $row->grd_span_id,
+                    'label' => trim((string) ($row->label ?? '')) !== ''
+                        ? (string) $row->label
+                        : (string) ($row->grd_span_id ?? ''),
+                ])
                 ->all();
         }
 
@@ -120,12 +122,12 @@ class SchoolController extends Controller
             'provinces' => $this->loadOptionRows(
                 'province_tbl',
                 'pro_id',
-                ['pro_name'],
+                ['pro_name_en', 'pro_name_si', 'pro_name_ta', 'pro_name'],
             ),
             'districts' => $this->loadOptionRows(
                 'district_tbl',
                 'dis_id',
-                ['dis_name'],
+                ['dis_name_en', 'dis_name_si', 'dis_name_ta', 'dis_name'],
                 function (Builder $query) use ($provinceId): void {
                     if ($provinceId !== null && Schema::hasColumn('district_tbl', 'pro_id')) {
                         $query->where('pro_id', $provinceId);
@@ -135,7 +137,7 @@ class SchoolController extends Controller
             'education_zones' => $this->loadOptionRows(
                 'edu_zone_tbl',
                 'zone_id',
-                ['zone_name'],
+                ['zone_name_en', 'zone_name_si', 'zone_name_ta', 'zone_name'],
                 function (Builder $query) use ($provinceId, $districtId): void {
                     if ($provinceId !== null && Schema::hasColumn('edu_zone_tbl', 'pro_id')) {
                         $query->where('pro_id', $provinceId);
@@ -149,7 +151,7 @@ class SchoolController extends Controller
             'education_divisions' => $this->loadOptionRows(
                 'edu_div_tbl',
                 'div_id',
-                ['div_name'],
+                ['div_name_en', 'div_name_si', 'div_name_ta', 'div_name'],
                 function (Builder $query) use ($zoneId): void {
                     if ($zoneId !== null && Schema::hasColumn('edu_div_tbl', 'zone_id')) {
                         $query->where('zone_id', $zoneId);
@@ -179,14 +181,14 @@ class SchoolController extends Controller
             'school_types' => $this->loadOptionRows(
                 'school_type_tbl',
                 'sch_type_id',
-                ['sch_type'],
+                ['sch_type_en', 'sch_type_si', 'sch_type_ta', 'sch_type'],
                 null,
                 true,
             ),
             'school_belongs_to' => $this->loadOptionRows(
                 'school_belongs_tbl',
                 'belongs_to_id',
-                ['belongs_to_name'],
+                ['belongs_to_name_en', 'belongs_to_name_si', 'belongs_to_name_ta', 'belongs_to_name'],
             ),
             'grade_spans' => $gradeSpans,
         ]);
@@ -608,15 +610,15 @@ class SchoolController extends Controller
             'is_deleted' => $hasIsDeleted ? (((int) ($row->is_deleted ?? 0)) === 1 ? 1 : 0) : 0,
         ];
 
-        $school['province_name'] = $this->resolveOptionLabel('province_tbl', 'pro_id', $school['pro_id'], ['pro_name']);
-        $school['district_name'] = $this->resolveOptionLabel('district_tbl', 'dis_id', $school['dis_id'], ['dis_name']);
-        $school['education_zone_name'] = $this->resolveOptionLabel('edu_zone_tbl', 'zone_id', $school['zone_id'], ['zone_name']);
-        $school['education_division_name'] = $this->resolveOptionLabel('edu_div_tbl', 'div_id', $school['div_id'], ['div_name']);
+        $school['province_name'] = $this->resolveOptionLabel('province_tbl', 'pro_id', $school['pro_id'], ['pro_name_en', 'pro_name_si', 'pro_name_ta', 'pro_name']);
+        $school['district_name'] = $this->resolveOptionLabel('district_tbl', 'dis_id', $school['dis_id'], ['dis_name_en', 'dis_name_si', 'dis_name_ta', 'dis_name']);
+        $school['education_zone_name'] = $this->resolveOptionLabel('edu_zone_tbl', 'zone_id', $school['zone_id'], ['zone_name_en', 'zone_name_si', 'zone_name_ta', 'zone_name']);
+        $school['education_division_name'] = $this->resolveOptionLabel('edu_div_tbl', 'div_id', $school['div_id'], ['div_name_en', 'div_name_si', 'div_name_ta', 'div_name']);
         $school['divisional_secretariat_name'] = $this->resolveOptionLabel('div_secretariat_tbl', 'div_sec_id', $school['div_sec_id'], ['div_sec_name_en', 'div_sec_name_si', 'div_sec_name_ta']);
         $school['grama_niladhari_division_name'] = $this->resolveOptionLabel('gs_divisions_tbl', 'gs_div_id', $school['gs_div_id'], ['gs_name_en', 'gs_name_si', 'gs_name_ta']);
-        $school['school_type_name'] = $this->resolveOptionLabel('school_type_tbl', 'sch_type_id', $school['sch_type_id'], ['sch_type']);
-        $school['belongs_to_name'] = $this->resolveOptionLabel('school_belongs_tbl', 'belongs_to_id', $school['belongs_to_id'], ['belongs_to_name']);
-        $school['grade_span_name'] = $this->resolveOptionLabel('grade_span_tbl', 'grd_span_id', $school['grd_span_id'], ['grd_span', 'grd_span_desc']);
+        $school['school_type_name'] = $this->resolveOptionLabel('school_type_tbl', 'sch_type_id', $school['sch_type_id'], ['sch_type_en', 'sch_type_si', 'sch_type_ta', 'sch_type']);
+        $school['belongs_to_name'] = $this->resolveOptionLabel('school_belongs_tbl', 'belongs_to_id', $school['belongs_to_id'], ['belongs_to_name_en', 'belongs_to_name_si', 'belongs_to_name_ta', 'belongs_to_name']);
+        $school['grade_span_name'] = $this->resolveOptionLabel('grade_span_tbl', 'grd_span_id', $school['grd_span_id'], ['grd_span_en', 'grd_span_si', 'grd_span_ta', 'grd_span']);
 
         return $school;
     }
@@ -805,31 +807,22 @@ class SchoolController extends Controller
             return null;
         }
 
-        $availableColumns = collect($labelColumns)
-            ->filter(fn (string $column): bool => Schema::hasColumn($table, $column))
-            ->values()
-            ->all();
-
+        $availableColumns = $this->availableLookupColumns($table, $labelColumns);
         if ($availableColumns === []) {
             return null;
         }
 
         $row = DB::table($table)
             ->where($idColumn, $id)
-            ->first($availableColumns);
+            ->selectRaw($this->buildLocalizedLabelSelect($table, $availableColumns))
+            ->first();
 
         if ($row === null) {
             return null;
         }
 
-        foreach ($availableColumns as $column) {
-            $value = trim((string) ($row->{$column} ?? ''));
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        return null;
+        $value = trim((string) ($row->label ?? ''));
+        return $value !== '' ? $value : null;
     }
 
     /**
@@ -847,14 +840,14 @@ class SchoolController extends Controller
             return [];
         }
 
-        $existingLabelColumns = collect($labelColumns)
-            ->filter(fn (string $column): bool => Schema::hasColumn($table, $column))
-            ->values()
-            ->all();
+        $availableColumns = $this->availableLookupColumns($table, $labelColumns);
+        if ($availableColumns === []) {
+            return [];
+        }
 
-        $selectColumns = array_values(array_unique(array_merge([$idColumn], $existingLabelColumns)));
-
-        $query = DB::table($table)->select($selectColumns);
+        $query = DB::table($table)
+            ->select($idColumn)
+            ->selectRaw($this->buildLocalizedLabelSelect($table, $availableColumns));
         if ($excludeDeleted && Schema::hasColumn($table, 'is_deleted')) {
             $query->where('is_deleted', 0);
         }
@@ -866,26 +859,30 @@ class SchoolController extends Controller
         return $query
             ->orderBy($idColumn)
             ->get()
-            ->map(function (object $row) use ($idColumn, $existingLabelColumns): array {
+            ->map(function (object $row) use ($idColumn): array {
                 $id = is_numeric($row->{$idColumn} ?? null) ? (int) $row->{$idColumn} : 0;
-                $label = (string) $id;
-
-                foreach ($existingLabelColumns as $column) {
-                    $value = trim((string) ($row->{$column} ?? ''));
-                    if ($value !== '') {
-                        $label = $value;
-                        break;
-                    }
-                }
+                $label = trim((string) ($row->label ?? ''));
 
                 return [
                     'id' => $id,
-                    'label' => $label,
+                    'label' => $label !== '' ? $label : (string) $id,
                 ];
             })
             ->filter(fn (array $row): bool => $row['id'] > 0)
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<int, string>  $labelColumns
+     * @return array<int, string>
+     */
+    private function availableLookupColumns(string $table, array $labelColumns): array
+    {
+        return array_values(array_filter(
+            $labelColumns,
+            fn (string $column): bool => Schema::hasColumn($table, $column),
+        ));
     }
 }
 
