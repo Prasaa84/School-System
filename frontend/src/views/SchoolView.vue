@@ -229,7 +229,7 @@
           </div>
         </div>
 
-        <div v-else class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 md:grid-cols-2">
+        <div v-else-if="!isAdmin" class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 md:grid-cols-2">
           <p><strong>{{ text.censusId }}:</strong> {{ school.census_id }}</p>
           <p><strong>{{ text.examNumber }}:</strong> {{ school.exam_no || text.notAvailable }}</p>
           <p class="md:col-span-2"><strong>{{ text.schoolName }}:</strong> {{ school.sch_name || text.notAvailable }}</p>
