@@ -296,7 +296,9 @@ class StudentController extends Controller
 
         if ($censusId === null) {
             return response()->json([
-                'message' => __('messages.students.census_required'),
+                'message' => $isAdmin
+                    ? __('messages.students.school_required')
+                    : __('messages.students.census_required'),
             ], 422);
         }
 
@@ -347,7 +349,11 @@ class StudentController extends Controller
         $censusId = $this->resolveImportCensusId($user, $validated);
 
         if ($censusId === null) {
-            return response()->json(['message' => __('messages.students.census_required')], 422);
+            return response()->json([
+                'message' => $this->isAdministrator($user)
+                    ? __('messages.students.school_required')
+                    : __('messages.students.census_required'),
+            ], 422);
         }
 
         if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_CREATE)) {

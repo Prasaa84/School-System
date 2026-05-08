@@ -22,6 +22,7 @@ return [
         'not_found' => 'Student not found.',
         'already_exists' => 'Student with admission number :index_no already exists.',
         'census_required' => 'Unable to determine school census ID.',
+        'school_required' => 'Please select a school first.',
         'grade_class_mismatch' => 'Selected grade and class do not match.',
         'import_success' => 'Student import completed.',
         'import_failed' => 'Unable to import students.',
@@ -61,4 +62,3 @@ return [
         'server_error' => 'Something went wrong. Please try again.',
     ],
 ];
-

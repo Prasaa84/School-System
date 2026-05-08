@@ -354,7 +354,14 @@
         </div>
 
         <p class="text-sm text-slate-600">{{ text.importHelp }}</p>
-        <p v-if="isAdmin && adminSchoolContextCensusId <= 0" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <label v-if="isAdmin" class="mt-4 block text-sm text-slate-700">
+          {{ text.school }} <span class="text-red-600">*</span>
+          <select v-model.number="importSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <option :value="0" disabled>{{ text.selectSchool }}</option>
+            <option v-for="row in schools" :key="row.id" :value="row.id">{{ row.label }}</option>
+          </select>
+        </label>
+        <p v-if="isAdmin && importSchoolCensusId <= 0" class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {{ text.selectSchoolBeforeImport }}
         </p>
 
@@ -391,7 +398,7 @@
           <button type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="closeImportDialog">
             {{ text.cancel }}
           </button>
-          <button type="button" class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="importing" @click="submitImport">
+          <button type="button" class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="importing || (isAdmin && importSchoolCensusId <= 0)" @click="submitImport">
             {{ importing ? text.uploading : text.upload }}
           </button>
         </div>
@@ -894,6 +901,7 @@ const classes = ref<ClassRow[]>([])
 const ethnicGroups = ref<OptionRow[]>([])
 const religions = ref<OptionRow[]>([])
 const schools = ref<OptionRow[]>([])
+const importSchoolCensusId = ref(0)
 const academicYears = ref<number[]>([])
 const fieldErrors = ref<ValidationErrors>({})
 const importFile = ref<File | null>(null)
@@ -1114,6 +1122,7 @@ const openImportDialog = (): void => {
   importFile.value = null
   importFileName.value = ''
   importResult.value = null
+  importSchoolCensusId.value = isAdmin.value && adminSchoolContextCensusId.value > 0 ? Number(adminSchoolContextCensusId.value) : 0
   showImportDialog.value = true
 }
 
@@ -1130,6 +1139,7 @@ const closeImportDialog = (): void => {
   importFile.value = null
   importFileName.value = ''
   importResult.value = null
+  importSchoolCensusId.value = 0
 }
 
 const onImportFileChange = (event: Event): void => {
@@ -1155,6 +1165,10 @@ const onAdminSchoolContextChange = async (): Promise<void> => {
     createForm.value.class_id = 0
     grades.value = []
     classes.value = []
+  }
+
+  if (showImportDialog.value) {
+    importSchoolCensusId.value = censusId > 0 ? censusId : 0
   }
 
   await Promise.all([loadStudents(1), loadGrades()])
@@ -1559,7 +1573,7 @@ const submitImport = async (): Promise<void> => {
     return
   }
 
-  if (isAdmin.value && adminSchoolContextCensusId.value <= 0) {
+  if (isAdmin.value && importSchoolCensusId.value <= 0) {
     importErrorMessage.value = text.value.selectSchoolBeforeImport
     return
   }
@@ -1575,8 +1589,11 @@ const submitImport = async (): Promise<void> => {
     const formData = new FormData()
     formData.append('file', importFile.value)
 
-    if (isAdmin.value && adminSchoolContextCensusId.value > 0) {
-      formData.append('census_id', String(adminSchoolContextCensusId.value))
+    if (isAdmin.value && importSchoolCensusId.value > 0) {
+      const selectedSchoolCensusId = Number(importSchoolCensusId.value)
+      formData.append('census_id', String(selectedSchoolCensusId))
+      adminSchoolContextCensusId.value = selectedSchoolCensusId
+      setSchoolContextCensusId(selectedSchoolCensusId)
     }
 
     const { data } = await api.post<StudentImportResponse>('/students/import', formData, {
