@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
+use App\Models\Staff;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -38,52 +38,53 @@ class StaffController extends Controller
             $user = $this->authUser();
             $staffColumns = Schema::getColumnListing('staff_tbl');
             $staffSchoolColumn = $this->resolveSchoolColumn($staffColumns);
-            $designationLabelColumns = ['desig_type_en', 'desig_type_si', 'desig_type_ta', 'desig_type'];
-            $availableDesignationLabelColumns = Schema::hasTable('designation_tbl')
-                ? array_values(array_filter(
-                    $designationLabelColumns,
-                    fn (string $column): bool => Schema::hasColumn('designation_tbl', $column),
-                ))
-                : [];
-
-            $query = DB::table('staff_tbl as st')
-                ->leftJoin('designation_tbl as dt', 'st.desig_id', '=', 'dt.desig_id')
+            $query = Staff::query()
                 ->select([
-                    'st.stf_id',
-                    'st.name_with_ini',
-                    'st.nic_no',
-                    'st.phone_mobile1',
-                    DB::raw('st.date_updated as last_update'),
+                    'stf_id',
+                    'census_id',
+                    'name_with_ini',
+                    'nic_no',
+                    'gender_id',
+                    'phone_mobile1',
+                    'desig_id',
+                    'date_updated',
                 ])
-                ->when(
-                    $availableDesignationLabelColumns !== [],
-                    fn ($builder) => $builder->addSelect(DB::raw($this->buildLocalizedLabelSelect('dt', $availableDesignationLabelColumns, 'designation')))
-                )
+                ->with([
+                    'school:census_id,sch_name',
+                    'designation',
+                    'gender',
+                ])
                 ->when(Schema::hasColumn('staff_tbl', 'is_deleted'), function ($builder): void {
-                    $builder->where('st.is_deleted', 0);
+                    $builder->where('is_deleted', 0);
                 })
                 ->when($q !== '', function ($builder) use ($q): void {
                     $builder->where(function ($inner) use ($q): void {
                         $inner
-                            ->where('st.name_with_ini', 'like', "%{$q}%")
-                            ->orWhere('st.nic_no', 'like', "%{$q}%")
-                            ->orWhere('st.phone_mobile1', 'like', "%{$q}%");
+                            ->where('name_with_ini', 'like', "%{$q}%")
+                            ->orWhere('nic_no', 'like', "%{$q}%")
+                            ->orWhere('phone_mobile1', 'like', "%{$q}%");
                     });
                 })
-                ->orderBy('st.stf_id', 'desc');
+                ->orderBy('census_id')
+                ->orderBy('stf_id');
 
-            $this->applySchoolScope($query, $user, 'st', $staffSchoolColumn);
+            if (!$this->isAdministrator($user)) {
+                $this->applySchoolScope($query->getQuery(), $user, null, $staffSchoolColumn);
+            }
 
             $paginated = $query->paginate($perPage);
 
             return response()->json([
                 'data' => collect($paginated->items())->map(fn ($row): array => [
                     'stf_id' => (int) $row->stf_id,
+                    'census_id' => isset($row->census_id) ? (string) $row->census_id : null,
                     'name_with_ini' => (string) ($row->name_with_ini ?? ''),
                     'nic_no' => (string) ($row->nic_no ?? ''),
+                    'gender' => $this->localizedGenderLabel($row),
                     'phone_mobile1' => $row->phone_mobile1,
-                    'designation' => $row->designation,
-                    'last_update' => $row->last_update,
+                    'designation' => $this->localizedDesignationLabel($row),
+                    'school_name' => $row->school?->sch_name,
+                    'last_update' => $row->date_updated,
                 ])->all(),
                 'meta' => [
                     'current_page' => $paginated->currentPage(),
@@ -110,14 +111,18 @@ class StaffController extends Controller
         $staffColumns = Schema::getColumnListing('staff_tbl');
         $staffSchoolColumn = $this->resolveSchoolColumn($staffColumns);
 
-        $query = DB::table('staff_tbl as st')
-            ->select(['st.stf_id', 'st.name_with_ini'])
+        $query = Staff::query()
+            ->select(['stf_id', 'census_id', 'name_with_ini'])
             ->when(Schema::hasColumn('staff_tbl', 'is_deleted'), function ($builder): void {
-                $builder->where('st.is_deleted', 0);
+                $builder->where('is_deleted', 0);
             })
-            ->orderBy('st.name_with_ini');
+            ->orderBy('census_id')
+            ->orderBy('name_with_ini')
+            ->orderBy('stf_id');
 
-        $this->applySchoolScope($query, $user, 'st', $staffSchoolColumn);
+        if (!$this->isAdministrator($user)) {
+            $this->applySchoolScope($query->getQuery(), $user, null, $staffSchoolColumn);
+        }
 
         return response()->json([
             'data' => $query->get()->map(fn ($row): array => [
@@ -149,21 +154,23 @@ class StaffController extends Controller
             $staffColumns = Schema::getColumnListing('staff_tbl');
             $staffSchoolColumn = $this->resolveSchoolColumn($staffColumns);
 
-            $base = DB::table('staff_tbl as st')
+            $base = Staff::query()
                 ->when(Schema::hasColumn('staff_tbl', 'is_deleted'), function ($builder): void {
-                    $builder->where('st.is_deleted', 0);
+                    $builder->where('is_deleted', 0);
                 });
 
-            $this->applySchoolScope($base, $user, 'st', $staffSchoolColumn);
+            if (!$this->isAdministrator($user)) {
+                $this->applySchoolScope($base->getQuery(), $user, null, $staffSchoolColumn);
+            }
 
             $total = (int) (clone $base)->count();
 
             $updated = (clone $base)
                 ->when($year !== null, function ($builder) use ($year): void {
-                    $builder->whereYear('st.date_updated', $year);
+                    $builder->whereYear('date_updated', $year);
                 })
                 ->when($month !== null, function ($builder) use ($month): void {
-                    $builder->whereMonth('st.date_updated', $month);
+                    $builder->whereMonth('date_updated', $month);
                 })
                 ->count();
 
@@ -180,5 +187,53 @@ class StaffController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function localizedDesignationLabel(Staff $staff): ?string
+    {
+        $designation = $staff->designation;
+        if ($designation === null) {
+            return null;
+        }
+
+        $language = $this->resolveRequestLanguage();
+        $candidates = match ($language) {
+            'si' => ['desig_type_si', 'desig_type_en', 'desig_type_ta', 'desig_type'],
+            'ta' => ['desig_type_ta', 'desig_type_en', 'desig_type_si', 'desig_type'],
+            default => ['desig_type_en', 'desig_type_si', 'desig_type_ta', 'desig_type'],
+        };
+
+        foreach ($candidates as $column) {
+            $value = trim((string) ($designation->{$column} ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function localizedGenderLabel(Staff $staff): ?string
+    {
+        $gender = $staff->gender;
+        if ($gender === null) {
+            return null;
+        }
+
+        $language = $this->resolveRequestLanguage();
+        $candidates = match ($language) {
+            'si' => ['gender_name_si', 'gender_name_en', 'gender_name_ta', 'gender_name'],
+            'ta' => ['gender_name_ta', 'gender_name_en', 'gender_name_si', 'gender_name'],
+            default => ['gender_name_en', 'gender_name_si', 'gender_name_ta', 'gender_name'],
+        };
+
+        foreach ($candidates as $column) {
+            $value = trim((string) ($gender->{$column} ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 }

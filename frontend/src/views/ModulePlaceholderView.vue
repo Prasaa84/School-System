@@ -99,9 +99,11 @@ import ModuleShell from '../components/modules/ModuleShell.vue'
 import StaffModulePanel from '../components/modules/StaffModulePanel.vue'
 import api from '../services/api'
 import { getUser } from '../services/auth'
+import { useUiStore } from '../stores/ui'
 import { useLocalizedText } from '../utils/uiText'
 
 const props = defineProps<{ moduleKey: string }>()
+const ui = useUiStore()
 
 type TabKey = 'view' | 'reports'
 
@@ -109,7 +111,7 @@ interface Grade { sch_grd_id: number | null; census_id: number | null; school_na
 interface GradeReportRow { grade_id: number; grade: string; year: number; student_count: number }
 interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null }
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
-interface StaffRow { stf_id: number; name_with_ini: string; nic_no: string | null; phone_mobile1: string | null; designation: string | null }
+interface StaffRow { stf_id: number; census_id: string | null; name_with_ini: string; nic_no: string | null; gender: string | null; phone_mobile1: string | null; designation: string | null; school_name: string | null }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
 interface ClassGradeOption { grade_id: number; grade: string }
@@ -523,43 +525,55 @@ const loadStaffReport = async (): Promise<void> => {
   Object.assign(staffSummary, data.summary)
 }
 
+const reloadCurrentModuleData = async (): Promise<void> => {
+  loading.value = true
+  error.value = ''
+
+  try {
+    if (canManage.value && (isGrades.value || isClasses.value)) {
+      await loadStaffOptions()
+    }
+
+    if (isGrades.value) {
+      await loadGrades()
+      if (activeTab.value === 'reports') await loadGradeReport()
+    }
+
+    if (isClasses.value) {
+      if (activeTab.value === 'view') {
+        await Promise.all([loadClassesView(), loadClassCreateOptions()])
+      } else {
+        await loadClassReport()
+      }
+    }
+
+    if (isStaff.value) {
+      if (activeTab.value === 'view') {
+        await loadStaff(1)
+      } else {
+        await loadStaffReport()
+      }
+    }
+  } catch {
+    error.value = text.value.moduleLoadError
+  } finally {
+    loading.value = false
+  }
+}
+
 watch(
   () => [props.moduleKey, activeTab.value, selectedGradeId.value, classYear.value, createClassGradeId.value],
   async () => {
-    loading.value = true
-    error.value = ''
-    try {
-      if (canManage.value && (isGrades.value || isClasses.value)) {
-        await loadStaffOptions()
-      }
-
-      if (isGrades.value) {
-        await loadGrades()
-        if (activeTab.value === 'reports') await loadGradeReport()
-      }
-
-      if (isClasses.value) {
-        if (activeTab.value === 'view') {
-          await Promise.all([loadClassesView(), loadClassCreateOptions()])
-        } else {
-          await loadClassReport()
-        }
-      }
-
-      if (isStaff.value) {
-        if (activeTab.value === 'view') {
-          await loadStaff(1)
-        } else {
-          await loadStaffReport()
-        }
-      }
-    } catch {
-      error.value = text.value.moduleLoadError
-    } finally {
-      loading.value = false
-    }
+    await reloadCurrentModuleData()
   },
   { immediate: true },
+)
+
+watch(
+  () => ui.language,
+  async () => {
+    await reloadCurrentModuleData()
+  },
 )
 
 watch(() => props.moduleKey, () => {

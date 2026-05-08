@@ -1,7 +1,7 @@
 <template>
   <section v-if="activeTab === 'view'" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><h2 class="font-display text-xl font-bold">{{ text.staff }}</h2><div class="flex gap-2"><input :value="staffSearch" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" :placeholder="text.searchPlaceholder" @input="onSearchInput" @keyup.enter="$emit('load-staff', 1)" /><button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white" @click="$emit('load-staff', 1)">{{ text.view }}</button></div></div>
-    <div class="overflow-auto rounded-xl border border-slate-200"><table class="min-w-full divide-y divide-slate-200 text-sm"><thead class="bg-slate-50"><tr><th class="px-3 py-2 text-left">{{ text.id }}</th><th class="px-3 py-2 text-left">{{ text.name }}</th><th class="px-3 py-2 text-left">{{ text.nic }}</th><th class="px-3 py-2 text-left">{{ text.phone }}</th><th class="px-3 py-2 text-left">{{ text.designation }}</th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="row in staffRows" :key="row.stf_id"><td class="px-3 py-2">{{ row.stf_id }}</td><td class="px-3 py-2">{{ row.name_with_ini }}</td><td class="px-3 py-2">{{ row.nic_no || '-' }}</td><td class="px-3 py-2">{{ row.phone_mobile1 || '-' }}</td><td class="px-3 py-2">{{ row.designation || '-' }}</td></tr></tbody></table></div>
+    <div class="overflow-auto rounded-xl border border-slate-200"><table class="min-w-full divide-y divide-slate-200 text-sm"><thead class="bg-slate-50"><tr><th class="px-3 py-2 text-left">{{ text.id }}</th><th class="px-3 py-2 text-left">{{ text.name }}</th><th class="px-3 py-2 text-left">{{ text.nic }}</th><th class="px-3 py-2 text-left">{{ text.gender }}</th><th class="px-3 py-2 text-left">{{ text.phone }}</th><th class="px-3 py-2 text-left">{{ text.designation }}</th><th class="px-3 py-2 text-left">{{ text.school }}</th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="row in staffRows" :key="row.stf_id"><td class="px-3 py-2">{{ row.stf_id }}</td><td class="px-3 py-2">{{ row.name_with_ini }}</td><td class="px-3 py-2">{{ row.nic_no || '-' }}</td><td class="px-3 py-2">{{ row.gender || '-' }}</td><td class="px-3 py-2">{{ row.phone_mobile1 || '-' }}</td><td class="px-3 py-2">{{ row.designation || '-' }}</td><td class="px-3 py-2">{{ row.school_name || '-' }}</td></tr></tbody></table></div>
     <div class="mt-4 flex items-center justify-between text-sm text-slate-600"><span>{{ text.total }}: {{ staffMeta.total }}</span><div class="flex gap-2"><button class="rounded border px-3 py-1" :disabled="staffMeta.current_page <= 1" @click="$emit('load-staff', staffMeta.current_page - 1)">{{ text.prev }}</button><span>{{ text.page }} {{ staffMeta.current_page }} / {{ staffMeta.last_page }}</span><button class="rounded border px-3 py-1" :disabled="staffMeta.current_page >= staffMeta.last_page" @click="$emit('load-staff', staffMeta.current_page + 1)">{{ text.next }}</button></div></div>
   </section>
 
@@ -14,7 +14,7 @@
 <script setup lang="ts">
 import { useLocalizedText } from '../../utils/uiText'
 
-interface StaffRow { stf_id: number; name_with_ini: string; nic_no: string | null; phone_mobile1: string | null; designation: string | null }
+interface StaffRow { stf_id: number; census_id: string | null; name_with_ini: string; nic_no: string | null; gender: string | null; phone_mobile1: string | null; designation: string | null; school_name: string | null }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
 interface StaffSummary { total_staff: number; updated_staff: number; not_updated_staff: number }
 
@@ -45,8 +45,10 @@ const text = useLocalizedText({
     id: 'ID',
     name: 'Name',
     nic: 'NIC',
+    gender: 'Male/Female',
     phone: 'Phone',
     designation: 'Designation',
+    school: 'School',
     total: 'Total',
     prev: 'Prev',
     page: 'Page',
@@ -65,8 +67,10 @@ const text = useLocalizedText({
     id: 'අංකය',
     name: 'නම',
     nic: 'NIC',
+    gender: 'ස්ත්‍රී/පුරුෂ',
     phone: 'දුරකථන',
     designation: 'තනතුර',
+    school: 'පාසල',
     total: 'එකතුව',
     prev: 'පෙර',
     page: 'පිටුව',
@@ -85,8 +89,10 @@ const text = useLocalizedText({
     id: 'ஐடி',
     name: 'பெயர்',
     nic: 'NIC',
+    gender: 'ஆண்/பெண்',
     phone: 'தொலைபேசி',
     designation: 'பதவி',
+    school: 'பாடசாலை',
     total: 'மொத்தம்',
     prev: 'முந்தைய',
     page: 'பக்கம்',
