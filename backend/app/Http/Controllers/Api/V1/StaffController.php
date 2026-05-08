@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use Throwable;
 class StaffController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
     public function index(Request $request): JsonResponse
     {
@@ -36,6 +38,13 @@ class StaffController extends Controller
             $user = $this->authUser();
             $staffColumns = Schema::getColumnListing('staff_tbl');
             $staffSchoolColumn = $this->resolveSchoolColumn($staffColumns);
+            $designationLabelColumns = ['desig_type_en', 'desig_type_si', 'desig_type_ta', 'desig_type'];
+            $availableDesignationLabelColumns = Schema::hasTable('designation_tbl')
+                ? array_values(array_filter(
+                    $designationLabelColumns,
+                    fn (string $column): bool => Schema::hasColumn('designation_tbl', $column),
+                ))
+                : [];
 
             $query = DB::table('staff_tbl as st')
                 ->leftJoin('designation_tbl as dt', 'st.desig_id', '=', 'dt.desig_id')
@@ -44,9 +53,12 @@ class StaffController extends Controller
                     'st.name_with_ini',
                     'st.nic_no',
                     'st.phone_mobile1',
-                    DB::raw('dt.desig_type as designation'),
                     DB::raw('st.date_updated as last_update'),
                 ])
+                ->when(
+                    $availableDesignationLabelColumns !== [],
+                    fn ($builder) => $builder->addSelect(DB::raw($this->buildLocalizedLabelSelect('dt', $availableDesignationLabelColumns, 'designation')))
+                )
                 ->when(Schema::hasColumn('staff_tbl', 'is_deleted'), function ($builder): void {
                     $builder->where('st.is_deleted', 0);
                 })
