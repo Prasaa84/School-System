@@ -189,6 +189,24 @@
                 <option v-for="row in staffReligions" :key="row.id" :value="row.id">{{ row.label }}</option>
               </select>
             </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.educationLevel }}
+              <select v-model.number="staffForm.edu_q_id" :class="staffInputClass('edu_q_id')">
+                <option :value="0">{{ text.selectEducationLevel }}</option>
+                <option v-for="row in educationLevels" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.edu_q_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.edu_q_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.professionalLevel }}
+              <select v-model.number="staffForm.prof_q_id" :class="staffInputClass('prof_q_id')">
+                <option :value="0">{{ text.selectProfessionalLevel }}</option>
+                <option v-for="row in professionalLevels" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.prof_q_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.prof_q_id }}</p>
+            </label>
           </div>
         </fieldset>
 
@@ -259,6 +277,15 @@
             </label>
 
             <label class="text-sm text-slate-700">
+              {{ text.serviceGrade }}
+              <select v-model.number="staffForm.serv_grd_id" :class="staffInputClass('serv_grd_id')">
+                <option :value="0">{{ text.selectServiceGrade }}</option>
+                <option v-for="row in serviceGrades" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.serv_grd_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.serv_grd_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
               {{ text.serviceStatus }}
               <select v-model.number="staffForm.service_status_id" :class="staffInputClass('service_status_id')">
                 <option :value="0">{{ text.selectServiceStatus }}</option>
@@ -296,24 +323,180 @@
             </label>
 
             <label class="text-sm text-slate-700">
-              {{ text.startDateSchool }}
-              <input v-model="staffForm.start_dt_this_sch" type="date" :class="staffInputClass('start_dt_this_sch')" />
+              {{ text.serviceGradeDate }}
+              <input v-model="staffForm.serv_grd_effective_dt" type="date" :class="staffInputClass('serv_grd_effective_dt')" />
+              <p v-if="staffFieldErrors.serv_grd_effective_dt" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.serv_grd_effective_dt }}</p>
             </label>
 
             <label class="text-sm text-slate-700">
-              {{ text.serviceGradeDate }}
-              <input v-model="staffForm.serv_grd_effective_dt" type="date" :class="staffInputClass('serv_grd_effective_dt')" />
+              {{ text.salaryIncreaseDate }}
+              <input v-model="staffForm.sal_incr_dt" type="date" :class="staffInputClass('sal_incr_dt')" />
             </label>
 
             <label class="text-sm text-slate-700">
               {{ text.staffNo }}
-              <input v-model="staffForm.stf_no" type="text" :class="staffInputClass('stf_no')" />
+              <input v-model="staffForm.stf_no" type="number" min="1" :class="staffInputClass('stf_no')" />
             </label>
 
             <label class="text-sm text-slate-700">
               {{ text.salaryNo }}
-              <input v-model="staffForm.salary_no" type="text" :class="staffInputClass('salary_no')" />
+              <input v-model="staffForm.salary_no" type="number" min="1" :class="staffInputClass('salary_no')" />
             </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.currentSchoolDetails }}</legend>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="text-sm text-slate-700">
+              {{ text.section }}
+              <select v-model.number="staffForm.sec_id" :class="staffInputClass('sec_id')">
+                <option :value="0">{{ text.selectSection }}</option>
+                <option v-for="row in sections" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.sec_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.sec_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.sectionRole }}
+              <select v-model.number="staffForm.sec_role_id" :class="staffInputClass('sec_role_id')">
+                <option :value="0">{{ text.selectSectionRole }}</option>
+                <option v-for="row in sectionRoles" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.sec_role_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.sec_role_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.startDateSchool }}
+              <input v-model="staffForm.start_dt_this_sch" type="date" :class="staffInputClass('start_dt_this_sch')" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.involvedTasks }}</legend>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="text-sm text-slate-700">
+              {{ text.mainTask }}
+              <select v-model.number="staffForm.main_task_id" :class="staffInputClass('main_task_id')">
+                <option :value="0">{{ text.selectMainTask }}</option>
+                <option v-for="row in involvedTasks" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.main_task_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.main_task_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.mainTaskSection }}
+              <select v-model.number="staffForm.main_task_section_id" :class="staffInputClass('main_task_section_id')">
+                <option :value="0">{{ text.selectTaskSection }}</option>
+                <option v-for="row in sections" :key="`main-${row.id}`" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.main_task_section_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.main_task_section_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.mainTaskSubject }}
+              <select v-model.number="staffForm.main_task_subject_id" :class="staffInputClass('main_task_subject_id')">
+                <option :value="0">{{ text.selectTaskSubject }}</option>
+                <option v-for="row in mainTaskSubjects" :key="`main-subj-${row.id}`" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.main_task_subject_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.main_task_subject_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.secondTask }}
+              <select v-model.number="staffForm.second_task_id" :class="staffInputClass('second_task_id')">
+                <option :value="0">{{ text.selectSecondTask }}</option>
+                <option v-for="row in involvedTasks" :key="`second-${row.id}`" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.second_task_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.second_task_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.secondTaskSection }}
+              <select v-model.number="staffForm.second_task_section_id" :class="staffInputClass('second_task_section_id')">
+                <option :value="0">{{ text.selectTaskSection }}</option>
+                <option v-for="row in sections" :key="`second-sec-${row.id}`" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.second_task_section_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.second_task_section_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.secondTaskSubject }}
+              <select v-model.number="staffForm.second_task_subject_id" :class="staffInputClass('second_task_subject_id')">
+                <option :value="0">{{ text.selectTaskSubject }}</option>
+                <option v-for="row in secondTaskSubjects" :key="`second-subj-${row.id}`" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.second_task_subject_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.second_task_subject_id }}</p>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.serviceStatusDetails }}</legend>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="text-sm text-slate-700">
+              {{ text.attachedProvince }}
+              <select v-model.number="staffForm.service_status_province_id" :class="staffInputClass('service_status_province_id')">
+                <option :value="0">{{ text.selectAttachedProvince }}</option>
+                <option v-for="row in provinces" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.attachedZone }}
+              <select v-model.number="staffForm.service_status_zone_id" :class="staffInputClass('service_status_zone_id')">
+                <option :value="0">{{ text.selectAttachedZone }}</option>
+                <option v-for="row in zones" :key="row.id" :value="row.id">{{ row.label }}</option>
+              </select>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.attachedSchool }}
+              <select v-model="staffForm.service_status_school_census_id" :class="staffInputClass('service_status_school_census_id')">
+                <option value="">{{ text.selectAttachedSchool }}</option>
+                <option v-for="row in serviceStatusSchools" :key="row.id" :value="String(row.id)">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.service_status_school_census_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.service_status_school_census_id }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700 md:col-span-2">
+              {{ text.customInstitute }}
+              <input v-model="staffForm.service_status_custom_institute" type="text" :class="staffInputClass('service_status_custom_institute')" />
+              <p v-if="staffFieldErrors.service_status_institute" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.service_status_institute }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.serviceStatusEffectiveDate }}
+              <input v-model="staffForm.service_status_effective_date" type="date" :class="staffInputClass('service_status_effective_date')" />
+              <p v-if="staffFieldErrors.service_status_effective_date" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.service_status_effective_date }}</p>
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.serviceStatusPeriod }}
+              <input v-model="staffForm.service_status_period" type="text" :class="staffInputClass('service_status_period')" />
+              <p v-if="staffFieldErrors.service_status_period" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.service_status_period }}</p>
+            </label>
+
+            <label class="flex items-center gap-2 pt-7 text-sm text-slate-700">
+              <input v-model="staffForm.service_status_is_current" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+              {{ text.serviceStatusCurrent }}
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.photo }}</legend>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="text-sm text-slate-700 md:col-span-2">
+              {{ text.selectPhoto }}
+              <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="file" accept=".jpg,.jpeg,.png,.webp" @change="onStaffPhotoChange" />
+            </label>
+
+            <div class="text-sm text-slate-700">
+              <p>{{ text.photoPreview }}</p>
+              <img v-if="staffPhotoPreview" :src="staffPhotoPreview" alt="Staff photo preview" class="mt-2 h-28 w-24 rounded-lg border border-slate-200 object-cover" />
+            </div>
           </div>
         </fieldset>
 
@@ -354,7 +537,7 @@ interface ClassReportRow { grade_id: number; grade: string; class_id: number; cl
 interface StaffRow { stf_id: number; census_id: string | null; name_with_ini: string; nic_no: string | null; gender: string | null; phone_mobile1: string | null; designation: string | null; school_name: string | null }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
-interface OptionRow { id: number; label: string; app_type_id?: number }
+interface OptionRow { id: number; label: string; app_type_id?: number; section_id?: number }
 interface ClassGradeOption { grade_id: number; grade: string }
 interface ClassOption { class_id: number; class: string }
 interface StaffOptionsResponse {
@@ -364,13 +547,23 @@ interface StaffOptionsResponse {
   civil_statuses?: OptionRow[]
   ethnic_groups?: OptionRow[]
   religions?: OptionRow[]
+  education_levels?: OptionRow[]
+  professional_levels?: OptionRow[]
   designations?: OptionRow[]
+  service_grades?: OptionRow[]
+  sections?: OptionRow[]
+  section_roles?: OptionRow[]
   staff_types?: OptionRow[]
   staff_statuses?: OptionRow[]
   service_statuses?: OptionRow[]
+  provinces?: OptionRow[]
+  zones?: OptionRow[]
+  all_schools?: OptionRow[]
   subject_mediums?: OptionRow[]
   appointment_types?: OptionRow[]
   appointment_subjects?: OptionRow[]
+  involved_tasks?: OptionRow[]
+  subjects?: OptionRow[]
 }
 interface StaffCreatePayload {
   title: string
@@ -393,17 +586,37 @@ interface StaffCreatePayload {
   vehicle_no1?: string
   vehicle_no2?: string
   email?: string
+  edu_q_id?: number
+  prof_q_id?: number
   stf_type_id?: number
   stf_status_id?: number
   service_status_id?: number
+  serv_grd_id?: number
+  sec_id?: number
+  sec_role_id?: number
   subj_med_id?: number
   app_type_id?: number
   app_subj_id?: number
   first_app_dt?: string
   start_dt_this_sch?: string
   serv_grd_effective_dt?: string
-  stf_no?: string
-  salary_no?: string
+  sal_incr_dt?: string
+  stf_no?: number
+  salary_no?: number
+  main_task_id?: number
+  main_task_section_id?: number
+  main_task_subject_id?: number
+  second_task_id?: number
+  second_task_section_id?: number
+  second_task_subject_id?: number
+  service_status_institute?: string
+  service_status_province_id?: number
+  service_status_zone_id?: number
+  service_status_school_census_id?: string
+  service_status_custom_institute?: string
+  service_status_effective_date?: string
+  service_status_period?: string
+  service_status_is_current?: boolean
 }
 type ValidationErrors = Record<string, string>
 
@@ -452,13 +665,25 @@ const staffGenders = ref<OptionRow[]>([])
 const staffCivilStatuses = ref<OptionRow[]>([])
 const staffEthnicGroups = ref<OptionRow[]>([])
 const staffReligions = ref<OptionRow[]>([])
+const educationLevels = ref<OptionRow[]>([])
+const professionalLevels = ref<OptionRow[]>([])
 const staffDesignations = ref<OptionRow[]>([])
+const serviceGrades = ref<OptionRow[]>([])
+const sections = ref<OptionRow[]>([])
+const sectionRoles = ref<OptionRow[]>([])
 const staffTypes = ref<OptionRow[]>([])
 const staffStatuses = ref<OptionRow[]>([])
 const serviceStatuses = ref<OptionRow[]>([])
+const provinces = ref<OptionRow[]>([])
+const zones = ref<OptionRow[]>([])
+const serviceStatusSchools = ref<OptionRow[]>([])
 const subjectMediums = ref<OptionRow[]>([])
 const appointmentTypes = ref<OptionRow[]>([])
 const appointmentSubjects = ref<OptionRow[]>([])
+const involvedTasks = ref<OptionRow[]>([])
+const subjects = ref<OptionRow[]>([])
+const staffPhotoFile = ref<File | null>(null)
+const staffPhotoPreview = ref('')
 const staffForm = reactive({
   title: '',
   census_id: getSchoolContextCensusId() ?? 0,
@@ -479,7 +704,12 @@ const staffForm = reactive({
   email: '',
   vehicle_no1: '',
   vehicle_no2: '',
+  edu_q_id: 0,
+  prof_q_id: 0,
   desig_id: 0,
+  serv_grd_id: 0,
+  sec_id: 0,
+  sec_role_id: 0,
   stf_type_id: 0,
   stf_status_id: 0,
   service_status_id: 0,
@@ -489,8 +719,23 @@ const staffForm = reactive({
   first_app_dt: '',
   start_dt_this_sch: '',
   serv_grd_effective_dt: '',
+  sal_incr_dt: '',
   stf_no: '',
   salary_no: '',
+  main_task_id: 0,
+  main_task_section_id: 0,
+  main_task_subject_id: 0,
+  second_task_id: 0,
+  second_task_section_id: 0,
+  second_task_subject_id: 0,
+  service_status_institute: '',
+  service_status_province_id: 0,
+  service_status_zone_id: 0,
+  service_status_school_census_id: '',
+  service_status_custom_institute: '',
+  service_status_effective_date: '',
+  service_status_period: '',
+  service_status_is_current: true,
 })
 
 const yearOptions = computed(() => { const now = new Date().getFullYear(); return Array.from({ length: 8 }, (_, i) => now - i) })
@@ -512,6 +757,16 @@ const filteredAppointmentSubjects = computed(() => {
 
   return appointmentSubjects.value.filter((row) => Number(row.app_type_id ?? 0) === Number(staffForm.app_type_id))
 })
+const mainTaskSubjects = computed(() => (
+  staffForm.main_task_section_id > 0
+    ? subjects.value.filter((row) => Number(row.section_id ?? 0) === Number(staffForm.main_task_section_id))
+    : subjects.value
+))
+const secondTaskSubjects = computed(() => (
+  staffForm.second_task_section_id > 0
+    ? subjects.value.filter((row) => Number(row.section_id ?? 0) === Number(staffForm.second_task_section_id))
+    : subjects.value
+))
 const text = useLocalizedText({
   en: {
     moduleFallbackTitle: 'Module',
@@ -526,6 +781,9 @@ const text = useLocalizedText({
     staffCore: 'Core Details',
     staffContact: 'Contact Details',
     staffWork: 'Work Details',
+    currentSchoolDetails: 'Current School Details',
+    involvedTasks: 'Involved Tasks',
+    serviceStatusDetails: 'Service Status Details',
     paymentsTitle: 'SDS Payments',
     paymentsSubtitle: 'Payments screens will be connected in the next API rollout.',
     reportsTitle: 'Reporting & Exports',
@@ -569,6 +827,10 @@ const text = useLocalizedText({
     selectEthnicGroup: 'Select ethnic group',
     religion: 'Religion',
     selectReligion: 'Select religion',
+    educationLevel: 'Education Level',
+    selectEducationLevel: 'Select education level',
+    professionalLevel: 'Professional Level',
+    selectProfessionalLevel: 'Select professional level',
     mobile: 'Mobile 1',
     mobileTwo: 'Mobile 2',
     homePhone: 'Home Phone',
@@ -585,6 +847,8 @@ const text = useLocalizedText({
     selectStaffStatus: 'Select staff status',
     serviceStatus: 'Service Status',
     selectServiceStatus: 'Select service status',
+    serviceGrade: 'Service Grade',
+    selectServiceGrade: 'Select service grade',
     subjectMedium: 'Subject Medium',
     selectSubjectMedium: 'Select subject medium',
     appointmentType: 'Appointment Type',
@@ -594,8 +858,37 @@ const text = useLocalizedText({
     firstAppDate: 'First Appointed Date',
     startDateSchool: 'Started In This School',
     serviceGradeDate: 'Service Grade Effective Date',
+    salaryIncreaseDate: 'Salary Increment Date',
+    section: 'Section',
+    selectSection: 'Select section',
+    sectionRole: 'Section Role',
+    selectSectionRole: 'Select section role',
     staffNo: 'Staff No',
     salaryNo: 'Salary No',
+    mainTask: 'Main Task',
+    selectMainTask: 'Select main task',
+    mainTaskSection: 'Main Task Section',
+    mainTaskSubject: 'Main Task Subject',
+    secondTask: 'Second Task',
+    selectSecondTask: 'Select second task',
+    secondTaskSection: 'Second Task Section',
+    secondTaskSubject: 'Second Task Subject',
+    selectTaskSection: 'Select task section',
+    selectTaskSubject: 'Select task subject',
+    serviceStatusInstitute: 'Institute',
+    serviceStatusEffectiveDate: 'Effective Date',
+    serviceStatusPeriod: 'Period',
+    serviceStatusCurrent: 'Current status record',
+    attachedProvince: 'Attached Province',
+    selectAttachedProvince: 'Select attached province',
+    attachedZone: 'Attached Zone',
+    selectAttachedZone: 'Select attached zone',
+    attachedSchool: 'Attached School',
+    selectAttachedSchool: 'Select attached school',
+    customInstitute: 'Other Institute',
+    photo: 'Profile Photo',
+    selectPhoto: 'Choose photo',
+    photoPreview: 'Preview',
   },
   si: {
     moduleFallbackTitle: 'මොඩියුලය',
@@ -610,6 +903,9 @@ const text = useLocalizedText({
     staffCore: 'මූලික තොරතුරු',
     staffContact: 'සම්බන්ධතා තොරතුරු',
     staffWork: 'සේවා තොරතුරු',
+    currentSchoolDetails: 'වත්මන් පාසල් තොරතුරු',
+    involvedTasks: 'නිරත වන කාර්යයන්',
+    serviceStatusDetails: 'සේවා තත්ත්ව විස්තර',
     paymentsTitle: 'SDS ගෙවීම්',
     paymentsSubtitle: 'ගෙවීම් තිර ඊළඟ API නිකුතුවේ සම්බන්ධ වේ.',
     reportsTitle: 'වාර්තා සහ අපනයන',
@@ -653,6 +949,10 @@ const text = useLocalizedText({
     selectEthnicGroup: 'ජන වර්ගය තෝරන්න',
     religion: 'ආගම',
     selectReligion: 'ආගම තෝරන්න',
+    educationLevel: 'අධ්‍යාපන සුදුසුකම',
+    selectEducationLevel: 'අධ්‍යාපන සුදුසුකම තෝරන්න',
+    professionalLevel: 'වෘත්තීය සුදුසුකම',
+    selectProfessionalLevel: 'වෘත්තීය සුදුසුකම තෝරන්න',
     mobile: 'ජංගම 1',
     mobileTwo: 'ජංගම 2',
     homePhone: 'නිවසේ දුරකථන',
@@ -669,6 +969,8 @@ const text = useLocalizedText({
     selectStaffStatus: 'කාර්ය මණ්ඩල තත්ත්වය තෝරන්න',
     serviceStatus: 'සේවා තත්ත්වය',
     selectServiceStatus: 'සේවා තත්ත්වය තෝරන්න',
+    serviceGrade: 'සේවා ශ්‍රේණිය',
+    selectServiceGrade: 'සේවා ශ්‍රේණිය තෝරන්න',
     subjectMedium: 'විෂය මාධ්‍යය',
     selectSubjectMedium: 'විෂය මාධ්‍යය තෝරන්න',
     appointmentType: 'පත්වීම් වර්ගය',
@@ -678,8 +980,37 @@ const text = useLocalizedText({
     firstAppDate: 'පළමු පත්වීම් දිනය',
     startDateSchool: 'මෙම පාසලේ ආරම්භ කළ දිනය',
     serviceGradeDate: 'සේවා ශ්‍රේණි ක්‍රියාත්මක දිනය',
+    salaryIncreaseDate: 'වැටුප් වර්ධක දිනය',
+    section: 'අංශය',
+    selectSection: 'අංශය තෝරන්න',
+    sectionRole: 'අංශ භූමිකාව',
+    selectSectionRole: 'අංශ භූමිකාව තෝරන්න',
     staffNo: 'කාර්ය මණ්ඩල අංකය',
     salaryNo: 'වැටුප් අංකය',
+    mainTask: 'ප්‍රධාන කාර්යය',
+    selectMainTask: 'ප්‍රධාන කාර්යය තෝරන්න',
+    mainTaskSection: 'ප්‍රධාන කාර්යයේ අංශය',
+    mainTaskSubject: 'ප්‍රධාන කාර්යයේ විෂයය',
+    secondTask: 'දෙවන කාර්යය',
+    selectSecondTask: 'දෙවන කාර්යය තෝරන්න',
+    secondTaskSection: 'දෙවන කාර්යයේ අංශය',
+    secondTaskSubject: 'දෙවන කාර්යයේ විෂයය',
+    selectTaskSection: 'කාර්ය අංශය තෝරන්න',
+    selectTaskSubject: 'කාර්ය විෂයය තෝරන්න',
+    serviceStatusInstitute: 'ආයතනය',
+    serviceStatusEffectiveDate: 'ක්‍රියාත්මක දිනය',
+    serviceStatusPeriod: 'කාලය',
+    serviceStatusCurrent: 'වත්මන් සේවා තත්ත්ව වාර්තාව',
+    attachedProvince: 'අනුයුක්ත පළාත',
+    selectAttachedProvince: 'අනුයුක්ත පළාත තෝරන්න',
+    attachedZone: 'අනුයුක්ත කලාපය',
+    selectAttachedZone: 'අනුයුක්ත කලාපය තෝරන්න',
+    attachedSchool: 'අනුයුක්ත පාසල',
+    selectAttachedSchool: 'අනුයුක්ත පාසල තෝරන්න',
+    customInstitute: 'වෙනත් ආයතනය',
+    photo: 'පැතිකඩ ඡායාරූපය',
+    selectPhoto: 'ඡායාරූපය තෝරන්න',
+    photoPreview: 'පෙරදසුන',
   },
   ta: {
     moduleFallbackTitle: 'தொகுதி',
@@ -694,6 +1025,9 @@ const text = useLocalizedText({
     staffCore: 'அடிப்படை தகவல்கள்',
     staffContact: 'தொடர்பு தகவல்கள்',
     staffWork: 'சேவை தகவல்கள்',
+    currentSchoolDetails: 'தற்போதைய பாடசாலை தகவல்கள்',
+    involvedTasks: 'ஈடுபட்ட பணிகள்',
+    serviceStatusDetails: 'சேவை நிலை விவரங்கள்',
     paymentsTitle: 'SDS கட்டணங்கள்',
     paymentsSubtitle: 'கட்டண திரைகள் அடுத்த API வெளியீட்டில் இணைக்கப்படும்.',
     reportsTitle: 'அறிக்கைகள் மற்றும் ஏற்றுமதிகள்',
@@ -737,6 +1071,10 @@ const text = useLocalizedText({
     selectEthnicGroup: 'இனக்குழுவைத் தேர்ந்தெடுக்கவும்',
     religion: 'மதம்',
     selectReligion: 'மதத்தைத் தேர்ந்தெடுக்கவும்',
+    educationLevel: 'கல்வித் தகுதி',
+    selectEducationLevel: 'கல்வித் தகுதியைத் தேர்ந்தெடுக்கவும்',
+    professionalLevel: 'தொழில்முறை தகுதி',
+    selectProfessionalLevel: 'தொழில்முறை தகுதியைத் தேர்ந்தெடுக்கவும்',
     mobile: 'கைபேசி 1',
     mobileTwo: 'கைபேசி 2',
     homePhone: 'வீட்டு தொலைபேசி',
@@ -753,6 +1091,8 @@ const text = useLocalizedText({
     selectStaffStatus: 'பணியாளர் நிலையைத் தேர்ந்தெடுக்கவும்',
     serviceStatus: 'சேவை நிலை',
     selectServiceStatus: 'சேவை நிலையைத் தேர்ந்தெடுக்கவும்',
+    serviceGrade: 'சேவை தரம்',
+    selectServiceGrade: 'சேவை தரத்தைத் தேர்ந்தெடுக்கவும்',
     subjectMedium: 'பாட மொழி',
     selectSubjectMedium: 'பாட மொழியைத் தேர்ந்தெடுக்கவும்',
     appointmentType: 'நியமன வகை',
@@ -762,8 +1102,37 @@ const text = useLocalizedText({
     firstAppDate: 'முதல் நியமன தேதி',
     startDateSchool: 'இந்த பாடசாலையில் தொடங்கிய தேதி',
     serviceGradeDate: 'சேவை தரம் அமலான தேதி',
+    salaryIncreaseDate: 'சம்பள உயர்வு தேதி',
+    section: 'பிரிவு',
+    selectSection: 'பிரிவைத் தேர்ந்தெடுக்கவும்',
+    sectionRole: 'பிரிவு பங்கு',
+    selectSectionRole: 'பிரிவு பங்கைத் தேர்ந்தெடுக்கவும்',
     staffNo: 'பணியாளர் எண்',
     salaryNo: 'சம்பள எண்',
+    mainTask: 'முக்கிய பணி',
+    selectMainTask: 'முக்கிய பணியைத் தேர்ந்தெடுக்கவும்',
+    mainTaskSection: 'முக்கிய பணி பிரிவு',
+    mainTaskSubject: 'முக்கிய பணி பாடம்',
+    secondTask: 'இரண்டாம் பணி',
+    selectSecondTask: 'இரண்டாம் பணியைத் தேர்ந்தெடுக்கவும்',
+    secondTaskSection: 'இரண்டாம் பணி பிரிவு',
+    secondTaskSubject: 'இரண்டாம் பணி பாடம்',
+    selectTaskSection: 'பணி பிரிவைத் தேர்ந்தெடுக்கவும்',
+    selectTaskSubject: 'பணி பாடத்தைத் தேர்ந்தெடுக்கவும்',
+    serviceStatusInstitute: 'நிறுவனம்',
+    serviceStatusEffectiveDate: 'அமல்படும் தேதி',
+    serviceStatusPeriod: 'காலம்',
+    serviceStatusCurrent: 'தற்போதைய சேவை நிலை பதிவு',
+    attachedProvince: 'இணைக்கப்பட்ட மாகாணம்',
+    selectAttachedProvince: 'இணைக்கப்பட்ட மாகாணத்தைத் தேர்ந்தெடுக்கவும்',
+    attachedZone: 'இணைக்கப்பட்ட வலயம்',
+    selectAttachedZone: 'இணைக்கப்பட்ட வலயத்தைத் தேர்ந்தெடுக்கவும்',
+    attachedSchool: 'இணைக்கப்பட்ட பாடசாலை',
+    selectAttachedSchool: 'இணைக்கப்பட்ட பாடசாலையைத் தேர்ந்தெடுக்கவும்',
+    customInstitute: 'வேறு நிறுவனம்',
+    photo: 'சுயவிவர புகைப்படம்',
+    selectPhoto: 'புகைப்படத்தைத் தேர்ந்தெடுக்கவும்',
+    photoPreview: 'முன்னோட்டம்',
   },
 })
 
@@ -811,13 +1180,23 @@ const loadStaffOptions = async (): Promise<void> => {
   staffCivilStatuses.value = Array.isArray(data.civil_statuses) ? data.civil_statuses : []
   staffEthnicGroups.value = Array.isArray(data.ethnic_groups) ? data.ethnic_groups : []
   staffReligions.value = Array.isArray(data.religions) ? data.religions : []
+  educationLevels.value = Array.isArray(data.education_levels) ? data.education_levels : []
+  professionalLevels.value = Array.isArray(data.professional_levels) ? data.professional_levels : []
   staffDesignations.value = Array.isArray(data.designations) ? data.designations : []
+  serviceGrades.value = Array.isArray(data.service_grades) ? data.service_grades : []
+  sections.value = Array.isArray(data.sections) ? data.sections : []
+  sectionRoles.value = Array.isArray(data.section_roles) ? data.section_roles : []
   staffTypes.value = Array.isArray(data.staff_types) ? data.staff_types : []
   staffStatuses.value = Array.isArray(data.staff_statuses) ? data.staff_statuses : []
   serviceStatuses.value = Array.isArray(data.service_statuses) ? data.service_statuses : []
+  provinces.value = Array.isArray(data.provinces) ? data.provinces : []
+  zones.value = Array.isArray(data.zones) ? data.zones : []
+  serviceStatusSchools.value = Array.isArray(data.all_schools) ? data.all_schools : []
   subjectMediums.value = Array.isArray(data.subject_mediums) ? data.subject_mediums : []
   appointmentTypes.value = Array.isArray(data.appointment_types) ? data.appointment_types : []
   appointmentSubjects.value = Array.isArray(data.appointment_subjects) ? data.appointment_subjects : []
+  involvedTasks.value = Array.isArray(data.involved_tasks) ? data.involved_tasks : []
+  subjects.value = Array.isArray(data.subjects) ? data.subjects : []
 }
 
 const resetStaffForm = (): void => {
@@ -841,7 +1220,12 @@ const resetStaffForm = (): void => {
   staffForm.email = ''
   staffForm.vehicle_no1 = ''
   staffForm.vehicle_no2 = ''
+  staffForm.edu_q_id = 0
+  staffForm.prof_q_id = 0
   staffForm.desig_id = 0
+  staffForm.serv_grd_id = 0
+  staffForm.sec_id = 0
+  staffForm.sec_role_id = 0
   staffForm.stf_type_id = 0
   staffForm.stf_status_id = 0
   staffForm.service_status_id = 0
@@ -851,8 +1235,25 @@ const resetStaffForm = (): void => {
   staffForm.first_app_dt = ''
   staffForm.start_dt_this_sch = ''
   staffForm.serv_grd_effective_dt = ''
+  staffForm.sal_incr_dt = ''
   staffForm.stf_no = ''
   staffForm.salary_no = ''
+  staffForm.main_task_id = 0
+  staffForm.main_task_section_id = 0
+  staffForm.main_task_subject_id = 0
+  staffForm.second_task_id = 0
+  staffForm.second_task_section_id = 0
+  staffForm.second_task_subject_id = 0
+  staffForm.service_status_institute = ''
+  staffForm.service_status_province_id = 0
+  staffForm.service_status_zone_id = 0
+  staffForm.service_status_school_census_id = ''
+  staffForm.service_status_custom_institute = ''
+  staffForm.service_status_effective_date = ''
+  staffForm.service_status_period = ''
+  staffForm.service_status_is_current = true
+  staffPhotoFile.value = null
+  staffPhotoPreview.value = ''
 }
 
 const staffInputClass = (field: string): string[] => [
@@ -895,6 +1296,13 @@ const scrollToStaffError = async (): Promise<void> => {
     staffErrorRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
     staffErrorRef.value.focus({ preventScroll: true })
   }
+}
+
+const onStaffPhotoChange = (event: Event): void => {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  staffPhotoFile.value = file
+  staffPhotoPreview.value = file ? URL.createObjectURL(file) : ''
 }
 
 const openAddStaffDialog = async (): Promise<void> => {
@@ -1154,6 +1562,13 @@ const saveStaff = async (): Promise<void> => {
   }
 
   savingStaff.value = true
+  const submitDebugId = `staff-save-${Date.now()}`
+  console.info('[Staff Save] started', {
+    submitDebugId,
+    hasPhoto: Boolean(staffPhotoFile.value),
+    censusId: isAdmin.value ? Number(staffForm.census_id) : null,
+    nicNo: staffForm.nic_no.trim() || null,
+  })
 
   const payload: StaffCreatePayload = {
     title: staffForm.title.trim(),
@@ -1178,28 +1593,89 @@ const saveStaff = async (): Promise<void> => {
   if (staffForm.email.trim() !== '') payload.email = staffForm.email.trim()
   if (staffForm.vehicle_no1.trim() !== '') payload.vehicle_no1 = staffForm.vehicle_no1.trim()
   if (staffForm.vehicle_no2.trim() !== '') payload.vehicle_no2 = staffForm.vehicle_no2.trim()
+  if (Number(staffForm.edu_q_id) > 0) payload.edu_q_id = Number(staffForm.edu_q_id)
+  if (Number(staffForm.prof_q_id) > 0) payload.prof_q_id = Number(staffForm.prof_q_id)
   if (Number(staffForm.stf_type_id) > 0) payload.stf_type_id = Number(staffForm.stf_type_id)
   if (Number(staffForm.stf_status_id) > 0) payload.stf_status_id = Number(staffForm.stf_status_id)
   if (Number(staffForm.service_status_id) > 0) payload.service_status_id = Number(staffForm.service_status_id)
+  if (Number(staffForm.serv_grd_id) > 0) payload.serv_grd_id = Number(staffForm.serv_grd_id)
+  if (Number(staffForm.sec_id) > 0) payload.sec_id = Number(staffForm.sec_id)
+  if (Number(staffForm.sec_role_id) > 0) payload.sec_role_id = Number(staffForm.sec_role_id)
   if (Number(staffForm.subj_med_id) > 0) payload.subj_med_id = Number(staffForm.subj_med_id)
   if (Number(staffForm.app_type_id) > 0) payload.app_type_id = Number(staffForm.app_type_id)
   if (Number(staffForm.app_subj_id) > 0) payload.app_subj_id = Number(staffForm.app_subj_id)
   if (staffForm.first_app_dt.trim() !== '') payload.first_app_dt = staffForm.first_app_dt.trim()
   if (staffForm.start_dt_this_sch.trim() !== '') payload.start_dt_this_sch = staffForm.start_dt_this_sch.trim()
   if (staffForm.serv_grd_effective_dt.trim() !== '') payload.serv_grd_effective_dt = staffForm.serv_grd_effective_dt.trim()
-  if (staffForm.stf_no.trim() !== '') payload.stf_no = staffForm.stf_no.trim()
-  if (staffForm.salary_no.trim() !== '') payload.salary_no = staffForm.salary_no.trim()
+  if (staffForm.sal_incr_dt.trim() !== '') payload.sal_incr_dt = staffForm.sal_incr_dt.trim()
+  if (Number(staffForm.stf_no) > 0) payload.stf_no = Number(staffForm.stf_no)
+  if (Number(staffForm.salary_no) > 0) payload.salary_no = Number(staffForm.salary_no)
+  if (Number(staffForm.main_task_id) > 0) payload.main_task_id = Number(staffForm.main_task_id)
+  if (Number(staffForm.main_task_section_id) > 0) payload.main_task_section_id = Number(staffForm.main_task_section_id)
+  if (Number(staffForm.main_task_subject_id) > 0) payload.main_task_subject_id = Number(staffForm.main_task_subject_id)
+  if (Number(staffForm.second_task_id) > 0) payload.second_task_id = Number(staffForm.second_task_id)
+  if (Number(staffForm.second_task_section_id) > 0) payload.second_task_section_id = Number(staffForm.second_task_section_id)
+  if (Number(staffForm.second_task_subject_id) > 0) payload.second_task_subject_id = Number(staffForm.second_task_subject_id)
+  if (staffForm.service_status_institute.trim() !== '') payload.service_status_institute = staffForm.service_status_institute.trim()
+  if (Number(staffForm.service_status_province_id) > 0) payload.service_status_province_id = Number(staffForm.service_status_province_id)
+  if (Number(staffForm.service_status_zone_id) > 0) payload.service_status_zone_id = Number(staffForm.service_status_zone_id)
+  if (staffForm.service_status_school_census_id.trim() !== '') payload.service_status_school_census_id = staffForm.service_status_school_census_id.trim()
+  if (staffForm.service_status_custom_institute.trim() !== '') payload.service_status_custom_institute = staffForm.service_status_custom_institute.trim()
+  if (staffForm.service_status_effective_date.trim() !== '') payload.service_status_effective_date = staffForm.service_status_effective_date.trim()
+  if (staffForm.service_status_period.trim() !== '') payload.service_status_period = staffForm.service_status_period.trim()
+  payload.service_status_is_current = Boolean(staffForm.service_status_is_current)
 
   try {
-    const { data } = await api.post('/staff', payload)
+    console.info('[Staff Save] preparing request body', {
+      submitDebugId,
+      fieldCount: Object.keys(payload).length,
+    })
+    const requestBody = staffPhotoFile.value
+      ? (() => {
+          const formData = new FormData()
+          Object.entries(payload).forEach(([key, value]) => {
+            formData.append(key, String(value))
+          })
+          formData.append('profile_photo', staffPhotoFile.value as File)
+          return formData
+        })()
+      : payload
+
+    console.info('[Staff Save] sending request', { submitDebugId })
+    const { data } = await api.post('/staff', requestBody, staffPhotoFile.value ? {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    } : undefined)
+    console.info('[Staff Save] request completed', {
+      submitDebugId,
+      stfId: data?.data?.stf_id ?? null,
+    })
     message.value = typeof data?.message === 'string' && data.message.trim() !== '' ? data.message : text.value.staffAdded
     if (isAdmin.value && Number(staffForm.census_id) > 0) {
       setSchoolContextCensusId(Number(staffForm.census_id))
     }
     closeAddStaffDialog()
     resetStaffForm()
-    await loadStaff(1)
+    savingStaff.value = false
+
+    console.info('[Staff Save] refreshing staff list', { submitDebugId })
+    void loadStaff(1)
+      .then(() => {
+        console.info('[Staff Save] staff list refreshed', { submitDebugId })
+      })
+      .catch((reloadError) => {
+        console.error('[Staff Save] staff list refresh failed', {
+          submitDebugId,
+          error: reloadError,
+        })
+        error.value = extractApiMessage(reloadError) || text.value.moduleLoadError
+      })
   } catch (errorValue) {
+    console.error('[Staff Save] request failed', {
+      submitDebugId,
+      error: errorValue,
+    })
     staffFieldErrors.value = extractFieldErrors(errorValue)
     staffError.value = extractApiMessage(errorValue) || text.value.moduleLoadError
     await scrollToStaffError()
@@ -1264,6 +1740,24 @@ watch(
   () => {
     if (!filteredAppointmentSubjects.value.some((row) => row.id === Number(staffForm.app_subj_id))) {
       staffForm.app_subj_id = 0
+    }
+  },
+)
+
+watch(
+  () => staffForm.main_task_section_id,
+  () => {
+    if (!mainTaskSubjects.value.some((row) => row.id === Number(staffForm.main_task_subject_id))) {
+      staffForm.main_task_subject_id = 0
+    }
+  },
+)
+
+watch(
+  () => staffForm.second_task_section_id,
+  () => {
+    if (!secondTaskSubjects.value.some((row) => row.id === Number(staffForm.second_task_subject_id))) {
+      staffForm.second_task_subject_id = 0
     }
   },
 )
