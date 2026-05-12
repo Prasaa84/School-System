@@ -559,6 +559,120 @@ class StaffController extends Controller
         }
     }
 
+    public function report(Request $request): JsonResponse
+    {
+        try {
+            if (!Schema::hasTable('staff_tbl')) {
+                return response()->json([
+                    'data' => [],
+                    'meta' => ['total' => 0],
+                ]);
+            }
+
+            $user = $this->authUser();
+            $staffColumns = Schema::getColumnListing('staff_tbl');
+            $staffSchoolColumn = $this->resolveSchoolColumn($staffColumns);
+            $schoolCensusId = trim((string) $request->query('school_census_id', ''));
+            $keyword = trim((string) $request->query('q', ''));
+
+            $query = Staff::query()
+                ->select([
+                    'stf_id',
+                    'census_id',
+                    'name_with_ini',
+                    'nic_no',
+                    'gender_id',
+                    'phone_mobile1',
+                    'desig_id',
+                ])
+                ->with([
+                    'school:census_id,sch_name',
+                    'designation',
+                    'gender',
+                ])
+                ->when(Schema::hasColumn('staff_tbl', 'is_deleted'), function ($builder): void {
+                    $builder->where('is_deleted', 0);
+                })
+                ->when($keyword !== '', function ($builder) use ($keyword): void {
+                    $builder->where(function ($inner) use ($keyword): void {
+                        $inner
+                            ->where('name_with_ini', 'like', "%{$keyword}%")
+                            ->orWhere('nic_no', 'like', "%{$keyword}%")
+                            ->orWhere('phone_mobile1', 'like', "%{$keyword}%");
+                    });
+                });
+
+            if ($this->isAdministrator($user)) {
+                if ($schoolCensusId !== '') {
+                    $canonicalSchoolCensusId = $this->resolveCanonicalSchoolCensusId($schoolCensusId);
+                    if ($canonicalSchoolCensusId !== null) {
+                        $query->where('census_id', $canonicalSchoolCensusId);
+                    }
+                }
+            } else {
+                $this->applySchoolScope($query->getQuery(), $user, null, $staffSchoolColumn);
+            }
+
+            $this->applyStaffLookupFilters($query, $request);
+
+            $rows = $query
+                ->orderBy('census_id')
+                ->orderBy('name_with_ini')
+                ->orderBy('stf_id')
+                ->get();
+
+            return response()->json([
+                'data' => $rows->map(fn ($row): array => [
+                    'stf_id' => (int) $row->stf_id,
+                    'census_id' => isset($row->census_id) ? (string) $row->census_id : null,
+                    'name_with_ini' => (string) ($row->name_with_ini ?? ''),
+                    'nic_no' => (string) ($row->nic_no ?? ''),
+                    'gender' => $this->localizedGenderLabel($row),
+                    'phone_mobile1' => $row->phone_mobile1,
+                    'designation' => $this->localizedDesignationLabel($row),
+                    'school_name' => $row->school?->sch_name,
+                ])->all(),
+                'meta' => [
+                    'total' => $rows->count(),
+                ],
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'Unable to load staff report.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function applyStaffLookupFilters($query, Request $request): void
+    {
+        $filters = [
+            'gender_id',
+            'civil_status_id',
+            'ethnic_group_id',
+            'religion_id',
+            'edu_q_id',
+            'prof_q_id',
+            'desig_id',
+            'serv_grd_id',
+            'sec_id',
+            'sec_role_id',
+            'stf_type_id',
+            'stf_status_id',
+            'service_status_id',
+            'subj_med_id',
+            'app_type_id',
+            'app_subj_id',
+        ];
+
+        foreach ($filters as $column) {
+            $value = (int) $request->query($column, 0);
+            if ($value > 0 && Schema::hasColumn('staff_tbl', $column)) {
+                $query->where($column, $value);
+            }
+        }
+    }
+
     private function localizedDesignationLabel(Staff $staff): ?string
     {
         $designation = $staff->designation;
@@ -1022,6 +1136,16 @@ class StaffController extends Controller
         $nic = trim((string) ($validated['nic_no'] ?? ''));
         if ($nic === '' || !Schema::hasTable('staff_tbl')) {
             return [];
+        }
+
+        if ($ignoreStaffId !== null && $ignoreStaffId > 0) {
+            $currentStaff = Staff::query()->find($ignoreStaffId);
+            if ($currentStaff !== null) {
+                $currentNic = trim((string) ($currentStaff->nic_no ?? ''));
+                if ($currentNic !== '' && strcasecmp($currentNic, $nic) === 0) {
+                    return [];
+                }
+            }
         }
 
         $query = Staff::query()->where('nic_no', $nic);

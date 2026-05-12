@@ -76,17 +76,29 @@
       :staff-schools="staffSchools"
       :staff-rows="staffRows"
       :staff-meta="staffMeta"
+      :report-filters="staffReportFilters"
+      :report-rows="staffReportRows"
+      :genders="staffGenders"
+      :civil-statuses="staffCivilStatuses"
+      :ethnic-groups="staffEthnicGroups"
+      :religions="staffReligions"
+      :education-levels="educationLevels"
+      :professional-levels="professionalLevels"
+      :designations="staffDesignations"
+      :service-grades="serviceGrades"
+      :sections="sections"
+      :section-roles="sectionRoles"
+      :staff-types="staffTypes"
+      :staff-statuses="staffStatuses"
+      :service-statuses="serviceStatuses"
+      :subject-mediums="subjectMediums"
       :loading-edit-staff-id="loadingEditStaffId"
-      :report-year="reportYear"
-      :report-month="reportMonth"
-      :year-options="yearOptions"
-      :staff-summary="staffSummary"
       @update:staff-search="staffSearch = $event"
       @update:selected-school-census-id="selectedStaffSchoolCensusId = $event"
-      @update:report-year="reportYear = $event"
-      @update:report-month="reportMonth = $event"
+      @update:report-filters="updateStaffReportFilters"
       @load-staff="loadStaff"
       @load-report="loadStaffReport"
+      @reset-report-filters="resetStaffReportFilters"
       @open-add-staff="openAddStaffDialog"
       @open-edit-staff="openEditStaffDialog"
     />
@@ -600,6 +612,24 @@ interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; s
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
 interface StaffRow { stf_id: number; census_id: string | null; name_with_ini: string; nic_no: string | null; gender: string | null; phone_mobile1: string | null; designation: string | null; school_name: string | null; can_edit?: boolean }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
+interface StaffReportFilters {
+  q: string
+  school_census_id: number
+  gender_id: number
+  civil_status_id: number
+  ethnic_group_id: number
+  religion_id: number
+  edu_q_id: number
+  prof_q_id: number
+  desig_id: number
+  serv_grd_id: number
+  sec_id: number
+  sec_role_id: number
+  stf_type_id: number
+  stf_status_id: number
+  service_status_id: number
+  subj_med_id: number
+}
 interface StaffOption { stf_id: number; name_with_ini: string }
 interface OptionRow { id: number; label: string; app_type_id?: number; section_id?: number }
 interface ClassGradeOption { grade_id: number; grade: string }
@@ -630,6 +660,25 @@ interface StaffOptionsResponse {
   involved_tasks?: OptionRow[]
   subjects?: OptionRow[]
 }
+
+const createDefaultStaffReportFilters = (): StaffReportFilters => ({
+  q: '',
+  school_census_id: 0,
+  gender_id: 0,
+  civil_status_id: 0,
+  ethnic_group_id: 0,
+  religion_id: 0,
+  edu_q_id: 0,
+  prof_q_id: 0,
+  desig_id: 0,
+  serv_grd_id: 0,
+  sec_id: 0,
+  sec_role_id: 0,
+  stf_type_id: 0,
+  stf_status_id: 0,
+  service_status_id: 0,
+  subj_med_id: 0,
+})
 interface StaffCreatePayload {
   title: string
   full_name: string
@@ -735,13 +784,12 @@ const createClassId = ref(0)
 const createApprovedCount = ref(35)
 const createClassOptions = ref<ClassOption[]>([])
 const reportYear = ref(0)
-const reportMonth = ref(0)
-
 const staffSearch = ref('')
 const selectedStaffSchoolCensusId = ref(getSchoolContextCensusId() ?? 0)
 const staffRows = ref<StaffRow[]>([])
 const staffMeta = reactive<StaffMeta>({ current_page: 1, per_page: 20, total: 0, last_page: 1 })
-const staffSummary = reactive({ total_staff: 0, updated_staff: 0, not_updated_staff: 0 })
+const staffReportRows = ref<StaffRow[]>([])
+const staffReportFilters = reactive<StaffReportFilters>(createDefaultStaffReportFilters())
 const showAddStaffDialog = ref(false)
 const showStaffCredentialsDialog = ref(false)
 const editStaffId = ref<number | null>(null)
@@ -875,7 +923,7 @@ const text = useLocalizedText({
     classesTitle: 'Classes Management',
     classesSubtitle: 'Manage class counts, class teachers, and class reports.',
     staffTitle: 'Staff Management',
-    staffSubtitle: 'Search staff records and review update summaries.',
+    staffSubtitle: 'Search staff records and run filter-based staff reports.',
     addStaffTitle: 'Add Staff',
     editStaffTitle: 'Edit Staff',
     staffCore: 'Core Details',
@@ -1009,7 +1057,7 @@ const text = useLocalizedText({
     classesTitle: 'පන්ති කළමනාකරණය',
     classesSubtitle: 'පන්ති සංඛ්‍යාව, පන්ති භාර ගුරුවරු සහ පන්ති වාර්තා කළමනාකරණය කරන්න.',
     staffTitle: 'කාර්ය මණ්ඩල කළමනාකරණය',
-    staffSubtitle: 'කාර්ය මණ්ඩල වාර්තා සොයා යාවත්කාලීන සාරාංශ බලන්න.',
+    staffSubtitle: 'කාර්ය මණ්ඩල වාර්තා සොයා පෙරහන් මත පදනම් වූ කාර්ය මණ්ඩල වාර්තා ධාවනය කරන්න.',
     addStaffTitle: 'කාර්ය මණ්ඩලය එක් කරන්න',
     editStaffTitle: 'කාර්ය මණ්ඩලය සංස්කරණය කරන්න',
     staffCore: 'මූලික තොරතුරු',
@@ -1143,7 +1191,7 @@ const text = useLocalizedText({
     classesTitle: 'வகுப்பு மேலாண்மை',
     classesSubtitle: 'வகுப்பு எண்ணிக்கைகள், வகுப்பு ஆசிரியர்கள் மற்றும் வகுப்பு அறிக்கைகளை நிர்வகிக்கவும்.',
     staffTitle: 'பணியாளர் மேலாண்மை',
-    staffSubtitle: 'பணியாளர் பதிவுகளை தேடி புதுப்பிப்பு சுருக்கங்களை பாருங்கள்.',
+    staffSubtitle: 'பணியாளர் பதிவுகளை தேடி வடிகட்டி அடிப்படையிலான பணியாளர் அறிக்கைகளை இயக்குங்கள்.',
     addStaffTitle: 'பணியாளர் சேர்க்கவும்',
     editStaffTitle: 'பணியாளரைத் திருத்தவும்',
     staffCore: 'அடிப்படை தகவல்கள்',
@@ -1789,14 +1837,35 @@ const loadStaff = async (page = 1): Promise<void> => {
   Object.assign(staffMeta, data.meta)
 }
 
+const updateStaffReportFilters = (patch: Partial<StaffReportFilters>): void => {
+  Object.assign(staffReportFilters, patch)
+}
+
+const resetStaffReportFilters = async (): Promise<void> => {
+  Object.assign(staffReportFilters, createDefaultStaffReportFilters())
+  await loadStaffReport()
+}
+
 const loadStaffReport = async (): Promise<void> => {
   message.value = ''
   error.value = ''
-  const params: Record<string, number> = {}
-  if (reportYear.value) params.year = reportYear.value
-  if (reportMonth.value) params.month = reportMonth.value
-  const { data } = await api.get<{ summary: { total_staff: number; updated_staff: number; not_updated_staff: number } }>('/staff/report-summary', { params })
-  Object.assign(staffSummary, data.summary)
+  const params: Record<string, string | number> = {}
+
+  Object.entries(staffReportFilters).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      if (value.trim() !== '') {
+        params[key] = value.trim()
+      }
+      return
+    }
+
+    if (Number(value) > 0) {
+      params[key] = Number(value)
+    }
+  })
+
+  const { data } = await api.get<{ data: StaffRow[] }>('/staff/report', { params })
+  staffReportRows.value = Array.isArray(data.data) ? data.data : []
 }
 
 const saveStaff = async (): Promise<void> => {
@@ -2040,7 +2109,8 @@ watch(
 watch(() => props.moduleKey, () => {
   activeTab.value = 'view'
   reportYear.value = 0
-  reportMonth.value = 0
+  Object.assign(staffReportFilters, createDefaultStaffReportFilters())
+  staffReportRows.value = []
   selectedGradeId.value = 0
   classYear.value = new Date().getFullYear()
   createClassGradeId.value = 0

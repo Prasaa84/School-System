@@ -53,6 +53,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/staff', [StaffController::class, 'index']);
         Route::get('/staff/options', [StaffController::class, 'options']);
+        Route::get('/staff/report', [StaffController::class, 'report']);
         Route::get('/staff/report-summary', [StaffController::class, 'reportSummary']);
         Route::get('/staff/{staff}', [StaffController::class, 'show']);
         Route::post('/staff', [StaffController::class, 'store']);
