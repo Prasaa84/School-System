@@ -97,6 +97,37 @@
     />
   </ModuleShell>
 
+  <div v-if="showStaffCredentialsDialog" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeStaffCredentialsDialog">
+    <section class="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="font-display text-xl font-bold text-slate-900">{{ text.staffLoginCreatedTitle }}</h2>
+        <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" @click="closeStaffCredentialsDialog">{{ text.close }}</button>
+      </div>
+
+      <p class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        {{ text.staffLoginCreatedHelp }}
+      </p>
+
+      <div class="grid gap-3 md:grid-cols-2">
+        <label class="text-sm text-slate-700">
+          {{ text.loginUsername }}
+          <input :value="staffCredentials.username" type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm" readonly />
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.temporaryPassword }}
+          <input :value="staffCredentials.temporaryPassword" type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm" readonly />
+        </label>
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="closeStaffCredentialsDialog">
+          {{ text.close }}
+        </button>
+      </div>
+    </section>
+  </div>
+
   <div v-if="showAddStaffDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeAddStaffDialog">
     <section class="max-h-[90vh] w-full max-w-6xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
       <div class="mb-4 flex items-center justify-between">
@@ -657,6 +688,22 @@ interface StaffCreatePayload {
 interface StaffDetailResponse {
   data: Record<string, string | number | boolean | null>
 }
+interface StaffLoginAccountResult {
+  created?: boolean
+  updated?: boolean
+  disabled?: boolean
+  username?: string | null
+  temporary_password?: string | null
+}
+interface StaffSaveResponse {
+  message?: string
+  data?: {
+    stf_id?: number
+    name_with_ini?: string
+    school_name?: string | null
+    login_account?: StaffLoginAccountResult
+  }
+}
 type ValidationErrors = Record<string, string>
 
 const currentUser = getUser()
@@ -696,6 +743,7 @@ const staffRows = ref<StaffRow[]>([])
 const staffMeta = reactive<StaffMeta>({ current_page: 1, per_page: 20, total: 0, last_page: 1 })
 const staffSummary = reactive({ total_staff: 0, updated_staff: 0, not_updated_staff: 0 })
 const showAddStaffDialog = ref(false)
+const showStaffCredentialsDialog = ref(false)
 const editStaffId = ref<number | null>(null)
 const isStaffEditMode = computed(() => editStaffId.value !== null)
 const loadingEditStaffId = ref<number | null>(null)
@@ -728,6 +776,10 @@ const involvedTasks = ref<OptionRow[]>([])
 const subjects = ref<OptionRow[]>([])
 const staffPhotoFile = ref<File | null>(null)
 const staffPhotoPreview = ref('')
+const staffCredentials = reactive({
+  username: '',
+  temporaryPassword: '',
+})
 const staffForm = reactive({
   title: '',
   census_id: getSchoolContextCensusId() ?? 0,
@@ -942,6 +994,9 @@ const text = useLocalizedText({
     userRole: 'User Role',
     selectUserRole: 'Select user role',
     loginUsername: 'Login Username',
+    temporaryPassword: 'Temporary Password',
+    staffLoginCreatedTitle: 'Login Created',
+    staffLoginCreatedHelp: 'Please share these credentials with the user now. The temporary password will not be shown again.',
     photo: 'Profile Photo',
     selectPhoto: 'Choose photo',
     photoPreview: 'Preview',
@@ -1073,6 +1128,9 @@ const text = useLocalizedText({
     userRole: 'පරිශීලක භූමිකාව',
     selectUserRole: 'පරිශීලක භූමිකාව තෝරන්න',
     loginUsername: 'පිවිසුම් නාමය',
+    temporaryPassword: 'තාවකාලික මුරපදය',
+    staffLoginCreatedTitle: 'පිවිසුම සාදන ලදී',
+    staffLoginCreatedHelp: 'මෙම පිවිසුම් තොරතුරු දැන්ම පරිශීලකයාට ලබා දෙන්න. තාවකාලික මුරපදය නැවත නොපෙන්වයි.',
     photo: 'පැතිකඩ ඡායාරූපය',
     selectPhoto: 'ඡායාරූපය තෝරන්න',
     photoPreview: 'පෙරදසුන',
@@ -1204,6 +1262,9 @@ const text = useLocalizedText({
     userRole: 'பயனர் பங்கு',
     selectUserRole: 'பயனர் பங்கைத் தேர்ந்தெடுக்கவும்',
     loginUsername: 'உள்நுழைவு பெயர்',
+    temporaryPassword: 'தற்காலிக கடவுச்சொல்',
+    staffLoginCreatedTitle: 'உள்நுழைவு உருவாக்கப்பட்டது',
+    staffLoginCreatedHelp: 'இந்த உள்நுழைவு தகவல்களை உடனே பயனருடன் பகிருங்கள். தற்காலிக கடவுச்சொல் மீண்டும் காட்டப்படாது.',
     photo: 'சுயவிவர புகைப்படம்',
     selectPhoto: 'புகைப்படத்தைத் தேர்ந்தெடுக்கவும்',
     photoPreview: 'முன்னோட்டம்',
@@ -1397,6 +1458,12 @@ const closeAddStaffDialog = (): void => {
   editStaffId.value = null
   staffError.value = ''
   staffFieldErrors.value = {}
+}
+
+const closeStaffCredentialsDialog = (): void => {
+  showStaffCredentialsDialog.value = false
+  staffCredentials.username = ''
+  staffCredentials.temporaryPassword = ''
 }
 
 const applyStaffDetailToForm = (detail: StaffDetailResponse['data']): void => {
@@ -1836,7 +1903,7 @@ const saveStaff = async (): Promise<void> => {
     } : undefined
     const { data } = isStaffEditMode.value && editStaffId.value !== null
       ? await api.put(`/staff/${editStaffId.value}`, requestBody, requestConfig)
-      : await api.post('/staff', requestBody, requestConfig)
+      : await api.post('/staff', requestBody, requestConfig) as { data: StaffSaveResponse }
     console.info('[Staff Save] request completed', {
       submitDebugId,
       stfId: data?.data?.stf_id ?? null,
@@ -1850,6 +1917,13 @@ const saveStaff = async (): Promise<void> => {
     closeAddStaffDialog()
     resetStaffForm()
     savingStaff.value = false
+
+    const loginAccount = data?.data?.login_account
+    if (loginAccount?.created && loginAccount.username && loginAccount.temporary_password) {
+      staffCredentials.username = loginAccount.username
+      staffCredentials.temporaryPassword = loginAccount.temporary_password
+      showStaffCredentialsDialog.value = true
+    }
 
     console.info('[Staff Save] refreshing staff list', { submitDebugId })
     void loadStaff(staffMeta.current_page)
