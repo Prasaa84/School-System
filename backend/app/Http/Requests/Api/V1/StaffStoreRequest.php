@@ -13,6 +13,25 @@ class StaffStoreRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $value = $this->input('service_status_is_current');
+
+        if ($value === null) {
+            return;
+        }
+
+        $normalized = match (strtolower(trim((string) $value))) {
+            '1', 'true', 'yes', 'on' => true,
+            '0', 'false', 'no', 'off' => false,
+            default => $value,
+        };
+
+        $this->merge([
+            'service_status_is_current' => $normalized,
+        ]);
+    }
+
     /**
      * @return array<string, array<int, string>>
      */
@@ -70,6 +89,8 @@ class StaffStoreRequest extends FormRequest
             'service_status_effective_date' => ['nullable', 'date'],
             'service_status_period' => ['nullable', 'string', 'max:30'],
             'service_status_is_current' => ['nullable', 'boolean'],
+            'create_user_login' => ['nullable', 'boolean'],
+            'login_role_id' => ['nullable', 'integer', 'min:1'],
             'profile_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ];
     }

@@ -7,12 +7,15 @@ use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StaffStoreRequest;
 use App\Models\SchoolDetail;
+use App\Models\SdsUser;
 use App\Models\Staff;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Throwable;
 
 class StaffController extends Controller
@@ -23,6 +26,7 @@ class StaffController extends Controller
     public function index(Request $request): JsonResponse
     {
         $q = trim((string) $request->query('q', ''));
+        $schoolCensusId = trim((string) $request->query('school_census_id', ''));
         $perPage = (int) $request->query('per_page', 20);
         $perPage = max(1, min($perPage, 100));
 
@@ -72,7 +76,14 @@ class StaffController extends Controller
                 ->orderBy('census_id')
                 ->orderBy('stf_id');
 
-            if (!$this->isAdministrator($user)) {
+            if ($this->isAdministrator($user)) {
+                if ($schoolCensusId !== '') {
+                    $canonicalSchoolCensusId = $this->resolveCanonicalSchoolCensusId($schoolCensusId);
+                    if ($canonicalSchoolCensusId !== null) {
+                        $query->where('census_id', $canonicalSchoolCensusId);
+                    }
+                }
+            } else {
                 $this->applySchoolScope($query->getQuery(), $user, null, $staffSchoolColumn);
             }
 
@@ -157,6 +168,53 @@ class StaffController extends Controller
             'appointment_subjects' => $this->loadAppointmentSubjectRows(),
             'involved_tasks' => $this->loadLookupRows('involved_task_tbl', 'involved_task_id', ['inv_task_en', 'inv_task_si', 'inv_task_ta'], true),
             'subjects' => $this->loadSubjectRows(),
+            'login_roles' => $this->loadLoginRoleRows(),
+        ]);
+    }
+
+    public function show(int $staff): JsonResponse
+    {
+        $user = $this->authUser();
+        if (!$this->canManageStaff($user)) {
+            Log::warning('Staff show forbidden.', [
+                'requested_stf_id' => $staff,
+                'user_id' => $user->user_id ?? $user->id ?? null,
+            ]);
+
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        Log::info('Staff show started.', [
+            'requested_stf_id' => $staff,
+            'user_id' => $user->user_id ?? $user->id ?? null,
+        ]);
+
+        $staffRow = $this->findManageableStaff($staff, $user);
+        if ($staffRow === null) {
+            Log::warning('Staff show target not found.', [
+                'requested_stf_id' => $staff,
+                'user_id' => $user->user_id ?? $user->id ?? null,
+            ]);
+
+            return response()->json(['message' => 'Staff record not found.'], 404);
+        }
+
+        $payload = array_merge(
+            $this->staffBaseDetail($staffRow),
+            $this->loadCurrentServiceGradeDetail((int) $staffRow->stf_id),
+            $this->loadCurrentServiceStatusDetail((int) $staffRow->stf_id),
+            $this->loadCurrentInvolvedTaskDetail((int) $staffRow->stf_id),
+            ['photo_url' => $this->resolveStaffPhotoUrl((int) $staffRow->stf_id)],
+        );
+
+        Log::info('Staff show completed.', [
+            'stf_id' => (int) $staffRow->stf_id,
+            'census_id' => $staffRow->census_id ?? null,
+            'has_photo' => !empty($payload['photo_url']),
+        ]);
+
+        return response()->json([
+            'data' => $payload,
         ]);
     }
 
@@ -183,6 +241,7 @@ class StaffController extends Controller
             $this->validateDuplicateNic($validated),
             $this->validateStaffLookupValues($validated),
             $this->validateStaffCompositeFields($validated),
+            $this->validateStaffLoginFields($validated),
         );
         if ($errors !== []) {
             return response()->json([
@@ -198,14 +257,22 @@ class StaffController extends Controller
             'has_photo' => $request->hasFile('profile_photo'),
         ]);
 
+        $loginResult = [
+            'created' => false,
+            'updated' => false,
+            'disabled' => false,
+            'username' => null,
+            'temporary_password' => null,
+        ];
+
         try {
-            $staff = DB::transaction(function () use ($validated, $censusId, $user, $request) {
+            $staff = DB::transaction(function () use ($validated, $censusId, $request, &$loginResult) {
                 Log::info('Staff store transaction opened.', [
                     'census_id' => $censusId,
                 ]);
 
                 $staff = new Staff();
-                $staff->fill($this->buildStaffData($validated, $censusId, $user));
+                $staff->fill($this->buildStaffData($validated, $censusId));
 
                 if (Schema::hasColumn('staff_tbl', 'date_added')) {
                     $staff->date_added = now();
@@ -245,6 +312,15 @@ class StaffController extends Controller
                     'has_photo' => $request->hasFile('profile_photo'),
                 ]);
 
+                $loginResult = $this->syncStaffLogin($staff, $validated);
+                Log::info('Staff login stage completed.', [
+                    'stf_id' => $staff->stf_id,
+                    'login_created' => $loginResult['created'],
+                    'login_updated' => $loginResult['updated'],
+                    'login_disabled' => $loginResult['disabled'],
+                    'login_username' => $loginResult['username'],
+                ]);
+
                 return $staff;
             });
 
@@ -256,11 +332,12 @@ class StaffController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Staff added successfully.',
+                'message' => $this->buildStaffSaveMessage('Staff added successfully.', $loginResult),
                 'data' => [
                     'stf_id' => (int) $staff->stf_id,
                     'name_with_ini' => (string) ($staff->name_with_ini ?? ''),
                     'school_name' => $staff->school?->sch_name,
+                    'login_account' => $loginResult,
                 ],
             ], 201);
         } catch (Throwable $e) {
@@ -272,6 +349,154 @@ class StaffController extends Controller
 
             return response()->json([
                 'message' => 'Unable to add staff.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function update(StaffStoreRequest $request, int $staff): JsonResponse
+    {
+        $user = $this->authUser();
+        if (!$this->canManageStaff($user)) {
+            Log::warning('Staff update forbidden.', [
+                'requested_stf_id' => $staff,
+                'user_id' => $user->user_id ?? $user->id ?? null,
+            ]);
+
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $staffRow = $this->findManageableStaff($staff, $user);
+        if ($staffRow === null) {
+            Log::warning('Staff update target not found.', [
+                'requested_stf_id' => $staff,
+                'user_id' => $user->user_id ?? $user->id ?? null,
+            ]);
+
+            return response()->json(['message' => 'Staff record not found.'], 404);
+        }
+
+        $validated = $request->validated();
+        $censusId = $this->resolveStaffCensusIdForUpdate($user, $validated, $staffRow);
+
+        if ($censusId === null) {
+            return response()->json([
+                'message' => $this->isAdministrator($user)
+                    ? 'Please select a school first.'
+                    : 'Unable to determine school census ID.',
+                'errors' => ['census_id' => ['Please select a school first.']],
+            ], 422);
+        }
+
+        Log::info('Staff update started.', [
+            'stf_id' => (int) $staffRow->stf_id,
+            'existing_census_id' => $staffRow->census_id ?? null,
+            'target_census_id' => $censusId,
+            'nic_no' => $validated['nic_no'] ?? null,
+            'has_photo' => $request->hasFile('profile_photo'),
+            'user_id' => $user->user_id ?? $user->id ?? null,
+        ]);
+
+        $errors = array_merge(
+            $this->validateDuplicateNic($validated, (int) $staffRow->stf_id),
+            $this->validateStaffLookupValues($validated),
+            $this->validateStaffCompositeFields($validated),
+            $this->validateStaffLoginFields($validated),
+        );
+        if ($errors !== []) {
+            Log::warning('Staff update validation failed.', [
+                'stf_id' => (int) $staffRow->stf_id,
+                'error_fields' => array_keys($errors),
+            ]);
+
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $errors,
+            ], 422);
+        }
+
+        try {
+            $loginResult = [
+                'created' => false,
+                'updated' => false,
+                'disabled' => false,
+                'username' => null,
+                'temporary_password' => null,
+            ];
+
+            DB::transaction(function () use ($request, $validated, $censusId, $staffRow, &$loginResult): void {
+                Log::info('Staff update transaction opened.', [
+                    'stf_id' => (int) $staffRow->stf_id,
+                    'census_id' => $censusId,
+                ]);
+
+                $staffRow->fill($this->buildStaffData($validated, $censusId));
+
+                if (Schema::hasColumn('staff_tbl', 'date_updated')) {
+                    $staffRow->date_updated = now();
+                }
+
+                $staffRow->save();
+
+                Log::info('Staff update base row saved.', [
+                    'stf_id' => (int) $staffRow->stf_id,
+                    'census_id' => $staffRow->census_id ?? null,
+                ]);
+
+                $this->syncServiceGradeRecord($staffRow, $validated, $censusId);
+                Log::info('Staff update service grade synced.', [
+                    'stf_id' => (int) $staffRow->stf_id,
+                ]);
+
+                $this->syncServiceStatusRecord($staffRow, $validated, $censusId);
+                Log::info('Staff update service status synced.', [
+                    'stf_id' => (int) $staffRow->stf_id,
+                ]);
+
+                $this->syncInvolvedTaskRecords($staffRow, $validated, $censusId);
+                Log::info('Staff update involved tasks synced.', [
+                    'stf_id' => (int) $staffRow->stf_id,
+                ]);
+
+                $this->storeStaffPhoto($request->file('profile_photo'), (int) $staffRow->stf_id);
+                Log::info('Staff update photo stage completed.', [
+                    'stf_id' => (int) $staffRow->stf_id,
+                    'has_photo' => $request->hasFile('profile_photo'),
+                ]);
+
+                $loginResult = $this->syncStaffLogin($staffRow, $validated);
+                Log::info('Staff update login stage completed.', [
+                    'stf_id' => (int) $staffRow->stf_id,
+                    'login_created' => $loginResult['created'],
+                    'login_updated' => $loginResult['updated'],
+                    'login_disabled' => $loginResult['disabled'],
+                    'login_username' => $loginResult['username'],
+                ]);
+            });
+
+            Log::info('Staff update completed.', [
+                'stf_id' => (int) $staffRow->stf_id,
+                'census_id' => $staffRow->census_id ?? null,
+            ]);
+
+            return response()->json([
+                'message' => $this->buildStaffSaveMessage('Staff updated successfully.', $loginResult),
+                'data' => [
+                    'stf_id' => (int) $staffRow->stf_id,
+                    'name_with_ini' => (string) ($staffRow->name_with_ini ?? ''),
+                    'login_account' => $loginResult,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            Log::error('Staff update failed.', [
+                'stf_id' => (int) $staffRow->stf_id,
+                'census_id' => $censusId,
+                'nic_no' => $validated['nic_no'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to update staff.',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -423,7 +648,7 @@ class StaffController extends Controller
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
-    private function buildStaffData(array $validated, string $censusId, mixed $user): array
+    private function buildStaffData(array $validated, string $censusId): array
     {
         $data = [
             'title' => trim((string) $validated['title']),
@@ -432,7 +657,6 @@ class StaffController extends Controller
             'name_with_ini' => trim((string) $validated['name_with_ini']),
             'gender_id' => (int) $validated['gender_id'],
             'desig_id' => (int) $validated['desig_id'],
-            'user_id' => $this->resolveStaffUserId($user),
         ];
 
         foreach ([
@@ -699,6 +923,29 @@ class StaffController extends Controller
     }
 
     /**
+     * @return array<int, array{id: int, label: string}>
+     */
+    private function loadLoginRoleRows(): array
+    {
+        if (!Schema::hasTable('user_role_tbl')) {
+            return [];
+        }
+
+        return DB::table('user_role_tbl')
+            ->select(['role_id', 'role_name'])
+            ->whereNotIn('role_id', [1, 7])
+            ->orderBy('role_id')
+            ->get()
+            ->map(fn ($row): array => [
+                'id' => (int) ($row->role_id ?? 0),
+                'label' => trim((string) ($row->role_name ?? '')) !== '' ? (string) ($row->role_name ?? '') : (string) ($row->role_id ?? ''),
+            ])
+            ->filter(fn (array $row): bool => $row['id'] > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
      * @param  array<string, mixed>  $validated
      * @return array<string, array<int, string>>
      */
@@ -770,7 +1017,7 @@ class StaffController extends Controller
      * @param  array<string, mixed>  $validated
      * @return array<string, array<int, string>>
      */
-    private function validateDuplicateNic(array $validated): array
+    private function validateDuplicateNic(array $validated, ?int $ignoreStaffId = null): array
     {
         $nic = trim((string) ($validated['nic_no'] ?? ''));
         if ($nic === '' || !Schema::hasTable('staff_tbl')) {
@@ -781,10 +1028,139 @@ class StaffController extends Controller
         if (Schema::hasColumn('staff_tbl', 'is_deleted')) {
             $query->where('is_deleted', 0);
         }
+        if ($ignoreStaffId !== null && $ignoreStaffId > 0) {
+            $query->where('stf_id', '!=', $ignoreStaffId);
+        }
 
         return $query->exists()
             ? ['nic_no' => ['This NIC already exists.']]
             : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, array<int, string>>
+     */
+    private function validateStaffLoginFields(array $validated): array
+    {
+        $errors = [];
+
+        if (!$this->toBool($validated['create_user_login'] ?? false)) {
+            return $errors;
+        }
+
+        $nic = preg_replace('/[^A-Za-z0-9]/', '', trim((string) ($validated['nic_no'] ?? '')));
+        if ($nic === '') {
+            $errors['nic_no'] = ['NIC is required when user login is enabled.'];
+        }
+
+        $loginRoleId = $this->toIntOrNull($validated['login_role_id'] ?? null);
+        if ($loginRoleId === null) {
+            $errors['login_role_id'] = ['User role is required when user login is enabled.'];
+            return $errors;
+        }
+
+        if (!Schema::hasTable('user_role_tbl')) {
+            $errors['login_role_id'] = ['User roles table is unavailable.'];
+            return $errors;
+        }
+
+        $isAllowedRole = DB::table('user_role_tbl')
+            ->where('role_id', $loginRoleId)
+            ->whereNotIn('role_id', [1, 7])
+            ->exists();
+
+        if (!$isAllowedRole) {
+            $errors['login_role_id'] = ['Selected user role is invalid for staff login.'];
+        }
+
+        return $errors;
+    }
+
+    private function findManageableStaff(int $staffId, mixed $user): ?Staff
+    {
+        if ($staffId <= 0 || !Schema::hasTable('staff_tbl')) {
+            return null;
+        }
+
+        $staffColumns = Schema::getColumnListing('staff_tbl');
+        $staffSchoolColumn = $this->resolveSchoolColumn($staffColumns);
+
+        $query = Staff::query()->where('stf_id', $staffId);
+        if (Schema::hasColumn('staff_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        if (!$this->isAdministrator($user)) {
+            $this->applySchoolScope($query->getQuery(), $user, null, $staffSchoolColumn);
+        }
+
+        return $query->first();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function staffBaseDetail(Staff $staff): array
+    {
+        $linkedLogin = $this->loadLinkedLoginDetail($staff);
+
+        return [
+            'stf_id' => (int) $staff->stf_id,
+            'title' => (string) ($staff->title ?? ''),
+            'census_id' => isset($staff->census_id) ? (string) $staff->census_id : null,
+            'full_name' => (string) ($staff->full_name ?? ''),
+            'name_with_ini' => (string) ($staff->name_with_ini ?? ''),
+            'nick_name' => (string) ($staff->nick_name ?? ''),
+            'nic_no' => (string) ($staff->nic_no ?? ''),
+            'dob' => $this->formatDateValue($staff->dob ?? null),
+            'gender_id' => $this->toIntOrNull($staff->gender_id ?? null),
+            'civil_status_id' => $this->toIntOrNull($staff->civil_status_id ?? null),
+            'ethnic_group_id' => $this->toIntOrNull($staff->ethnic_group_id ?? null),
+            'religion_id' => $this->toIntOrNull($staff->religion_id ?? null),
+            'phone_home' => (string) ($staff->phone_home ?? ''),
+            'phone_mobile1' => (string) ($staff->phone_mobile1 ?? ''),
+            'phone_mobile2' => (string) ($staff->phone_mobile2 ?? ''),
+            'address1' => (string) ($staff->address1 ?? ''),
+            'address2' => (string) ($staff->address2 ?? ''),
+            'email' => (string) ($staff->email ?? ''),
+            'vehicle_no1' => (string) ($staff->vehicle_no1 ?? ''),
+            'vehicle_no2' => (string) ($staff->vehicle_no2 ?? ''),
+            'edu_q_id' => $this->toIntOrNull($staff->edu_q_id ?? null),
+            'prof_q_id' => $this->toIntOrNull($staff->prof_q_id ?? null),
+            'desig_id' => $this->toIntOrNull($staff->desig_id ?? null),
+            'serv_grd_id' => $this->toIntOrNull($staff->serv_grd_id ?? null),
+            'sec_id' => $this->toIntOrNull($staff->sec_id ?? null),
+            'sec_role_id' => $this->toIntOrNull($staff->sec_role_id ?? null),
+            'stf_type_id' => $this->toIntOrNull($staff->stf_type_id ?? null),
+            'stf_status_id' => $this->toIntOrNull($staff->stf_status_id ?? null),
+            'service_status_id' => $this->toIntOrNull($staff->service_status_id ?? null),
+            'subj_med_id' => $this->toIntOrNull($staff->subj_med_id ?? null),
+            'app_type_id' => $this->toIntOrNull($staff->app_type_id ?? null),
+            'app_subj_id' => $this->toIntOrNull($staff->app_subj_id ?? null),
+            'first_app_dt' => $this->formatDateValue($staff->first_app_dt ?? null),
+            'start_dt_this_sch' => $this->formatDateValue($staff->start_dt_this_sch ?? null),
+            'serv_grd_effective_dt' => $this->formatDateValue($staff->serv_grd_effective_dt ?? null),
+            'sal_incr_dt' => $this->formatDateValue($staff->sal_incr_dt ?? null),
+            'stf_no' => $this->toIntOrNull($staff->stf_no ?? null),
+            'salary_no' => $this->toIntOrNull($staff->salary_no ?? null),
+            'create_user_login' => $linkedLogin['create_user_login'],
+            'login_role_id' => $linkedLogin['login_role_id'],
+            'login_username' => $linkedLogin['login_username'],
+        ];
+    }
+
+    private function resolveStaffCensusIdForUpdate(mixed $user, array $validated, Staff $staff): ?string
+    {
+        if ($this->isAdministrator($user)) {
+            $requested = trim((string) ($validated['census_id'] ?? ''));
+
+            if ($requested !== '') {
+                return $this->resolveCanonicalSchoolCensusId($requested);
+            }
+        }
+
+        return isset($staff->census_id) ? (string) $staff->census_id : null;
     }
 
     private function rowExists(string $table, string $idColumn, int $id, bool $excludeDeleted = false): bool
@@ -840,6 +1216,15 @@ class StaffController extends Controller
     /**
      * @param  array<string, mixed>  $validated
      */
+    private function syncServiceGradeRecord(Staff $staff, array $validated, string $censusId): void
+    {
+        $this->clearStaffRelatedRecords('staff_service_grade_tbl', (int) $staff->stf_id);
+        $this->storeServiceGradeRecord($staff, $validated, $censusId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
     private function storeServiceStatusRecord(Staff $staff, array $validated, string $censusId): void
     {
         $serviceStatusId = $this->toIntOrNull($validated['service_status_id'] ?? null);
@@ -869,6 +1254,15 @@ class StaffController extends Controller
             'date_updated' => now(),
             'is_deleted' => 0,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncServiceStatusRecord(Staff $staff, array $validated, string $censusId): void
+    {
+        $this->clearStaffRelatedRecords('staff_service_status_tbl', (int) $staff->stf_id);
+        $this->storeServiceStatusRecord($staff, $validated, $censusId);
     }
 
     private function storeStaffPhoto(mixed $photo, int $staffId): void
@@ -931,11 +1325,201 @@ class StaffController extends Controller
         }
     }
 
-    private function resolveStaffUserId(mixed $user): int
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncInvolvedTaskRecords(Staff $staff, array $validated, string $censusId): void
     {
-        $id = (int) ($user->user_id ?? $user->id ?? 0);
+        $this->clearStaffRelatedRecords('staff_involved_task_tbl', (int) $staff->stf_id);
+        $this->storeInvolvedTaskRecords($staff, $validated, $censusId);
+    }
 
-        return max(0, $id);
+    private function clearStaffRelatedRecords(string $table, int $staffId): void
+    {
+        if ($staffId <= 0 || !Schema::hasTable($table)) {
+            return;
+        }
+
+        $query = DB::table($table)->where('stf_id', $staffId);
+
+        if (Schema::hasColumn($table, 'is_deleted')) {
+            $payload = ['is_deleted' => 1];
+            if (Schema::hasColumn($table, 'is_current')) {
+                $payload['is_current'] = 0;
+            }
+            if (Schema::hasColumn($table, 'date_updated')) {
+                $payload['date_updated'] = now();
+            }
+            $query->update($payload);
+            return;
+        }
+
+        $query->delete();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadCurrentServiceGradeDetail(int $staffId): array
+    {
+        if ($staffId <= 0 || !Schema::hasTable('staff_service_grade_tbl')) {
+            return ['serv_grd_id' => null, 'serv_grd_effective_dt' => ''];
+        }
+
+        $query = DB::table('staff_service_grade_tbl')->where('stf_id', $staffId);
+        if (Schema::hasColumn('staff_service_grade_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+        if (Schema::hasColumn('staff_service_grade_tbl', 'is_current')) {
+            $query->orderByDesc('is_current');
+        }
+        if (Schema::hasColumn('staff_service_grade_tbl', 'date_updated')) {
+            $query->orderByDesc('date_updated');
+        }
+        if (Schema::hasColumn('staff_service_grade_tbl', 'date_added')) {
+            $query->orderByDesc('date_added');
+        }
+
+        $row = $query->first();
+
+        return [
+            'serv_grd_id' => $this->toIntOrNull($row->serv_grd_id ?? null),
+            'serv_grd_effective_dt' => $this->formatDateValue($row->effective_date ?? null),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadCurrentServiceStatusDetail(int $staffId): array
+    {
+        if ($staffId <= 0 || !Schema::hasTable('staff_service_status_tbl')) {
+            return [
+                'service_status_id' => null,
+                'service_status_custom_institute' => '',
+                'service_status_effective_date' => '',
+                'service_status_period' => '',
+                'service_status_is_current' => true,
+            ];
+        }
+
+        $query = DB::table('staff_service_status_tbl')->where('stf_id', $staffId);
+        if (Schema::hasColumn('staff_service_status_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+        if (Schema::hasColumn('staff_service_status_tbl', 'is_current')) {
+            $query->orderByDesc('is_current');
+        }
+        if (Schema::hasColumn('staff_service_status_tbl', 'date_updated')) {
+            $query->orderByDesc('date_updated');
+        }
+        if (Schema::hasColumn('staff_service_status_tbl', 'date_added')) {
+            $query->orderByDesc('date_added');
+        }
+
+        $row = $query->first();
+
+        return [
+            'service_status_id' => $this->toIntOrNull($row->status_id ?? null),
+            'service_status_custom_institute' => (string) ($row->institute ?? ''),
+            'service_status_effective_date' => $this->formatDateValue($row->effective_date ?? null),
+            'service_status_period' => (string) ($row->period ?? ''),
+            'service_status_is_current' => $this->toBool($row->is_current ?? 1),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadCurrentInvolvedTaskDetail(int $staffId): array
+    {
+        $detail = [
+            'main_task_id' => null,
+            'main_task_section_id' => null,
+            'main_task_subject_id' => null,
+            'second_task_id' => null,
+            'second_task_section_id' => null,
+            'second_task_subject_id' => null,
+        ];
+
+        if ($staffId <= 0 || !Schema::hasTable('staff_involved_task_tbl')) {
+            return $detail;
+        }
+
+        $query = DB::table('staff_involved_task_tbl')->where('stf_id', $staffId);
+        if (Schema::hasColumn('staff_involved_task_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        $query->orderBy('involved_task_type_id');
+        if (Schema::hasColumn('staff_involved_task_tbl', 'date_updated')) {
+            $query->orderByDesc('date_updated');
+        }
+
+        $rows = $query->get();
+        foreach ($rows as $row) {
+            $prefix = (int) ($row->involved_task_type_id ?? 0) === 2 ? 'second_task' : 'main_task';
+            $detail["{$prefix}_id"] = $this->toIntOrNull($row->involved_task_id ?? null);
+            $detail["{$prefix}_section_id"] = $this->toIntOrNull($row->section_id ?? null);
+            $detail["{$prefix}_subject_id"] = $this->toIntOrNull($row->subject_id ?? null);
+        }
+
+        return $detail;
+    }
+
+    private function resolveStaffPhotoUrl(int $staffId): ?string
+    {
+        if ($staffId <= 0) {
+            return null;
+        }
+
+        $matches = glob(public_path('uploads/staff/' . $staffId . '.*')) ?: [];
+        $path = $matches[0] ?? null;
+
+        if ($path === null || !is_file($path)) {
+            return null;
+        }
+
+        $version = @filemtime($path);
+
+        return url('/uploads/staff/' . basename($path)) . ($version ? ('?v=' . $version) : '');
+    }
+
+    private function formatDateValue(mixed $value): string
+    {
+        $text = trim((string) $value);
+
+        return $text === '' ? '' : substr($text, 0, 10);
+    }
+
+    /**
+     * @return array{create_user_login: bool, login_role_id: int|null, login_username: string}
+     */
+    private function loadLinkedLoginDetail(Staff $staff): array
+    {
+        $linkedUserId = $this->toIntOrNull($staff->user_id ?? null);
+        if ($linkedUserId === null) {
+            return [
+                'create_user_login' => false,
+                'login_role_id' => null,
+                'login_username' => '',
+            ];
+        }
+
+        $user = SdsUser::query()->where('user_id', $linkedUserId)->first();
+        if ($user === null) {
+            return [
+                'create_user_login' => false,
+                'login_role_id' => null,
+                'login_username' => '',
+            ];
+        }
+
+        return [
+            'create_user_login' => ((int) ($user->is_deleted ?? 0) === 0) && ((int) ($user->status_id ?? 0) === 1),
+            'login_role_id' => $this->toIntOrNull($user->role_id ?? null),
+            'login_username' => (string) ($user->username ?? ''),
+        ];
     }
 
     private function subjectBelongsToSection(int $subjectId, int $sectionId): bool
@@ -1007,6 +1591,138 @@ class StaffController extends Controller
         return $label === '' ? null : $label;
     }
 
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{created: bool, updated: bool, disabled: bool, username: string|null, temporary_password: string|null}
+     */
+    private function syncStaffLogin(Staff $staff, array $validated): array
+    {
+        $result = [
+            'created' => false,
+            'updated' => false,
+            'disabled' => false,
+            'username' => null,
+            'temporary_password' => null,
+        ];
+
+        if (!Schema::hasTable('user_tbl')) {
+            return $result;
+        }
+
+        $linkedUserId = $this->toIntOrNull($staff->user_id ?? null);
+        $linkedUser = $linkedUserId !== null
+            ? SdsUser::query()->where('user_id', $linkedUserId)->first()
+            : null;
+
+        $shouldEnableLogin = $this->toBool($validated['create_user_login'] ?? false);
+        $loginRoleId = $this->toIntOrNull($validated['login_role_id'] ?? null);
+
+        if (!$shouldEnableLogin) {
+            if ($linkedUser !== null) {
+                $linkedUser->status_id = 0;
+                if (Schema::hasColumn('user_tbl', 'date_updated')) {
+                    $linkedUser->date_updated = now();
+                }
+                $linkedUser->save();
+                $result['disabled'] = true;
+                $result['username'] = (string) ($linkedUser->username ?? '');
+            }
+
+            return $result;
+        }
+
+        if ($linkedUser !== null) {
+            $linkedUser->role_id = $loginRoleId;
+            $linkedUser->status_id = 1;
+            if (Schema::hasColumn('user_tbl', 'is_deleted')) {
+                $linkedUser->is_deleted = 0;
+            }
+            if (Schema::hasColumn('user_tbl', 'date_updated')) {
+                $linkedUser->date_updated = now();
+            }
+            $linkedUser->save();
+            $result['updated'] = true;
+            $result['username'] = (string) ($linkedUser->username ?? '');
+
+            return $result;
+        }
+
+        $username = $this->generateUniqueStaffUsername($staff, $validated);
+        $temporaryPassword = Str::random(10);
+
+        $user = new SdsUser();
+        $user->role_id = $loginRoleId;
+        $user->username = $username;
+        $user->password = Hash::make($temporaryPassword);
+        $user->grade_id = 0;
+        $user->class_id = 0;
+        $user->status_id = 1;
+        if (Schema::hasColumn('user_tbl', 'date_added')) {
+            $user->date_added = now();
+        }
+        if (Schema::hasColumn('user_tbl', 'date_updated')) {
+            $user->date_updated = now();
+        }
+        if (Schema::hasColumn('user_tbl', 'is_deleted')) {
+            $user->is_deleted = 0;
+        }
+        $user->save();
+
+        if (Schema::hasColumn('staff_tbl', 'user_id')) {
+            $staff->user_id = (int) $user->user_id;
+            if (Schema::hasColumn('staff_tbl', 'date_updated')) {
+                $staff->date_updated = now();
+            }
+            $staff->save();
+        }
+
+        $result['created'] = true;
+        $result['username'] = $username;
+        $result['temporary_password'] = $temporaryPassword;
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function generateUniqueStaffUsername(Staff $staff, array $validated): string
+    {
+        $base = strtolower(trim((string) preg_replace('/[^A-Za-z0-9]/', '', trim((string) ($validated['nic_no'] ?? '')))));
+        if ($base === '') {
+            $base = 'staff' . (int) $staff->stf_id;
+        }
+
+        $username = $base;
+        $suffix = 1;
+        while (SdsUser::query()->where('username', $username)->exists()) {
+            $suffix++;
+            $username = $base . $suffix;
+        }
+
+        return $username;
+    }
+
+    /**
+     * @param  array{created: bool, updated: bool, disabled: bool, username: string|null, temporary_password: string|null}  $loginResult
+     */
+    private function buildStaffSaveMessage(string $baseMessage, array $loginResult): string
+    {
+        if ($loginResult['created'] && $loginResult['username'] !== null && $loginResult['temporary_password'] !== null) {
+            return $baseMessage . ' Login created. Username: ' . $loginResult['username'] . '. Temporary password: ' . $loginResult['temporary_password'] . '.';
+        }
+
+        if ($loginResult['updated'] && $loginResult['username'] !== null) {
+            return $baseMessage . ' Login updated for username: ' . $loginResult['username'] . '.';
+        }
+
+        if ($loginResult['disabled'] && $loginResult['username'] !== null) {
+            return $baseMessage . ' Login disabled for username: ' . $loginResult['username'] . '.';
+        }
+
+        return $baseMessage;
+    }
+
     private function toNullableString(mixed $value): ?string
     {
         $text = trim((string) $value);
@@ -1030,5 +1746,10 @@ class StaffController extends Controller
         }
 
         return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true) ? 1 : 0;
+    }
+
+    private function toBool(mixed $value): bool
+    {
+        return $this->toBoolInt($value) === 1;
     }
 }

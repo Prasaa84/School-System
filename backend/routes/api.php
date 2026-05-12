@@ -54,7 +54,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/staff', [StaffController::class, 'index']);
         Route::get('/staff/options', [StaffController::class, 'options']);
         Route::get('/staff/report-summary', [StaffController::class, 'reportSummary']);
+        Route::get('/staff/{staff}', [StaffController::class, 'show']);
         Route::post('/staff', [StaffController::class, 'store']);
+        Route::put('/staff/{staff}', [StaffController::class, 'update']);
 
         Route::get('/students', [StudentController::class, 'index']);
         Route::get('/students/options', [StudentController::class, 'options']);

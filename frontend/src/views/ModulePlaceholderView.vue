@@ -69,20 +69,26 @@
     <StaffModulePanel
       v-if="isStaff"
       :active-tab="activeTab"
+      :is-admin="isAdmin"
       :can-manage="canManage"
       :staff-search="staffSearch"
+      :selected-school-census-id="selectedStaffSchoolCensusId"
+      :staff-schools="staffSchools"
       :staff-rows="staffRows"
       :staff-meta="staffMeta"
+      :loading-edit-staff-id="loadingEditStaffId"
       :report-year="reportYear"
       :report-month="reportMonth"
       :year-options="yearOptions"
       :staff-summary="staffSummary"
       @update:staff-search="staffSearch = $event"
+      @update:selected-school-census-id="selectedStaffSchoolCensusId = $event"
       @update:report-year="reportYear = $event"
       @update:report-month="reportMonth = $event"
       @load-staff="loadStaff"
       @load-report="loadStaffReport"
       @open-add-staff="openAddStaffDialog"
+      @open-edit-staff="openEditStaffDialog"
     />
 
     <ModuleQueuedNotice
@@ -94,7 +100,7 @@
   <div v-if="showAddStaffDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeAddStaffDialog">
     <section class="max-h-[90vh] w-full max-w-6xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
       <div class="mb-4 flex items-center justify-between">
-        <h2 class="font-display text-xl font-bold text-slate-900">{{ text.addStaffTitle }}</h2>
+        <h2 class="font-display text-xl font-bold text-slate-900">{{ isStaffEditMode ? text.editStaffTitle : text.addStaffTitle }}</h2>
         <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" @click="closeAddStaffDialog">{{ text.close }}</button>
       </div>
 
@@ -486,6 +492,33 @@
         </fieldset>
 
         <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.userLogin }}</legend>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="flex items-center gap-2 pt-7 text-sm text-slate-700">
+              <input v-model="staffForm.create_user_login" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+              {{ text.enableUserLogin }}
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.userRole }}
+              <select v-model.number="staffForm.login_role_id" :class="staffInputClass('login_role_id')" :disabled="!staffForm.create_user_login">
+                <option :value="0">{{ text.selectUserRole }}</option>
+                <option v-for="row in loginRoles" :key="`login-role-${row.id}`" :value="row.id">{{ row.label }}</option>
+              </select>
+              <p v-if="staffFieldErrors.login_role_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.login_role_id }}</p>
+            </label>
+
+            <label v-if="staffForm.login_username" class="text-sm text-slate-700">
+              {{ text.loginUsername }}
+              <input :value="staffForm.login_username" type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm" readonly />
+            </label>
+            <p v-else-if="staffForm.create_user_login" class="pt-7 text-sm text-slate-500">
+              {{ staffForm.nic_no.trim() || '-' }}
+            </p>
+          </div>
+        </fieldset>
+
+        <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
           <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.photo }}</legend>
           <div class="grid gap-3 md:grid-cols-3">
             <label class="text-sm text-slate-700 md:col-span-2">
@@ -505,7 +538,7 @@
             {{ text.cancel }}
           </button>
           <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="savingStaff">
-            {{ savingStaff ? text.saving : text.saveStaff }}
+            {{ savingStaff ? (isStaffEditMode ? text.updating : text.saving) : (isStaffEditMode ? text.updateStaff : text.saveStaff) }}
           </button>
         </div>
       </form>
@@ -534,7 +567,7 @@ interface Grade { sch_grd_id: number | null; census_id: number | null; school_na
 interface GradeReportRow { grade_id: number; grade: string; year: number; student_count: number }
 interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null }
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
-interface StaffRow { stf_id: number; census_id: string | null; name_with_ini: string; nic_no: string | null; gender: string | null; phone_mobile1: string | null; designation: string | null; school_name: string | null }
+interface StaffRow { stf_id: number; census_id: string | null; name_with_ini: string; nic_no: string | null; gender: string | null; phone_mobile1: string | null; designation: string | null; school_name: string | null; can_edit?: boolean }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
 interface OptionRow { id: number; label: string; app_type_id?: number; section_id?: number }
@@ -543,6 +576,7 @@ interface ClassOption { class_id: number; class: string }
 interface StaffOptionsResponse {
   data: StaffOption[]
   schools?: OptionRow[]
+  login_roles?: OptionRow[]
   genders?: OptionRow[]
   civil_statuses?: OptionRow[]
   ethnic_groups?: OptionRow[]
@@ -617,6 +651,11 @@ interface StaffCreatePayload {
   service_status_effective_date?: string
   service_status_period?: string
   service_status_is_current?: boolean
+  create_user_login?: boolean
+  login_role_id?: number
+}
+interface StaffDetailResponse {
+  data: Record<string, string | number | boolean | null>
 }
 type ValidationErrors = Record<string, string>
 
@@ -652,15 +691,20 @@ const reportYear = ref(0)
 const reportMonth = ref(0)
 
 const staffSearch = ref('')
+const selectedStaffSchoolCensusId = ref(getSchoolContextCensusId() ?? 0)
 const staffRows = ref<StaffRow[]>([])
 const staffMeta = reactive<StaffMeta>({ current_page: 1, per_page: 20, total: 0, last_page: 1 })
 const staffSummary = reactive({ total_staff: 0, updated_staff: 0, not_updated_staff: 0 })
 const showAddStaffDialog = ref(false)
+const editStaffId = ref<number | null>(null)
+const isStaffEditMode = computed(() => editStaffId.value !== null)
+const loadingEditStaffId = ref<number | null>(null)
 const savingStaff = ref(false)
 const staffError = ref('')
 const staffFieldErrors = ref<ValidationErrors>({})
 const staffErrorRef = ref<HTMLElement | null>(null)
 const staffSchools = ref<OptionRow[]>([])
+const loginRoles = ref<OptionRow[]>([])
 const staffGenders = ref<OptionRow[]>([])
 const staffCivilStatuses = ref<OptionRow[]>([])
 const staffEthnicGroups = ref<OptionRow[]>([])
@@ -736,6 +780,9 @@ const staffForm = reactive({
   service_status_effective_date: '',
   service_status_period: '',
   service_status_is_current: true,
+  create_user_login: false,
+  login_role_id: 0,
+  login_username: '',
 })
 
 const yearOptions = computed(() => { const now = new Date().getFullYear(); return Array.from({ length: 8 }, (_, i) => now - i) })
@@ -778,6 +825,7 @@ const text = useLocalizedText({
     staffTitle: 'Staff Management',
     staffSubtitle: 'Search staff records and review update summaries.',
     addStaffTitle: 'Add Staff',
+    editStaffTitle: 'Edit Staff',
     staffCore: 'Core Details',
     staffContact: 'Contact Details',
     staffWork: 'Work Details',
@@ -808,8 +856,11 @@ const text = useLocalizedText({
     close: 'Close',
     cancel: 'Cancel',
     saving: 'Saving...',
+    updating: 'Updating...',
     saveStaff: 'Save Staff',
+    updateStaff: 'Update Staff',
     staffAdded: 'Staff added successfully.',
+    staffUpdated: 'Staff updated successfully.',
     titleLabel: 'Title',
     selectTitle: 'Select title',
     school: 'School',
@@ -886,6 +937,11 @@ const text = useLocalizedText({
     attachedSchool: 'Attached School',
     selectAttachedSchool: 'Select attached school',
     customInstitute: 'Other Institute',
+    userLogin: 'User Login',
+    enableUserLogin: 'Enable user login',
+    userRole: 'User Role',
+    selectUserRole: 'Select user role',
+    loginUsername: 'Login Username',
     photo: 'Profile Photo',
     selectPhoto: 'Choose photo',
     photoPreview: 'Preview',
@@ -900,6 +956,7 @@ const text = useLocalizedText({
     staffTitle: 'කාර්ය මණ්ඩල කළමනාකරණය',
     staffSubtitle: 'කාර්ය මණ්ඩල වාර්තා සොයා යාවත්කාලීන සාරාංශ බලන්න.',
     addStaffTitle: 'කාර්ය මණ්ඩලය එක් කරන්න',
+    editStaffTitle: 'කාර්ය මණ්ඩලය සංස්කරණය කරන්න',
     staffCore: 'මූලික තොරතුරු',
     staffContact: 'සම්බන්ධතා තොරතුරු',
     staffWork: 'සේවා තොරතුරු',
@@ -930,8 +987,11 @@ const text = useLocalizedText({
     close: 'වසන්න',
     cancel: 'අවලංගු කරන්න',
     saving: 'සුරකිමින්...',
+    updating: 'යාවත්කාලීන කරමින්...',
     saveStaff: 'කාර්ය මණ්ඩලය සුරකින්න',
+    updateStaff: 'කාර්ය මණ්ඩලය යාවත්කාලීන කරන්න',
     staffAdded: 'කාර්ය මණ්ඩලය සාර්ථකව එක් කරන ලදී.',
+    staffUpdated: 'කාර්ය මණ්ඩලය සාර්ථකව යාවත්කාලීන කරන ලදී.',
     titleLabel: 'Title',
     selectTitle: 'Title තෝරන්න',
     school: 'පාසල',
@@ -1008,6 +1068,11 @@ const text = useLocalizedText({
     attachedSchool: 'අනුයුක්ත පාසල',
     selectAttachedSchool: 'අනුයුක්ත පාසල තෝරන්න',
     customInstitute: 'වෙනත් ආයතනය',
+    userLogin: 'පරිශීලක පිවිසුම',
+    enableUserLogin: 'පරිශීලක පිවිසුම සක්‍රිය කරන්න',
+    userRole: 'පරිශීලක භූමිකාව',
+    selectUserRole: 'පරිශීලක භූමිකාව තෝරන්න',
+    loginUsername: 'පිවිසුම් නාමය',
     photo: 'පැතිකඩ ඡායාරූපය',
     selectPhoto: 'ඡායාරූපය තෝරන්න',
     photoPreview: 'පෙරදසුන',
@@ -1022,6 +1087,7 @@ const text = useLocalizedText({
     staffTitle: 'பணியாளர் மேலாண்மை',
     staffSubtitle: 'பணியாளர் பதிவுகளை தேடி புதுப்பிப்பு சுருக்கங்களை பாருங்கள்.',
     addStaffTitle: 'பணியாளர் சேர்க்கவும்',
+    editStaffTitle: 'பணியாளரைத் திருத்தவும்',
     staffCore: 'அடிப்படை தகவல்கள்',
     staffContact: 'தொடர்பு தகவல்கள்',
     staffWork: 'சேவை தகவல்கள்',
@@ -1052,8 +1118,11 @@ const text = useLocalizedText({
     close: 'மூடு',
     cancel: 'ரத்து செய்',
     saving: 'சேமிக்கப்படுகிறது...',
+    updating: 'புதுப்பிக்கப்படுகிறது...',
     saveStaff: 'பணியாளர் சேமிக்கவும்',
+    updateStaff: 'பணியாளரை புதுப்பிக்கவும்',
     staffAdded: 'பணியாளர் வெற்றிகரமாக சேர்க்கப்பட்டார்.',
+    staffUpdated: 'பணியாளர் வெற்றிகரமாக புதுப்பிக்கப்பட்டார்.',
     titleLabel: 'Title',
     selectTitle: 'Title தேர்ந்தெடுக்கவும்',
     school: 'பாடசாலை',
@@ -1130,6 +1199,11 @@ const text = useLocalizedText({
     attachedSchool: 'இணைக்கப்பட்ட பாடசாலை',
     selectAttachedSchool: 'இணைக்கப்பட்ட பாடசாலையைத் தேர்ந்தெடுக்கவும்',
     customInstitute: 'வேறு நிறுவனம்',
+    userLogin: 'பயனர் உள்நுழைவு',
+    enableUserLogin: 'பயனர் உள்நுழைவை செயல்படுத்தவும்',
+    userRole: 'பயனர் பங்கு',
+    selectUserRole: 'பயனர் பங்கைத் தேர்ந்தெடுக்கவும்',
+    loginUsername: 'உள்நுழைவு பெயர்',
     photo: 'சுயவிவர புகைப்படம்',
     selectPhoto: 'புகைப்படத்தைத் தேர்ந்தெடுக்கவும்',
     photoPreview: 'முன்னோட்டம்',
@@ -1176,6 +1250,7 @@ const loadStaffOptions = async (): Promise<void> => {
   const { data } = await api.get<StaffOptionsResponse>('/staff/options')
   staffOptions.value = data.data
   staffSchools.value = Array.isArray(data.schools) ? data.schools : []
+  loginRoles.value = Array.isArray(data.login_roles) ? data.login_roles : []
   staffGenders.value = Array.isArray(data.genders) ? data.genders : []
   staffCivilStatuses.value = Array.isArray(data.civil_statuses) ? data.civil_statuses : []
   staffEthnicGroups.value = Array.isArray(data.ethnic_groups) ? data.ethnic_groups : []
@@ -1252,6 +1327,9 @@ const resetStaffForm = (): void => {
   staffForm.service_status_effective_date = ''
   staffForm.service_status_period = ''
   staffForm.service_status_is_current = true
+  staffForm.create_user_login = false
+  staffForm.login_role_id = 0
+  staffForm.login_username = ''
   staffPhotoFile.value = null
   staffPhotoPreview.value = ''
 }
@@ -1308,6 +1386,7 @@ const onStaffPhotoChange = (event: Event): void => {
 const openAddStaffDialog = async (): Promise<void> => {
   staffError.value = ''
   staffFieldErrors.value = {}
+  editStaffId.value = null
   resetStaffForm()
   await loadStaffOptions()
   showAddStaffDialog.value = true
@@ -1315,8 +1394,102 @@ const openAddStaffDialog = async (): Promise<void> => {
 
 const closeAddStaffDialog = (): void => {
   showAddStaffDialog.value = false
+  editStaffId.value = null
   staffError.value = ''
   staffFieldErrors.value = {}
+}
+
+const applyStaffDetailToForm = (detail: StaffDetailResponse['data']): void => {
+  staffForm.title = String(detail.title ?? '')
+  staffForm.census_id = Number(detail.census_id ?? 0)
+  staffForm.full_name = String(detail.full_name ?? '')
+  staffForm.name_with_ini = String(detail.name_with_ini ?? '')
+  staffForm.nick_name = String(detail.nick_name ?? '')
+  staffForm.nic_no = String(detail.nic_no ?? '')
+  staffForm.dob = String(detail.dob ?? '')
+  staffForm.gender_id = Number(detail.gender_id ?? 0)
+  staffForm.civil_status_id = Number(detail.civil_status_id ?? 0)
+  staffForm.ethnic_group_id = Number(detail.ethnic_group_id ?? 0)
+  staffForm.religion_id = Number(detail.religion_id ?? 0)
+  staffForm.phone_home = String(detail.phone_home ?? '')
+  staffForm.phone_mobile1 = String(detail.phone_mobile1 ?? '')
+  staffForm.phone_mobile2 = String(detail.phone_mobile2 ?? '')
+  staffForm.address1 = String(detail.address1 ?? '')
+  staffForm.address2 = String(detail.address2 ?? '')
+  staffForm.email = String(detail.email ?? '')
+  staffForm.vehicle_no1 = String(detail.vehicle_no1 ?? '')
+  staffForm.vehicle_no2 = String(detail.vehicle_no2 ?? '')
+  staffForm.edu_q_id = Number(detail.edu_q_id ?? 0)
+  staffForm.prof_q_id = Number(detail.prof_q_id ?? 0)
+  staffForm.desig_id = Number(detail.desig_id ?? 0)
+  staffForm.serv_grd_id = Number(detail.serv_grd_id ?? 0)
+  staffForm.sec_id = Number(detail.sec_id ?? 0)
+  staffForm.sec_role_id = Number(detail.sec_role_id ?? 0)
+  staffForm.stf_type_id = Number(detail.stf_type_id ?? 0)
+  staffForm.stf_status_id = Number(detail.stf_status_id ?? 0)
+  staffForm.service_status_id = Number(detail.service_status_id ?? 0)
+  staffForm.subj_med_id = Number(detail.subj_med_id ?? 0)
+  staffForm.app_type_id = Number(detail.app_type_id ?? 0)
+  staffForm.app_subj_id = Number(detail.app_subj_id ?? 0)
+  staffForm.first_app_dt = String(detail.first_app_dt ?? '')
+  staffForm.start_dt_this_sch = String(detail.start_dt_this_sch ?? '')
+  staffForm.serv_grd_effective_dt = String(detail.serv_grd_effective_dt ?? '')
+  staffForm.sal_incr_dt = String(detail.sal_incr_dt ?? '')
+  staffForm.stf_no = detail.stf_no ? String(detail.stf_no) : ''
+  staffForm.salary_no = detail.salary_no ? String(detail.salary_no) : ''
+  staffForm.main_task_id = Number(detail.main_task_id ?? 0)
+  staffForm.main_task_section_id = Number(detail.main_task_section_id ?? 0)
+  staffForm.main_task_subject_id = Number(detail.main_task_subject_id ?? 0)
+  staffForm.second_task_id = Number(detail.second_task_id ?? 0)
+  staffForm.second_task_section_id = Number(detail.second_task_section_id ?? 0)
+  staffForm.second_task_subject_id = Number(detail.second_task_subject_id ?? 0)
+  staffForm.service_status_custom_institute = String(detail.service_status_custom_institute ?? '')
+  staffForm.service_status_effective_date = String(detail.service_status_effective_date ?? '')
+  staffForm.service_status_period = String(detail.service_status_period ?? '')
+  staffForm.service_status_is_current = Boolean(detail.service_status_is_current ?? true)
+  staffForm.create_user_login = Boolean(detail.create_user_login ?? false)
+  staffForm.login_role_id = Number(detail.login_role_id ?? 0)
+  staffForm.login_username = String(detail.login_username ?? '')
+  staffPhotoFile.value = null
+  staffPhotoPreview.value = String(detail.photo_url ?? '')
+}
+
+const openEditStaffDialog = async (row: StaffRow): Promise<void> => {
+  loadingEditStaffId.value = row.stf_id
+  staffError.value = ''
+  staffFieldErrors.value = {}
+  const editDebugId = `staff-edit-${row.stf_id}-${Date.now()}`
+
+  console.info('[Staff Edit] started', {
+    editDebugId,
+    stfId: row.stf_id,
+    censusId: row.census_id ?? null,
+  })
+
+  try {
+    console.info('[Staff Edit] loading options', { editDebugId })
+    await loadStaffOptions()
+    console.info('[Staff Edit] loading detail', { editDebugId, stfId: row.stf_id })
+    const { data } = await api.get<StaffDetailResponse>(`/staff/${row.stf_id}`)
+    resetStaffForm()
+    applyStaffDetailToForm(data.data)
+    editStaffId.value = row.stf_id
+    showAddStaffDialog.value = true
+    console.info('[Staff Edit] dialog ready', {
+      editDebugId,
+      stfId: row.stf_id,
+      hasPhotoPreview: Boolean(staffPhotoPreview.value),
+    })
+  } catch (errorValue) {
+    console.error('[Staff Edit] failed', {
+      editDebugId,
+      stfId: row.stf_id,
+      error: errorValue,
+    })
+    error.value = extractApiMessage(errorValue) || text.value.moduleLoadError
+  } finally {
+    loadingEditStaffId.value = null
+  }
 }
 
 const hydrateGradeEdits = (): void => {
@@ -1534,7 +1707,17 @@ const loadClassReport = async (): Promise<void> => {
 }
 
 const loadStaff = async (page = 1): Promise<void> => {
-  const { data } = await api.get<{ data: StaffRow[]; meta: StaffMeta }>('/staff', { params: { q: staffSearch.value, page, per_page: staffMeta.per_page } })
+  const params: Record<string, string | number> = {
+    q: staffSearch.value,
+    page,
+    per_page: staffMeta.per_page,
+  }
+
+  if (isAdmin.value && selectedStaffSchoolCensusId.value > 0) {
+    params.school_census_id = selectedStaffSchoolCensusId.value
+  }
+
+  const { data } = await api.get<{ data: StaffRow[]; meta: StaffMeta }>('/staff', { params })
   staffRows.value = data.data
   Object.assign(staffMeta, data.meta)
 }
@@ -1624,6 +1807,10 @@ const saveStaff = async (): Promise<void> => {
   if (staffForm.service_status_effective_date.trim() !== '') payload.service_status_effective_date = staffForm.service_status_effective_date.trim()
   if (staffForm.service_status_period.trim() !== '') payload.service_status_period = staffForm.service_status_period.trim()
   payload.service_status_is_current = Boolean(staffForm.service_status_is_current)
+  payload.create_user_login = Boolean(staffForm.create_user_login)
+  if (staffForm.create_user_login && Number(staffForm.login_role_id) > 0) {
+    payload.login_role_id = Number(staffForm.login_role_id)
+  }
 
   try {
     console.info('[Staff Save] preparing request body', {
@@ -1634,7 +1821,7 @@ const saveStaff = async (): Promise<void> => {
       ? (() => {
           const formData = new FormData()
           Object.entries(payload).forEach(([key, value]) => {
-            formData.append(key, String(value))
+            formData.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value))
           })
           formData.append('profile_photo', staffPhotoFile.value as File)
           return formData
@@ -1642,17 +1829,22 @@ const saveStaff = async (): Promise<void> => {
       : payload
 
     console.info('[Staff Save] sending request', { submitDebugId })
-    const { data } = await api.post('/staff', requestBody, staffPhotoFile.value ? {
+    const requestConfig = staffPhotoFile.value ? {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-    } : undefined)
+    } : undefined
+    const { data } = isStaffEditMode.value && editStaffId.value !== null
+      ? await api.put(`/staff/${editStaffId.value}`, requestBody, requestConfig)
+      : await api.post('/staff', requestBody, requestConfig)
     console.info('[Staff Save] request completed', {
       submitDebugId,
       stfId: data?.data?.stf_id ?? null,
     })
-    message.value = typeof data?.message === 'string' && data.message.trim() !== '' ? data.message : text.value.staffAdded
-    if (isAdmin.value && Number(staffForm.census_id) > 0) {
+    message.value = typeof data?.message === 'string' && data.message.trim() !== ''
+      ? data.message
+      : (isStaffEditMode.value ? text.value.staffUpdated : text.value.staffAdded)
+    if (isAdmin.value && Number(staffForm.census_id) > 0 && !isStaffEditMode.value) {
       setSchoolContextCensusId(Number(staffForm.census_id))
     }
     closeAddStaffDialog()
@@ -1660,7 +1852,7 @@ const saveStaff = async (): Promise<void> => {
     savingStaff.value = false
 
     console.info('[Staff Save] refreshing staff list', { submitDebugId })
-    void loadStaff(1)
+    void loadStaff(staffMeta.current_page)
       .then(() => {
         console.info('[Staff Save] staff list refreshed', { submitDebugId })
       })
@@ -1745,6 +1937,15 @@ watch(
 )
 
 watch(
+  () => staffForm.create_user_login,
+  (enabled) => {
+    if (!enabled) {
+      staffForm.login_role_id = 0
+    }
+  },
+)
+
+watch(
   () => staffForm.main_task_section_id,
   () => {
     if (!mainTaskSubjects.value.some((row) => row.id === Number(staffForm.main_task_subject_id))) {
@@ -1774,6 +1975,7 @@ watch(() => props.moduleKey, () => {
   createClassOptions.value = []
   classCreateGradeOptions.value = []
   showAddStaffDialog.value = false
+  editStaffId.value = null
   message.value = ''
   error.value = ''
 })
