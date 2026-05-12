@@ -10,7 +10,7 @@ use App\Http\Requests\Api\V1\StudentIndexRequest;
 use App\Http\Requests\Api\V1\StudentStoreRequest;
 use App\Models\Guardian;
 use App\Models\SchoolDetail;
-use App\Models\SdsUser;
+use App\Models\User;
 use App\Models\StudentGradeClass;
 use App\Services\FeatureAccessService;
 use App\Services\StudentService;
@@ -693,7 +693,7 @@ class StudentController extends Controller
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function resolveImportCensusId(SdsUser $user, array $validated): ?string
+    private function resolveImportCensusId(User $user, array $validated): ?string
     {
         $isAdmin = $this->isAdministrator($user);
         $adminScopedCensusId = $this->resolveRequestedSchoolCensusId($user);
@@ -947,7 +947,7 @@ class StudentController extends Controller
         return collect($e->errors())->flatten()->first() ?? __('messages.request.validation_failed');
     }
 
-    private function loadStudentForWrite(int $studentId, ?SdsUser $user): ?object
+    private function loadStudentForWrite(int $studentId, ?User $user): ?object
     {
         $query = DB::table('student_tbl as st')
             ->select([

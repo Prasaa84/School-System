@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Concerns;
 
 use App\Models\SchoolDetail;
-use App\Models\SdsUser;
+use App\Models\User;
 use App\Models\Staff;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -11,14 +11,14 @@ use Illuminate\Support\Facades\Schema;
 
 trait AppliesSchoolScope
 {
-    protected function authUser(): ?SdsUser
+    protected function authUser(): ?User
     {
         $user = request()->attributes->get('auth_user');
 
-        return $user instanceof SdsUser ? $user : null;
+        return $user instanceof User ? $user : null;
     }
 
-    protected function isAdministrator(?SdsUser $user): bool
+    protected function isAdministrator(?User $user): bool
     {
         if ($user === null) {
             return false;
@@ -33,7 +33,7 @@ trait AppliesSchoolScope
         return in_array($roleName, ['admin', 'administrator'], true);
     }
 
-    protected function resolveUserCensusId(?SdsUser $user): ?string
+    protected function resolveUserCensusId(?User $user): ?string
     {
         if ($user === null) {
             return null;
@@ -73,7 +73,7 @@ trait AppliesSchoolScope
         return $this->resolveRequestedSchoolCensusIdFromRequest() !== null;
     }
 
-    protected function resolveRequestedSchoolCensusId(?SdsUser $user): ?string
+    protected function resolveRequestedSchoolCensusId(?User $user): ?string
     {
         if (!$this->isAdministrator($user)) {
             return null;
@@ -87,7 +87,7 @@ trait AppliesSchoolScope
         return $this->resolveCanonicalSchoolCensusId($requestedCensusId);
     }
 
-    protected function resolveEffectiveSchoolCensusId(?SdsUser $user): ?string
+    protected function resolveEffectiveSchoolCensusId(?User $user): ?string
     {
         if ($this->isAdministrator($user)) {
             return $this->resolveRequestedSchoolCensusId($user);
@@ -113,7 +113,7 @@ trait AppliesSchoolScope
         return null;
     }
 
-    protected function applySchoolScope(Builder $query, ?SdsUser $user, ?string $alias, ?string $schoolColumn): void
+    protected function applySchoolScope(Builder $query, ?User $user, ?string $alias, ?string $schoolColumn): void
     {
         if ($schoolColumn === null) {
             $query->whereRaw('1 = 0');
@@ -161,7 +161,7 @@ trait AppliesSchoolScope
         return $this->normalizeCensusId($rawValue);
     }
 
-    private function isStudentRole(?SdsUser $user): bool
+    private function isStudentRole(?User $user): bool
     {
         if ($user === null) {
             return false;
@@ -176,7 +176,7 @@ trait AppliesSchoolScope
         return $roleName === 'student';
     }
 
-    private function resolveStudentCensusIdByUsername(SdsUser $user): ?string
+    private function resolveStudentCensusIdByUsername(User $user): ?string
     {
         if (!Schema::hasTable('student_tbl')) {
             return null;
@@ -294,6 +294,5 @@ trait AppliesSchoolScope
         return is_numeric($left) && is_numeric($right) && ((int) $left === (int) $right);
     }
 }
-
 
 

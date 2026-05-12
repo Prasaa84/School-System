@@ -4,7 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Models\ApiToken;
-use App\Models\SdsUser;
+use App\Models\User;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,7 +37,7 @@ class AuthenticateApiToken
             return $this->unauthorizedResponse('Authorization token has expired.');
         }
 
-        $user = SdsUser::query()
+        $user = User::query()
             ->with('role')
             ->where('user_id', $apiToken->user_id)
             ->where('status_id', 1)

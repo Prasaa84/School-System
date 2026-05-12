@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\SdsUser;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -52,7 +52,7 @@ class FeatureAccessService
         ];
     }
 
-    public function hasFeature(?SdsUser $user, ?string $schoolCensusId, string $featureKey): bool
+    public function hasFeature(?User $user, ?string $schoolCensusId, string $featureKey): bool
     {
         $permissions = $this->permissionMapForUser($user, $schoolCensusId);
 
@@ -62,7 +62,7 @@ class FeatureAccessService
     /**
      * @return array<string, bool>
      */
-    public function permissionMapForUser(?SdsUser $user, ?string $schoolCensusId): array
+    public function permissionMapForUser(?User $user, ?string $schoolCensusId): array
     {
         if ($user === null) {
             return $this->emptyPermissionMap();
@@ -263,7 +263,7 @@ class FeatureAccessService
             ->all();
     }
 
-    private function isAdministrator(SdsUser $user): bool
+    private function isAdministrator(User $user): bool
     {
         if ((int) ($user->role_id ?? 0) === 1) {
             return true;

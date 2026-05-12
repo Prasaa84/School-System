@@ -6,7 +6,7 @@ use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolDetail;
-use App\Models\SdsUser;
+use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -486,7 +486,7 @@ class SchoolController extends Controller
         ]);
     }
 
-    private function resolveTargetSchoolCensusId(?SdsUser $user): ?string
+    private function resolveTargetSchoolCensusId(?User $user): ?string
     {
         if ($this->isAdministrator($user)) {
             return $this->resolveRequestedSchoolCensusId($user);
@@ -495,7 +495,7 @@ class SchoolController extends Controller
         return $this->resolveUserCensusId($user);
     }
 
-    private function canEditSchoolDetails(?SdsUser $user): bool
+    private function canEditSchoolDetails(?User $user): bool
     {
         if ($user === null) {
             return false;
@@ -514,7 +514,7 @@ class SchoolController extends Controller
         return $roleName === 'principal';
     }
 
-    private function canManageSchools(?SdsUser $user): bool
+    private function canManageSchools(?User $user): bool
     {
         return $user !== null && $this->isAdministrator($user);
     }
@@ -529,7 +529,7 @@ class SchoolController extends Controller
     /**
      * @return array<int, array{id: int, label: string, census_id: string, is_deleted: int}>
      */
-    private function loadSchoolListForAdministrator(?SdsUser $user): array
+    private function loadSchoolListForAdministrator(?User $user): array
     {
         if (!$this->isAdministrator($user)) {
             return [];

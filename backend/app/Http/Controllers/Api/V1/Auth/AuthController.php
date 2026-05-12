@@ -6,7 +6,7 @@ use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
 use App\Models\ApiToken;
-use App\Models\SdsUser;
+use App\Models\User;
 use App\Services\FeatureAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +26,7 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        $user = SdsUser::query()
+        $user = User::query()
             ->with('role')
             ->where('username', (string) $validated['username'])
             ->where('status_id', 1)
@@ -77,7 +77,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        /** @var SdsUser|null $user */
+        /** @var User|null $user */
         $user = $request->attributes->get('auth_user');
 
         if ($user === null) {
@@ -104,7 +104,7 @@ class AuthController extends Controller
         }
 
         $user = $request->attributes->get('auth_user');
-        if ($user instanceof SdsUser) {
+        if ($user instanceof User) {
             Log::info('Logout.', [
                 'user_id' => (int) $user->user_id,
                 'username' => (string) $user->username,
@@ -124,7 +124,7 @@ class AuthController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function formatUser(SdsUser $user, ?string $resolvedCensusId): array
+    private function formatUser(User $user, ?string $resolvedCensusId): array
     {
         return [
             'user_id' => (int) $user->user_id,

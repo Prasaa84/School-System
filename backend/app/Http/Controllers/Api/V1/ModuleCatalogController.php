@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\SdsUser;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +14,7 @@ class ModuleCatalogController extends Controller
 {
     public function __invoke(): JsonResponse
     {
-        /** @var SdsUser|null $user */
+        /** @var User|null $user */
         $user = request()->attributes->get('auth_user');
 
         $modules = $this->loadModulesFromDatabase($user);
@@ -28,7 +28,7 @@ class ModuleCatalogController extends Controller
         ]);
     }
 
-    private function loadModulesFromDatabase(?SdsUser $user): ?Collection
+    private function loadModulesFromDatabase(?User $user): ?Collection
     {
         try {
             $schema = DB::getSchemaBuilder();

@@ -7,8 +7,8 @@ use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StaffStoreRequest;
 use App\Models\SchoolDetail;
-use App\Models\SdsUser;
 use App\Models\Staff;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1506,7 +1506,7 @@ class StaffController extends Controller
             ];
         }
 
-        $user = SdsUser::query()->where('user_id', $linkedUserId)->first();
+        $user = User::query()->where('user_id', $linkedUserId)->first();
         if ($user === null) {
             return [
                 'create_user_login' => false,
@@ -1611,7 +1611,7 @@ class StaffController extends Controller
 
         $linkedUserId = $this->toIntOrNull($staff->user_id ?? null);
         $linkedUser = $linkedUserId !== null
-            ? SdsUser::query()->where('user_id', $linkedUserId)->first()
+            ? User::query()->where('user_id', $linkedUserId)->first()
             : null;
 
         $shouldEnableLogin = $this->toBool($validated['create_user_login'] ?? false);
@@ -1650,7 +1650,7 @@ class StaffController extends Controller
         $username = $this->generateUniqueStaffUsername($staff, $validated);
         $temporaryPassword = Str::random(10);
 
-        $user = new SdsUser();
+        $user = new User();
         $user->role_id = $loginRoleId;
         $user->username = $username;
         $user->password = Hash::make($temporaryPassword);
@@ -1695,7 +1695,7 @@ class StaffController extends Controller
 
         $username = $base;
         $suffix = 1;
-        while (SdsUser::query()->where('username', $username)->exists()) {
+        while (User::query()->where('username', $username)->exists()) {
             $suffix++;
             $username = $base . $suffix;
         }
