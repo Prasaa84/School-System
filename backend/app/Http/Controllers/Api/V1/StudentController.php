@@ -280,7 +280,7 @@ class StudentController extends Controller
         ]);
     }
 
-    public function assignmentRoster(Request $request): JsonResponse
+    public function studentsInClassesRoster(Request $request): JsonResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -403,7 +403,7 @@ class StudentController extends Controller
         ]);
     }
 
-    public function bulkAssign(Request $request): JsonResponse
+    public function saveStudentsInClasses(Request $request): JsonResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -494,7 +494,7 @@ class StudentController extends Controller
         }
     }
 
-    public function classAssignmentOverview(Request $request): JsonResponse
+    public function studentsInClassesOverview(Request $request): JsonResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -502,8 +502,8 @@ class StudentController extends Controller
         }
 
         $validated = Validator::make($request->all(), [
-            'target_year' => ['required', 'integer', 'between:2000,2100'],
-            'target_grade_id' => ['required', 'integer', 'exists:grade_tbl,grade_id'],
+            'year' => ['required', 'integer', 'between:2000,2100'],
+            'grade_id' => ['required', 'integer', 'exists:grade_tbl,grade_id'],
         ])->validate();
 
         $censusId = $this->resolveStudentWriteCensusId($user);
@@ -518,15 +518,15 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
-        $targetYear = (int) $validated['target_year'];
-        $targetGradeId = (int) $validated['target_grade_id'];
+        $year = (int) $validated['year'];
+        $gradeId = (int) $validated['grade_id'];
 
         return response()->json([
-            'target_classes' => $this->loadClassAssignmentBoxes($censusId, $targetYear, $targetGradeId),
+            'class_boxes' => $this->loadStudentsInClassesBoxes($censusId, $year, $gradeId),
         ]);
     }
 
-    public function uploadClassAssignment(Request $request): JsonResponse
+    public function uploadStudentsInClass(Request $request): JsonResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -569,6 +569,31 @@ class StudentController extends Controller
             ], 422);
         }
 
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+            'class_en',
+            'class_si',
+            'class_ta',
+            'class',
+        ]) ?? 'class';
+
+        $classLabel = DB::table('school_grade_class_tbl as sgct')
+            ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+            ->where('sgct.sch_grd_cls_id', $schoolGradeClassId)
+            ->value(DB::raw("ct.{$classLabelColumn} as class"));
+
+        $safeClass = preg_replace('/[^A-Za-z0-9]+/', '', trim((string) $classLabel)) ?: 'Class';
+        $expectedBaseName = sprintf('Grade_%d%s_%d', $gradeId, $safeClass, $year);
+        $uploadedBaseName = pathinfo((string) $request->file('file')?->getClientOriginalName(), PATHINFO_FILENAME);
+
+        if (strcasecmp($uploadedBaseName, $expectedBaseName) !== 0) {
+            return response()->json([
+                'message' => "Invalid file name. Expected {$expectedBaseName}.xlsx for the selected class.",
+                'errors' => [
+                    'file' => ["Invalid file name. Expected {$expectedBaseName}.xlsx for the selected class."],
+                ],
+            ], 422);
+        }
+
         try {
             $sheets = Excel::toArray([], $request->file('file'));
         } catch (Throwable $e) {
@@ -584,7 +609,7 @@ class StudentController extends Controller
             ], 422);
         }
 
-        $indexRows = $this->extractClassUploadIndexRows($sheet);
+        $indexRows = $this->extractStudentsInClassesUploadRows($sheet);
         if ($indexRows === []) {
             return response()->json([
                 'message' => 'No valid index numbers were found in the uploaded file.',
@@ -646,7 +671,7 @@ class StudentController extends Controller
         ]);
     }
 
-    public function clearClassAssignment(Request $request): JsonResponse
+    public function clearStudentsInClass(Request $request): JsonResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -693,7 +718,7 @@ class StudentController extends Controller
         ]);
     }
 
-    public function downloadClassAssignment(Request $request): JsonResponse|StreamedResponse
+    public function downloadStudentsInClass(Request $request): JsonResponse|StreamedResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -1013,7 +1038,7 @@ class StudentController extends Controller
         return response()->download($path, 'students-template.xlsx');
     }
 
-    public function downloadClassAssignmentTemplate(): JsonResponse|BinaryFileResponse
+    public function downloadStudentsInClassesTemplate(): JsonResponse|BinaryFileResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -1499,7 +1524,7 @@ class StudentController extends Controller
     /**
      * @return array<int, array{sch_grd_cls_id:int,class_id:int,class:string,student_count:int,students:array<int, array{std_id:int,index_no:string,name_with_initials:string}>}>
      */
-    private function loadClassAssignmentBoxes(string $censusId, int $year, int $gradeId): array
+    private function loadStudentsInClassesBoxes(string $censusId, int $year, int $gradeId): array
     {
         if (!Schema::hasTable('school_grade_class_tbl') || !Schema::hasTable('class_tbl')) {
             return [];
@@ -1582,7 +1607,7 @@ class StudentController extends Controller
      * @param  array<int, array<int, mixed>>  $sheet
      * @return array<int, array{row:int,index_no:string}>
      */
-    private function extractClassUploadIndexRows(array $sheet): array
+    private function extractStudentsInClassesUploadRows(array $sheet): array
     {
         $rows = [];
 

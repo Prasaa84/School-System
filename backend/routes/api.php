@@ -61,13 +61,13 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/students', [StudentController::class, 'index']);
         Route::get('/students/options', [StudentController::class, 'options']);
-        Route::get('/students/assignment/roster', [StudentController::class, 'assignmentRoster']);
-        Route::post('/students/assignment/bulk', [StudentController::class, 'bulkAssign']);
-        Route::get('/students/class-assignment/overview', [StudentController::class, 'classAssignmentOverview']);
-        Route::get('/students/class-assignment/download', [StudentController::class, 'downloadClassAssignment']);
-        Route::get('/students/class-assignment/template', [StudentController::class, 'downloadClassAssignmentTemplate']);
-        Route::post('/students/class-assignment/upload', [StudentController::class, 'uploadClassAssignment']);
-        Route::post('/students/class-assignment/clear', [StudentController::class, 'clearClassAssignment']);
+        Route::get('/students/in-classes/roster', [StudentController::class, 'studentsInClassesRoster']);
+        Route::post('/students/in-classes/save', [StudentController::class, 'saveStudentsInClasses']);
+        Route::get('/students/in-classes/overview', [StudentController::class, 'studentsInClassesOverview']);
+        Route::get('/students/in-classes/download', [StudentController::class, 'downloadStudentsInClass']);
+        Route::get('/students/in-classes/template', [StudentController::class, 'downloadStudentsInClassesTemplate']);
+        Route::post('/students/in-classes/upload', [StudentController::class, 'uploadStudentsInClass']);
+        Route::post('/students/in-classes/clear', [StudentController::class, 'clearStudentsInClass']);
         Route::get('/students/template', [StudentController::class, 'downloadTemplate']);
         Route::post('/students/import', [StudentController::class, 'import']);
         Route::post('/students', [StudentController::class, 'store']);

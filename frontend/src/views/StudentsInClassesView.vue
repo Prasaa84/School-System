@@ -8,7 +8,7 @@
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <fieldset class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-        <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.newYearArea }}</legend>
+        <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.classSelection }}</legend>
         <div class="grid gap-3 md:grid-cols-4">
           <label v-if="isAdmin" class="text-sm text-slate-700 md:col-span-3">
             {{ text.school }}
@@ -19,24 +19,24 @@
           </label>
 
           <label class="text-sm text-slate-700">
-            {{ text.targetYear }}
-            <select v-model.number="targetYear" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="isAdmin && adminSchoolContextCensusId <= 0">
+            {{ text.selectedYear }}
+            <select v-model.number="selectedYear" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="isAdmin && adminSchoolContextCensusId <= 0">
               <option :value="0">{{ text.selectYear }}</option>
-              <option v-for="year in academicYears" :key="`target-year-${year}`" :value="year">{{ year }}</option>
+              <option v-for="year in academicYears" :key="`selected-year-${year}`" :value="year">{{ year }}</option>
             </select>
           </label>
 
           <label class="text-sm text-slate-700">
-            {{ text.targetGrade }}
-            <select v-model.number="targetGradeId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="targetYear <= 0">
+            {{ text.selectedGrade }}
+            <select v-model.number="selectedGradeId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="selectedYear <= 0">
               <option :value="0">{{ text.selectGrade }}</option>
-              <option v-for="row in targetGrades" :key="`target-grade-${row.grade_id}`" :value="row.grade_id">{{ row.grade }}</option>
+              <option v-for="row in gradesForYear" :key="`selected-grade-${row.grade_id}`" :value="row.grade_id">{{ row.grade }}</option>
             </select>
           </label>
 
           <div class="text-sm text-slate-700">
             <p>{{ text.classCount }}</p>
-            <div class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900">{{ targetClasses.length }}</div>
+            <div class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900">{{ classBoxes.length }}</div>
           </div>
 
           <div class="flex items-end">
@@ -55,17 +55,17 @@
       <p v-if="pageError" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{{ pageError }}</p>
     </section>
 
-    <section v-if="targetYear > 0 && targetGradeId > 0" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section v-if="selectedYear > 0 && selectedGradeId > 0" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div class="mb-4 flex items-center justify-between">
         <div>
-          <h2 class="font-display text-xl font-bold text-slate-900">{{ text.newYearClasses }}</h2>
-          <p class="text-sm text-slate-500">{{ text.newYearHelp }}</p>
+          <h2 class="font-display text-xl font-bold text-slate-900">{{ text.studentsInClassesHeading }}</h2>
+          <p class="text-sm text-slate-500">{{ text.studentsInClassesHelp }}</p>
         </div>
-        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{{ text.totalStudents }}: {{ totalTargetStudents }}</span>
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{{ text.totalStudents }}: {{ totalClassStudents }}</span>
       </div>
 
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <article v-for="classBox in targetClasses" :key="`target-class-${classBox.sch_grd_cls_id}`" class="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+        <article v-for="classBox in classBoxes" :key="`class-box-${classBox.sch_grd_cls_id}`" class="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
           <div class="flex items-start gap-3">
             <div class="flex items-center gap-2">
               <h3 class="font-display text-sm font-bold tracking-tight text-slate-900">{{ classBox.class }}</h3>
@@ -101,7 +101,7 @@
               class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f8ea8] text-white transition hover:bg-[#0c7990] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
               :title="uploadingClassId === classBox.sch_grd_cls_id ? text.uploading : text.upload"
               :aria-label="uploadingClassId === classBox.sch_grd_cls_id ? text.uploading : text.upload"
-              :disabled="uploadingClassId === classBox.sch_grd_cls_id || !selectedFiles[classBox.sch_grd_cls_id]"
+              :disabled="uploadingClassId === classBox.sch_grd_cls_id || !selectedFilesByClass[classBox.sch_grd_cls_id]"
               @click="uploadClassFile(classBox)"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
@@ -122,18 +122,18 @@
             </button>
           </div>
 
-          <p v-if="selectedFiles[classBox.sch_grd_cls_id]" class="mt-2 inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-50 px-2 py-1 text-xs text-cyan-700">
+          <p v-if="selectedFilesByClass[classBox.sch_grd_cls_id]" class="mt-2 inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-50 px-2 py-1 text-xs text-cyan-700">
             <svg viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0">
               <path d="M5.5 4A2.5 2.5 0 0 1 8 1.5h5A2.5 2.5 0 0 1 15.5 4v8.25a4.25 4.25 0 1 1-8.5 0V5.5a2.75 2.75 0 1 1 5.5 0v6.25a1.25 1.25 0 1 1-2.5 0V6.5a.75.75 0 0 1 1.5 0v5.25a.25.25 0 1 0 .5 0V5.5a1.25 1.25 0 1 0-2.5 0v6.75a2.75 2.75 0 1 0 5.5 0V4A1 1 0 0 0 13 3h-5a1 1 0 0 0-1 1v8.25a.75.75 0 0 1-1.5 0V4Z" />
             </svg>
-            <span class="truncate">{{ selectedFiles[classBox.sch_grd_cls_id]?.name }}</span>
+            <span class="truncate">{{ selectedFilesByClass[classBox.sch_grd_cls_id]?.name }}</span>
           </p>
 
-          <div v-if="uploadResults[classBox.sch_grd_cls_id]" class="mt-3 rounded-lg border border-emerald-200 bg-white p-2.5 text-xs">
+          <div v-if="uploadResultsByClass[classBox.sch_grd_cls_id]" class="mt-3 rounded-lg border border-emerald-200 bg-white p-2.5 text-xs">
             <p class="font-semibold text-emerald-700">{{ text.lastUpload }}</p>
-            <p class="mt-1 text-slate-700">{{ text.successful }}: {{ uploadResults[classBox.sch_grd_cls_id]?.successful_count ?? 0 }}</p>
-            <p class="text-slate-700">{{ text.failed }}: {{ uploadResults[classBox.sch_grd_cls_id]?.failed_count ?? 0 }}</p>
-            <p class="text-slate-700">{{ text.cleared }}: {{ uploadResults[classBox.sch_grd_cls_id]?.cleared_count ?? 0 }}</p>
+            <p class="mt-1 text-slate-700">{{ text.successful }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.successful_count ?? 0 }}</p>
+            <p class="text-slate-700">{{ text.failed }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.failed_count ?? 0 }}</p>
+            <p class="text-slate-700">{{ text.cleared }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.cleared_count ?? 0 }}</p>
           </div>
 
           <div class="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white">
@@ -148,7 +148,7 @@
                 <tr v-if="classBox.students.length === 0">
                   <td colspan="2" class="px-2 py-4 text-center text-xs text-slate-500">{{ text.emptyClass }}</td>
                 </tr>
-                <tr v-for="student in classBox.students" :key="`target-student-${classBox.sch_grd_cls_id}-${student.std_id}`">
+                <tr v-for="student in classBox.students" :key="`class-student-${classBox.sch_grd_cls_id}-${student.std_id}`">
                   <td class="px-2 py-1.5 text-xs font-medium text-slate-800">{{ student.index_no }}</td>
                   <td class="px-2 py-1.5 text-xs text-slate-700">{{ student.name_with_initials }}</td>
                 </tr>
@@ -172,7 +172,7 @@ interface GradeRow { grade_id: number; grade: string }
 interface GradeResponse { year?: number | null; years?: number[]; data: GradeRow[] }
 interface StudentRow { std_id: number; index_no: string; name_with_initials: string }
 interface ClassBox { sch_grd_cls_id: number; class_id: number; class: string; student_count: number; students: StudentRow[] }
-interface OverviewResponse { target_classes: ClassBox[] }
+interface OverviewResponse { class_boxes: ClassBox[] }
 interface UploadSummary {
   cleared_count: number
   successful_count: number
@@ -204,16 +204,16 @@ const text = computed(() => ({
     : ui.language === 'ta'
       ? 'தேர்ந்தெடுக்கப்பட்ட ஆண்டு மற்றும் தரத்திற்கான வகுப்புகளில் மாணவர்களை இங்கே நிர்வகிக்கவும்.'
       : 'Manage students in the classes for the selected year and grade.',
-  newYearArea: ui.language === 'si' ? 'පන්ති තේරීම' : ui.language === 'ta' ? 'வகுப்பு தேர்வு' : 'Class Selection',
+  classSelection: ui.language === 'si' ? 'පන්ති තේරීම' : ui.language === 'ta' ? 'வகுப்பு தேர்வு' : 'Class Selection',
   school: ui.language === 'si' ? 'පාසල' : ui.language === 'ta' ? 'பாடசாலை' : 'School',
   selectSchool: ui.language === 'si' ? 'පාසල තෝරන්න' : ui.language === 'ta' ? 'பாடசாலையைத் தேர்ந்தெடுக்கவும்' : 'Select school',
-  targetYear: ui.language === 'si' ? 'නව වර්ෂය' : ui.language === 'ta' ? 'புதிய ஆண்டு' : 'Target Year',
-  targetGrade: ui.language === 'si' ? 'නව ශ්‍රේණිය' : ui.language === 'ta' ? 'புதிய தரம்' : 'Target Grade',
+  selectedYear: ui.language === 'si' ? 'වර්ෂය' : ui.language === 'ta' ? 'ஆண்டு' : 'Year',
+  selectedGrade: ui.language === 'si' ? 'ශ්‍රේණිය' : ui.language === 'ta' ? 'தரம்' : 'Grade',
   selectYear: ui.language === 'si' ? 'වර්ෂය තෝරන්න' : ui.language === 'ta' ? 'ஆண்டைத் தேர்ந்தெடுக்கவும்' : 'Select year',
   selectGrade: ui.language === 'si' ? 'ශ්‍රේණිය තෝරන්න' : ui.language === 'ta' ? 'தரத்தைத் தேர்ந்தெடுக்கவும்' : 'Select grade',
   classCount: ui.language === 'si' ? 'පංති ගණන' : ui.language === 'ta' ? 'வகுப்பு எண்ணிக்கை' : 'Class Count',
-  newYearClasses: ui.language === 'si' ? 'පන්තිවල සිසුන්' : ui.language === 'ta' ? 'வகுப்புகளில் மாணவர்கள்' : 'Students in Classes',
-  newYearHelp: ui.language === 'si'
+  studentsInClassesHeading: ui.language === 'si' ? 'පන්තිවල සිසුන්' : ui.language === 'ta' ? 'வகுப்புகளில் மாணவர்கள்' : 'Students in Classes',
+  studentsInClassesHelp: ui.language === 'si'
     ? 'තෝරාගත් ශ්‍රේණියේ සියලුම පන්ති මෙහි පෙන්වයි. එක් එක් පන්තියට අදාළ සිසුන් ලැයිස්තු කළමනාකරණය කරන්න.'
     : ui.language === 'ta'
       ? 'தேர்ந்தெடுக்கப்பட்ட தரத்தின் அனைத்து வகுப்புகளும் இங்கே காட்டப்படும். ஒவ்வொரு வகுப்பிற்குமான மாணவர் பட்டியலை நிர்வகிக்கவும்.'
@@ -250,23 +250,23 @@ const text = computed(() => ({
 
 const schools = ref<OptionRow[]>([])
 const academicYears = ref<number[]>([])
-const targetGrades = ref<GradeRow[]>([])
-const targetClasses = ref<ClassBox[]>([])
+const gradesForYear = ref<GradeRow[]>([])
+const classBoxes = ref<ClassBox[]>([])
 const pageMessage = ref('')
 const pageError = ref('')
 const downloadingClassId = ref<number | null>(null)
 const downloadingTemplate = ref(false)
 const uploadingClassId = ref<number | null>(null)
 const clearingClassId = ref<number | null>(null)
-const selectedFiles = ref<Record<number, File | null>>({})
-const uploadResults = ref<Record<number, UploadSummary>>({})
-const fileInputs = ref<Record<number, HTMLInputElement | null>>({})
+const selectedFilesByClass = ref<Record<number, File | null>>({})
+const uploadResultsByClass = ref<Record<number, UploadSummary>>({})
+const fileInputsByClass = ref<Record<number, HTMLInputElement | null>>({})
 
 const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
-const targetYear = ref(0)
-const targetGradeId = ref(0)
-const totalTargetStudents = computed(() => targetClasses.value.reduce((sum, row) => sum + row.students.length, 0))
+const selectedYear = ref(0)
+const selectedGradeId = ref(0)
+const totalClassStudents = computed(() => classBoxes.value.reduce((sum, row) => sum + row.students.length, 0))
 
 const buildSchoolHeaders = (): Record<string, string> | undefined => {
   if (!isAdmin.value) {
@@ -281,16 +281,16 @@ const extractApiMessage = (error: any): string => {
 }
 
 const setFileInputRef = (classId: number, element: Element | null): void => {
-  fileInputs.value[classId] = element instanceof HTMLInputElement ? element : null
+  fileInputsByClass.value[classId] = element instanceof HTMLInputElement ? element : null
 }
 
 const openFileDialog = (classId: number): void => {
-  fileInputs.value[classId]?.click()
+  fileInputsByClass.value[classId]?.click()
 }
 
 const onFileSelected = (classId: number, event: Event): void => {
   const target = event.target as HTMLInputElement | null
-  selectedFiles.value[classId] = target?.files?.[0] ?? null
+  selectedFilesByClass.value[classId] = target?.files?.[0] ?? null
 }
 
 const loadOptions = async (): Promise<void> => {
@@ -341,8 +341,8 @@ const loadOverview = async (): Promise<void> => {
     return
   }
 
-  if (targetYear.value <= 0 || targetGradeId.value <= 0) {
-    targetClasses.value = []
+  if (selectedYear.value <= 0 || selectedGradeId.value <= 0) {
+    classBoxes.value = []
     return
   }
 
@@ -352,16 +352,16 @@ const loadOverview = async (): Promise<void> => {
     const headers = buildSchoolHeaders()
     const config: { headers?: Record<string, string>; params: Record<string, number> } = {
       params: {
-        target_year: targetYear.value,
-        target_grade_id: targetGradeId.value,
+        year: selectedYear.value,
+        grade_id: selectedGradeId.value,
       },
     }
     if (headers) config.headers = headers
 
-    const { data } = await api.get<OverviewResponse>('/students/class-assignment/overview', config)
-    targetClasses.value = Array.isArray(data.target_classes) ? data.target_classes : []
+    const { data } = await api.get<OverviewResponse>('/students/in-classes/overview', config)
+    classBoxes.value = Array.isArray(data.class_boxes) ? data.class_boxes : []
   } catch (error: any) {
-    targetClasses.value = []
+    classBoxes.value = []
     pageError.value = extractApiMessage(error)
   }
 }
@@ -371,7 +371,7 @@ const downloadTemplate = async (): Promise<void> => {
   downloadingTemplate.value = true
 
   try {
-    const response = await api.get('/students/class-assignment/template', {
+    const response = await api.get('/students/in-classes/template', {
       responseType: 'blob',
     })
 
@@ -397,11 +397,11 @@ const downloadClassStudents = async (classBox: ClassBox): Promise<void> => {
 
   try {
     const headers = buildSchoolHeaders()
-    const response = await api.get('/students/class-assignment/download', {
+    const response = await api.get('/students/in-classes/download', {
       headers,
       params: {
-        year: targetYear.value,
-        grade_id: targetGradeId.value,
+        year: selectedYear.value,
+        grade_id: selectedGradeId.value,
         class_id: classBox.class_id,
       },
       responseType: 'blob',
@@ -412,7 +412,7 @@ const downloadClassStudents = async (classBox: ClassBox): Promise<void> => {
     const link = document.createElement('a')
     const className = String(classBox.class || 'Class').replace(/[^a-z0-9]+/gi, '')
     link.href = url
-    link.download = `Grade_${targetGradeId.value}${className}_${targetYear.value}.xlsx`
+    link.download = `Grade_${selectedGradeId.value}${className}_${selectedYear.value}.xlsx`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -425,7 +425,7 @@ const downloadClassStudents = async (classBox: ClassBox): Promise<void> => {
 }
 
 const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
-  if (!selectedFiles.value[classBox.sch_grd_cls_id]) {
+  if (!selectedFilesByClass.value[classBox.sch_grd_cls_id]) {
     return
   }
 
@@ -435,17 +435,17 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
 
   try {
     const formData = new FormData()
-    formData.append('year', String(targetYear.value))
-    formData.append('grade_id', String(targetGradeId.value))
+    formData.append('year', String(selectedYear.value))
+    formData.append('grade_id', String(selectedGradeId.value))
     formData.append('class_id', String(classBox.class_id))
-    formData.append('file', selectedFiles.value[classBox.sch_grd_cls_id] as File)
+    formData.append('file', selectedFilesByClass.value[classBox.sch_grd_cls_id] as File)
 
     const headers = buildSchoolHeaders()
     const config: { headers?: Record<string, string> } = {}
     if (headers) config.headers = headers
 
-    const { data } = await api.post('/students/class-assignment/upload', formData, config)
-    uploadResults.value[classBox.sch_grd_cls_id] = data?.data ?? {
+    const { data } = await api.post('/students/in-classes/upload', formData, config)
+    uploadResultsByClass.value[classBox.sch_grd_cls_id] = data?.data ?? {
       cleared_count: 0,
       successful_count: 0,
       failed_count: 0,
@@ -453,10 +453,10 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
       duplicate_indexes: [],
     }
 
-    pageMessage.value = `${text.value.saveSuccess} ${text.value.successful}: ${uploadResults.value[classBox.sch_grd_cls_id].successful_count}, ${text.value.failed}: ${uploadResults.value[classBox.sch_grd_cls_id].failed_count}.`
-    selectedFiles.value[classBox.sch_grd_cls_id] = null
-    if (fileInputs.value[classBox.sch_grd_cls_id]) {
-      fileInputs.value[classBox.sch_grd_cls_id]!.value = ''
+    pageMessage.value = `${text.value.saveSuccess} ${text.value.successful}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].successful_count}, ${text.value.failed}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].failed_count}.`
+    selectedFilesByClass.value[classBox.sch_grd_cls_id] = null
+    if (fileInputsByClass.value[classBox.sch_grd_cls_id]) {
+      fileInputsByClass.value[classBox.sch_grd_cls_id]!.value = ''
     }
     await loadOverview()
   } catch (error: any) {
@@ -480,9 +480,9 @@ const clearClassList = async (classBox: ClassBox): Promise<void> => {
     const config: { headers?: Record<string, string> } = {}
     if (headers) config.headers = headers
 
-    await api.post('/students/class-assignment/clear', {
-      year: targetYear.value,
-      grade_id: targetGradeId.value,
+    await api.post('/students/in-classes/clear', {
+      year: selectedYear.value,
+      grade_id: selectedGradeId.value,
       class_id: classBox.class_id,
     }, config)
 
@@ -502,20 +502,20 @@ const onSchoolChange = async (): Promise<void> => {
 
   const censusId = Number(adminSchoolContextCensusId.value)
   setSchoolContextCensusId(censusId > 0 ? censusId : null)
-  targetYear.value = 0
-  targetGradeId.value = 0
-  targetGrades.value = []
-  targetClasses.value = []
+  selectedYear.value = 0
+  selectedGradeId.value = 0
+  gradesForYear.value = []
+  classBoxes.value = []
   await loadAcademicYears()
 }
 
-watch(() => targetYear.value, async (year) => {
-  targetGradeId.value = 0
-  targetClasses.value = []
-  targetGrades.value = year > 0 ? await loadGradesForYear(year) : []
+watch(() => selectedYear.value, async (year) => {
+  selectedGradeId.value = 0
+  classBoxes.value = []
+  gradesForYear.value = year > 0 ? await loadGradesForYear(year) : []
 })
 
-watch(() => targetGradeId.value, async () => {
+watch(() => selectedGradeId.value, async () => {
   await loadOverview()
 })
 
