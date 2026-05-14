@@ -55,6 +55,8 @@ class StudentController extends Controller
         'd_o_admission' => 12,
     ];
 
+    private const STUDENTS_IN_CLASSES_META_SHEET = '__students_in_classes_meta';
+
     public function __construct(
         private readonly FeatureAccessService $featureAccess,
         private readonly StudentService $studentService,
@@ -622,6 +624,39 @@ class StudentController extends Controller
             ], 422);
         }
 
+        $workbookMetadata = $this->extractStudentsInClassesWorkbookMetadata($request->file('file'));
+        if ($workbookMetadata !== null) {
+            $metadataSchoolGradeClassId = isset($workbookMetadata['school_grade_class_id']) ? (int) $workbookMetadata['school_grade_class_id'] : 0;
+            $metadataYear = isset($workbookMetadata['year']) ? (int) $workbookMetadata['year'] : 0;
+            $metadataGradeId = isset($workbookMetadata['grade_id']) ? (int) $workbookMetadata['grade_id'] : 0;
+            $metadataClassId = isset($workbookMetadata['class_id']) ? (int) $workbookMetadata['class_id'] : 0;
+
+            if (
+                $metadataSchoolGradeClassId !== $schoolGradeClassId
+                || $metadataYear !== $year
+                || $metadataGradeId !== $gradeId
+                || $metadataClassId !== $classId
+            ) {
+                Log::warning('Students in classes upload failed: workbook metadata mismatch.', [
+                    'user_id' => $user->id ?? null,
+                    'census_id' => $censusId,
+                    'year' => $year,
+                    'grade_id' => $gradeId,
+                    'class_id' => $classId,
+                    'school_grade_class_id' => $schoolGradeClassId,
+                    'metadata' => $workbookMetadata,
+                    'uploaded_file_name' => $request->file('file')?->getClientOriginalName(),
+                ]);
+
+                return response()->json([
+                    'message' => 'This file belongs to a different class. Please upload the original file for the selected class.',
+                    'errors' => [
+                        'file' => ['This file belongs to a different class. Please upload the original file for the selected class.'],
+                    ],
+                ], 422);
+            }
+        }
+
         try {
             $sheets = Excel::toArray([], $request->file('file'));
         } catch (Throwable $e) {
@@ -697,30 +732,130 @@ class StudentController extends Controller
             'duplicate_index_count' => count($duplicateIndexes),
         ]);
 
+        $studentRows = Student::query()
+            ->whereIn('index_no', array_keys($uniqueIndexRows))
+            ->where('census_id', $censusId)
+            ->where('is_deleted', 0)
+            ->get(['std_id', 'index_no'])
+            ->keyBy(fn (Student $student): string => (string) $student->index_no);
+
         $missingIndexes = [];
+        foreach ($uniqueIndexRows as $indexNo => $rowInfo) {
+            if (!$studentRows->has($indexNo)) {
+                $missingIndexes[] = $rowInfo;
+            }
+        }
+
+        $conflictingAssignments = [];
+        if ($studentRows->isNotEmpty()) {
+            $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+                'class_en',
+                'class_si',
+                'class_ta',
+                'class',
+            ]) ?? 'class';
+
+            $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+                'grade_en',
+                'grade_si',
+                'grade_ta',
+            ]);
+
+            $currentAssignments = DB::table('student_grade_class_tbl as sgc')
+                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+                ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+                ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+                ->whereIn('sgc.std_id', $studentRows->pluck('std_id')->map(fn ($value): int => (int) $value)->all())
+                ->where('sgct.year', $year)
+                ->when(Schema::hasColumn('student_grade_class_tbl', 'is_deleted'), fn ($query) => $query->where('sgc.is_deleted', 0))
+                ->when(Schema::hasColumn('school_grade_class_tbl', 'is_deleted'), fn ($query) => $query->where('sgct.is_deleted', 0))
+                ->select([
+                    'sgc.std_id',
+                    'sgct.sch_grd_cls_id',
+                    'sgct.grade_id',
+                    'sgct.class_id',
+                ])
+                ->when($gradeLabelColumn !== null, fn ($query) => $query->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade_label")))
+                ->addSelect(DB::raw("ct.{$classLabelColumn} as class_label"))
+                ->orderByDesc('sgc.st_gr_cl_id')
+                ->get()
+                ->unique(fn ($row): int => (int) ($row->std_id ?? 0))
+                ->keyBy(fn ($row): int => (int) ($row->std_id ?? 0));
+
+            foreach ($studentRows as $indexNo => $student) {
+                $currentAssignment = $currentAssignments->get((int) $student->std_id);
+                if ($currentAssignment === null) {
+                    continue;
+                }
+
+                $assignedSchoolGradeClassId = (int) ($currentAssignment->sch_grd_cls_id ?? 0);
+                if ($assignedSchoolGradeClassId === $schoolGradeClassId) {
+                    continue;
+                }
+
+                $conflictingAssignments[] = [
+                    'row' => $uniqueIndexRows[(string) $indexNo]['row'] ?? 0,
+                    'index_no' => (string) $indexNo,
+                    'current_grade' => trim((string) ($currentAssignment->grade_label ?? '')),
+                    'current_class' => trim((string) ($currentAssignment->class_label ?? '')),
+                ];
+            }
+        }
+
+        if ($duplicateIndexes !== [] || $missingIndexes !== [] || $conflictingAssignments !== []) {
+            Log::warning('Students in classes upload rejected during validation.', [
+                'user_id' => $user->id ?? null,
+                'census_id' => $censusId,
+                'year' => $year,
+                'grade_id' => $gradeId,
+                'class_id' => $classId,
+                'duplicate_index_count' => count($duplicateIndexes),
+                'missing_index_count' => count($missingIndexes),
+                'conflicting_assignment_count' => count($conflictingAssignments),
+            ]);
+
+            $message = 'Fix the upload file before importing.';
+            if ($conflictingAssignments !== []) {
+                $firstConflict = $conflictingAssignments[0];
+                $currentLocation = trim(($firstConflict['current_grade'] !== '' ? $firstConflict['current_grade'] . ' ' : '') . ($firstConflict['current_class'] ?? ''));
+                $message = $currentLocation !== ''
+                    ? "Student {$firstConflict['index_no']} is already assigned to {$currentLocation} for {$year}. Remove the student from that class first."
+                    : "Student {$firstConflict['index_no']} is already assigned to another class for {$year}. Remove the student from that class first.";
+            } elseif ($missingIndexes !== []) {
+                $message = "Student {$missingIndexes[0]['index_no']} was not found for the selected school.";
+            } elseif ($duplicateIndexes !== []) {
+                $message = "Duplicate index number found in upload: {$duplicateIndexes[0]['index_no']}.";
+            }
+
+            return response()->json([
+                'message' => $message,
+                'data' => [
+                    'cleared_count' => 0,
+                    'successful_count' => 0,
+                    'failed_count' => count($missingIndexes) + count($duplicateIndexes) + count($conflictingAssignments),
+                    'missing_indexes' => array_values($missingIndexes),
+                    'duplicate_indexes' => array_values($duplicateIndexes),
+                    'conflicting_assignments' => array_values($conflictingAssignments),
+                ],
+            ], 422);
+        }
+
         $successfulCount = 0;
         $clearedCount = 0;
 
         DB::transaction(function () use (
             $uniqueIndexRows,
-            $censusId,
+            $studentRows,
             $year,
             $schoolGradeClassId,
-            &$missingIndexes,
             &$successfulCount,
             &$clearedCount
         ): void {
             $clearedCount = $this->studentService->hardDeleteAssignmentsForSchoolGradeClass($schoolGradeClassId);
 
             foreach ($uniqueIndexRows as $indexNo => $rowInfo) {
-                $student = Student::query()
-                    ->where('index_no', $indexNo)
-                    ->where('census_id', $censusId)
-                    ->where('is_deleted', 0)
-                    ->first();
-
-                if ($student === null) {
-                    $missingIndexes[] = $rowInfo;
+                $student = $studentRows->get($indexNo);
+                if (!$student instanceof Student) {
                     continue;
                 }
 
@@ -738,8 +873,9 @@ class StudentController extends Controller
             'school_grade_class_id' => $schoolGradeClassId,
             'cleared_count' => $clearedCount,
             'successful_count' => $successfulCount,
-            'missing_index_count' => count($missingIndexes),
-            'duplicate_index_count' => count($duplicateIndexes),
+            'missing_index_count' => 0,
+            'duplicate_index_count' => 0,
+            'conflicting_assignment_count' => 0,
         ]);
 
         return response()->json([
@@ -747,9 +883,10 @@ class StudentController extends Controller
             'data' => [
                 'cleared_count' => $clearedCount,
                 'successful_count' => $successfulCount,
-                'failed_count' => count($missingIndexes) + count($duplicateIndexes),
-                'missing_indexes' => array_values($missingIndexes),
-                'duplicate_indexes' => array_values($duplicateIndexes),
+                'failed_count' => 0,
+                'missing_indexes' => [],
+                'duplicate_indexes' => [],
+                'conflicting_assignments' => [],
             ],
         ]);
     }
@@ -884,7 +1021,7 @@ class StudentController extends Controller
         $safeClass = preg_replace('/[^A-Za-z0-9]+/', '', trim((string) $classLabel)) ?: 'Class';
         $filename = sprintf('Grade_%d%s_%d.xlsx', $gradeId, $safeClass, $year);
 
-        return response()->streamDownload(function () use ($students, $templatePath): void {
+        return response()->streamDownload(function () use ($students, $templatePath, $year, $gradeId, $classId, $schoolGradeClassId, $classLabel): void {
             $spreadsheet = IOFactory::load($templatePath);
             $sheet = $spreadsheet->getActiveSheet();
             $highestDataRow = max(1, (int) $sheet->getHighestDataRow());
@@ -899,6 +1036,14 @@ class StudentController extends Controller
                 $sheet->setCellValue("B{$rowNumber}", (string) ($student->index_no ?? ''));
                 $sheet->setCellValue("C{$rowNumber}", (string) ($student->name_with_initials ?? ''));
             }
+
+            $this->stampStudentsInClassesWorkbookMetadata($spreadsheet, [
+                'year' => (string) $year,
+                'grade_id' => (string) $gradeId,
+                'class_id' => (string) $classId,
+                'school_grade_class_id' => (string) $schoolGradeClassId,
+                'class_name' => trim((string) $classLabel),
+            ]);
 
             $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
             $writer->save('php://output');
@@ -1719,6 +1864,77 @@ class StudentController extends Controller
         }
 
         return $rows;
+    }
+
+    /**
+     * @param  array<string, string>  $metadata
+     */
+    private function stampStudentsInClassesWorkbookMetadata(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, array $metadata): void
+    {
+        $metaSheet = $spreadsheet->getSheetByName(self::STUDENTS_IN_CLASSES_META_SHEET);
+        if ($metaSheet === null) {
+            $metaSheet = $spreadsheet->createSheet();
+            $metaSheet->setTitle(self::STUDENTS_IN_CLASSES_META_SHEET);
+        } else {
+            $highestRow = max(1, (int) $metaSheet->getHighestRow());
+            if ($highestRow > 0) {
+                $metaSheet->removeRow(1, $highestRow);
+            }
+        }
+
+        $row = 1;
+        foreach ($metadata as $key => $value) {
+            $metaSheet->setCellValue("A{$row}", $key);
+            $metaSheet->setCellValue("B{$row}", $value);
+            $row++;
+        }
+
+        $metaSheet->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function extractStudentsInClassesWorkbookMetadata(?\Illuminate\Http\UploadedFile $file): ?array
+    {
+        if ($file === null) {
+            return null;
+        }
+
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        if (!in_array($extension, ['xlsx', 'xls'], true)) {
+            return null;
+        }
+
+        try {
+            $spreadsheet = IOFactory::load((string) $file->getRealPath());
+            $metaSheet = $spreadsheet->getSheetByName(self::STUDENTS_IN_CLASSES_META_SHEET);
+            if ($metaSheet === null) {
+                $spreadsheet->disconnectWorksheets();
+                return null;
+            }
+
+            $highestRow = max(1, (int) $metaSheet->getHighestRow());
+            $metadata = [];
+            for ($row = 1; $row <= $highestRow; $row++) {
+                $key = trim((string) $metaSheet->getCell("A{$row}")->getValue());
+                if ($key === '') {
+                    continue;
+                }
+
+                $metadata[$key] = trim((string) $metaSheet->getCell("B{$row}")->getValue());
+            }
+
+            $spreadsheet->disconnectWorksheets();
+            return $metadata === [] ? null : $metadata;
+        } catch (Throwable $e) {
+            Log::warning('Students in classes upload metadata read failed.', [
+                'original_file_name' => $file->getClientOriginalName(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     private function loadStudentForWrite(int $studentId, ?User $user): ?object

@@ -129,11 +129,22 @@
             <span class="truncate">{{ selectedFilesByClass[classBox.sch_grd_cls_id]?.name }}</span>
           </p>
 
-          <div v-if="uploadResultsByClass[classBox.sch_grd_cls_id]" class="mt-3 rounded-lg border border-emerald-200 bg-white p-2.5 text-xs">
-            <p class="font-semibold text-emerald-700">{{ text.lastUpload }}</p>
-            <p class="mt-1 text-slate-700">{{ text.successful }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.successful_count ?? 0 }}</p>
-            <p class="text-slate-700">{{ text.failed }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.failed_count ?? 0 }}</p>
-            <p class="text-slate-700">{{ text.cleared }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.cleared_count ?? 0 }}</p>
+            <div v-if="uploadResultsByClass[classBox.sch_grd_cls_id]" class="mt-3 rounded-lg border border-emerald-200 bg-white p-2.5 text-xs">
+              <p class="font-semibold text-emerald-700">{{ text.lastUpload }}</p>
+              <template v-if="hasUploadErrors(uploadResultsByClass[classBox.sch_grd_cls_id])">
+                <p class="mt-1 text-slate-700">{{ text.failed }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.failed_count ?? 0 }}</p>
+              </template>
+              <template v-else>
+                <p class="mt-1 text-slate-700">{{ text.successful }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.successful_count ?? 0 }}</p>
+                <p class="text-slate-700">{{ text.cleared }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.cleared_count ?? 0 }}</p>
+              </template>
+              <button
+                v-if="hasUploadErrors(uploadResultsByClass[classBox.sch_grd_cls_id])"
+              class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+              @click="openUploadErrorsModal(classBox)"
+            >
+              {{ text.viewErrors }}
+            </button>
           </div>
 
           <div class="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white">
@@ -158,6 +169,56 @@
         </article>
       </div>
     </section>
+
+    <div v-if="activeUploadErrorsClass && activeUploadErrorsSummary" class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/45 p-4" @click="closeUploadErrorsModal">
+      <div class="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" @click.stop>
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ text.uploadErrorsTitle }}</p>
+            <h3 class="mt-1 font-display text-lg font-bold text-slate-900">{{ uploadErrorsContextLabel }}</h3>
+          </div>
+          <button
+            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+            :title="text.close"
+            :aria-label="text.close"
+            @click="closeUploadErrorsModal"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+              <path d="M5 5l10 10M15 5 5 15" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="max-h-[calc(85vh-84px)] overflow-auto px-5 py-4 text-sm">
+          <div v-if="activeUploadErrorsSummary.missing_indexes.length" class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p class="font-semibold text-amber-900">{{ text.missingStudents }}</p>
+            <div class="mt-2 space-y-1 text-amber-900">
+              <p v-for="item in sortedMissingIndexes" :key="`modal-missing-${item.row}-${item.index_no}`">
+                {{ text.rowLabel }} {{ item.row }}: {{ item.index_no }}
+              </p>
+            </div>
+          </div>
+
+          <div v-if="activeUploadErrorsSummary.duplicate_indexes.length" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <p class="font-semibold text-rose-900">{{ text.duplicateIndexes }}</p>
+            <div class="mt-2 space-y-1 text-rose-900">
+              <p v-for="item in sortedDuplicateIndexes" :key="`modal-duplicate-${item.row}-${item.index_no}`">
+                {{ text.rowLabel }} {{ item.row }}: {{ item.index_no }}
+              </p>
+            </div>
+          </div>
+
+          <div v-if="activeUploadErrorsSummary.conflicting_assignments.length" class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+            <p class="font-semibold text-red-900">{{ text.conflictingAssignments }}</p>
+            <div class="mt-2 space-y-1 text-red-900">
+              <p v-for="item in sortedConflictingAssignments" :key="`modal-conflict-${item.row}-${item.index_no}`">
+                {{ text.rowLabel }} {{ item.row }}: {{ item.index_no }} - {{ item.current_grade }} {{ item.current_class }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -179,6 +240,8 @@ interface UploadSummary {
   failed_count: number
   missing_indexes: Array<{ row: number; index_no: string }>
   duplicate_indexes: Array<{ row: number; index_no: string }>
+  conflicting_assignments: Array<{ row: number; index_no: string; current_grade: string; current_class: string }>
+  attempted_at: number
 }
 interface StudentOptionsResponse { schools: OptionRow[] }
 
@@ -235,9 +298,18 @@ const text = computed(() => ({
       ? 'இந்த வகுப்பில் உள்ள அனைத்து மாணவர்களையும் நீக்க விரும்புகிறீர்களா?'
       : 'Are you sure you want to remove all students from this class?',
   lastUpload: ui.language === 'si' ? 'අවසන් උඩුගත කිරීම' : ui.language === 'ta' ? 'கடைசி பதிவேற்றம்' : 'Last Upload',
+  validationFailed: ui.language === 'si' ? 'වලංගු කිරීම අසාර්ථක විය.' : ui.language === 'ta' ? 'சரிபார்ப்பு தோல்வியடைந்தது.' : 'Validation failed.',
   successful: ui.language === 'si' ? 'සාර්ථක' : ui.language === 'ta' ? 'வெற்றி' : 'Successful',
   failed: ui.language === 'si' ? 'අසාර්ථක' : ui.language === 'ta' ? 'தோல்வி' : 'Failed',
   cleared: ui.language === 'si' ? 'මකා දැමූ' : ui.language === 'ta' ? 'நீக்கப்பட்டது' : 'Cleared',
+  missingStudents: ui.language === 'si' ? 'සොයාගත නොහැකි සිසුන්' : ui.language === 'ta' ? 'காணாத மாணவர்கள்' : 'Students Not Found',
+  duplicateIndexes: ui.language === 'si' ? 'අනුපිටපත් ඇතුළත් අංක' : ui.language === 'ta' ? 'மறுநகல் அனுமதி இலக்கங்கள்' : 'Duplicate Index Numbers',
+  conflictingAssignments: ui.language === 'si' ? 'වෙනත් පන්තිවල දැනට පවතින සිසුන්' : ui.language === 'ta' ? 'வேறு வகுப்புகளில் ஏற்கனவே உள்ள மாணவர்கள்' : 'Students Already In Other Classes',
+  uploadErrorsTitle: ui.language === 'si' ? 'උඩුගත කිරීමේ දෝෂ' : ui.language === 'ta' ? 'பதிவேற்ற பிழைகள்' : 'Upload Errors',
+  viewErrors: ui.language === 'si' ? 'දෝෂ බලන්න' : ui.language === 'ta' ? 'பிழைகளை காண்க' : 'View Errors',
+  yearLabel: ui.language === 'si' ? 'වර්ෂය' : ui.language === 'ta' ? 'ஆண்டு' : 'Year',
+  gradeLabel: ui.language === 'si' ? 'ශ්‍රේණිය' : ui.language === 'ta' ? 'தரம்' : 'Grade',
+  rowLabel: ui.language === 'si' ? 'පේළිය' : ui.language === 'ta' ? 'வரி' : 'Row',
   indexNo: ui.language === 'si' ? 'ඇතුළත් අංකය' : ui.language === 'ta' ? 'அனுமதி இலக்கம்' : 'Index No',
   name: ui.language === 'si' ? 'නම' : ui.language === 'ta' ? 'பெயர்' : 'Name',
   emptyClass: ui.language === 'si' ? 'තවම සිසුන් නැත.' : ui.language === 'ta' ? 'இன்னும் மாணவர்கள் இல்லை.' : 'No students yet.',
@@ -261,12 +333,22 @@ const clearingClassId = ref<number | null>(null)
 const selectedFilesByClass = ref<Record<number, File | null>>({})
 const uploadResultsByClass = ref<Record<number, UploadSummary>>({})
 const fileInputsByClass = ref<Record<number, HTMLInputElement | null>>({})
+const activeUploadErrorsClass = ref<ClassBox | null>(null)
+const activeUploadErrorsSummary = ref<UploadSummary | null>(null)
 
 const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
 const selectedYear = ref(0)
 const selectedGradeId = ref(0)
 const totalClassStudents = computed(() => classBoxes.value.reduce((sum, row) => sum + row.students.length, 0))
+const selectedGradeLabel = computed(() => gradesForYear.value.find((row) => row.grade_id === selectedGradeId.value)?.grade ?? '-')
+const uploadErrorsContextLabel = computed(() => {
+  if (!activeUploadErrorsClass.value) {
+    return ''
+  }
+
+  return `${selectedGradeLabel.value}${activeUploadErrorsClass.value.class} - ${selectedYear.value}`
+})
 
 const buildSchoolHeaders = (): Record<string, string> | undefined => {
   if (!isAdmin.value) {
@@ -278,6 +360,65 @@ const buildSchoolHeaders = (): Record<string, string> | undefined => {
 
 const extractApiMessage = (error: any): string => {
   return error?.response?.data?.message ?? ''
+}
+
+const normalizeUploadSummary = (payload: any): UploadSummary => ({
+  cleared_count: Number(payload?.cleared_count ?? 0),
+  successful_count: Number(payload?.successful_count ?? 0),
+  failed_count: Number(payload?.failed_count ?? 0),
+  missing_indexes: Array.isArray(payload?.missing_indexes) ? payload.missing_indexes : [],
+  duplicate_indexes: Array.isArray(payload?.duplicate_indexes) ? payload.duplicate_indexes : [],
+  conflicting_assignments: Array.isArray(payload?.conflicting_assignments) ? payload.conflicting_assignments : [],
+  attempted_at: Date.now(),
+})
+
+const compareIndexNumbers = (left: string, right: string): number => {
+  const leftValue = Number(left)
+  const rightValue = Number(right)
+
+  if (Number.isFinite(leftValue) && Number.isFinite(rightValue) && leftValue !== rightValue) {
+    return leftValue - rightValue
+  }
+
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+const sortedMissingIndexes = computed(() => {
+  return [...(activeUploadErrorsSummary.value?.missing_indexes ?? [])]
+    .sort((left, right) => compareIndexNumbers(String(left.index_no ?? ''), String(right.index_no ?? '')))
+})
+
+const sortedDuplicateIndexes = computed(() => {
+  return [...(activeUploadErrorsSummary.value?.duplicate_indexes ?? [])]
+    .sort((left, right) => compareIndexNumbers(String(left.index_no ?? ''), String(right.index_no ?? '')))
+})
+
+const sortedConflictingAssignments = computed(() => {
+  return [...(activeUploadErrorsSummary.value?.conflicting_assignments ?? [])]
+    .sort((left, right) => compareIndexNumbers(String(left.index_no ?? ''), String(right.index_no ?? '')))
+})
+
+const hasUploadErrors = (summary: UploadSummary | undefined): boolean => {
+  if (!summary) {
+    return false
+  }
+
+  return summary.missing_indexes.length > 0 || summary.duplicate_indexes.length > 0 || summary.conflicting_assignments.length > 0
+}
+
+const openUploadErrorsModal = (classBox: ClassBox): void => {
+  const summary = uploadResultsByClass.value[classBox.sch_grd_cls_id]
+  if (!summary || !hasUploadErrors(summary)) {
+    return
+  }
+
+  activeUploadErrorsClass.value = classBox
+  activeUploadErrorsSummary.value = summary
+}
+
+const closeUploadErrorsModal = (): void => {
+  activeUploadErrorsClass.value = null
+  activeUploadErrorsSummary.value = null
 }
 
 const setFileInputRef = (classId: number, element: Element | null): void => {
@@ -447,13 +588,7 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
     if (headers) config.headers = headers
 
     const { data } = await api.post('/students/in-classes/upload', formData, config)
-    uploadResultsByClass.value[classBox.sch_grd_cls_id] = data?.data ?? {
-      cleared_count: 0,
-      successful_count: 0,
-      failed_count: 0,
-      missing_indexes: [],
-      duplicate_indexes: [],
-    }
+    uploadResultsByClass.value[classBox.sch_grd_cls_id] = normalizeUploadSummary(data?.data)
 
     pageMessage.value = `${classBox.class}: ${text.value.saveSuccess} ${text.value.successful}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].successful_count}, ${text.value.failed}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].failed_count}.`
     selectedFilesByClass.value[classBox.sch_grd_cls_id] = null
@@ -462,7 +597,13 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
     }
     await loadOverview()
   } catch (error: any) {
-    pageError.value = extractApiMessage(error)
+    if (error?.response?.status === 422 && error?.response?.data?.data) {
+      uploadResultsByClass.value[classBox.sch_grd_cls_id] = normalizeUploadSummary(error.response.data.data)
+      pageError.value = `${classBox.class}: ${extractApiMessage(error) || text.value.validationFailed}`
+      openUploadErrorsModal(classBox)
+    } else {
+      pageError.value = extractApiMessage(error)
+    }
   } finally {
     uploadingClassId.value = null
   }
