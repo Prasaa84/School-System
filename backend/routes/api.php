@@ -61,6 +61,13 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/students', [StudentController::class, 'index']);
         Route::get('/students/options', [StudentController::class, 'options']);
+        Route::get('/students/assignment/roster', [StudentController::class, 'assignmentRoster']);
+        Route::post('/students/assignment/bulk', [StudentController::class, 'bulkAssign']);
+        Route::get('/students/class-assignment/overview', [StudentController::class, 'classAssignmentOverview']);
+        Route::get('/students/class-assignment/download', [StudentController::class, 'downloadClassAssignment']);
+        Route::get('/students/class-assignment/template', [StudentController::class, 'downloadClassAssignmentTemplate']);
+        Route::post('/students/class-assignment/upload', [StudentController::class, 'uploadClassAssignment']);
+        Route::post('/students/class-assignment/clear', [StudentController::class, 'clearClassAssignment']);
         Route::get('/students/template', [StudentController::class, 'downloadTemplate']);
         Route::post('/students/import', [StudentController::class, 'import']);
         Route::post('/students', [StudentController::class, 'store']);
@@ -69,6 +76,3 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/students/{studentId}', [StudentController::class, 'destroy'])->whereNumber('studentId');
     });
 });
-
-
-

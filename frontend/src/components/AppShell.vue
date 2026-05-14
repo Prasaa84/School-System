@@ -255,9 +255,15 @@ const localizedMenu = computed(() => {
       children: item.children?.map((child) => ({
         ...child,
         label: pickLocalizedText(ui.language, {
-          en: child.label,
-          si: child.label,
-          ta: child.label,
+          en: {
+            'student-class-assignment': 'Students in Classes',
+          }[child.key] ?? child.label,
+          si: {
+            'student-class-assignment': 'පන්තිවල සිසුන්',
+          }[child.key] ?? child.label,
+          ta: {
+            'student-class-assignment': 'வகுப்புகளில் மாணவர்கள்',
+          }[child.key] ?? child.label,
         }),
       })),
     }
@@ -319,6 +325,9 @@ const loadMenu = async (): Promise<void> => {
       key: module.key,
       label: module.label,
       to: resolveModulePath(module),
+      children: module.key === 'students'
+        ? [{ key: 'student-class-assignment', label: 'Students in Classes', to: '/students/in-classes' }]
+        : undefined,
     }))
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
 

@@ -320,7 +320,7 @@ class StudentService
 
         $schoolGradeClassId = null;
         if ($hasCompleteAssignment) {
-            $schoolGradeClassId = $this->resolveSchoolGradeClassId($gradeId, $classId, $year, $censusId);
+            $schoolGradeClassId = $this->resolveSchoolGradeClassIdForAssignment($gradeId, $classId, $year, $censusId);
             if ($schoolGradeClassId === null) {
                 throw ValidationException::withMessages([
                     'grade_id' => [__('messages.students.grade_class_mismatch')],
@@ -453,7 +453,7 @@ class StudentService
         Guardian::query()->create($insert);
     }
 
-    private function resolveSchoolGradeClassId(int $gradeId, int $classId, int $year, string $censusId): ?int
+    public function resolveSchoolGradeClassIdForAssignment(int $gradeId, int $classId, int $year, string $censusId): ?int
     {
         if (!Schema::hasTable('school_grade_class_tbl')) {
             return null;
@@ -463,7 +463,7 @@ class StudentService
             ->where('grade_id', $gradeId)
             ->where('class_id', $classId)
             ->where('year', $year)
-            ->whereIn('census_id', $this->censusCandidates($censusId));
+            ->whereIn('census_id', $this->censusCandidatesForAssignment($censusId));
 
         if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
             $query->where('is_deleted', 0);
@@ -479,7 +479,7 @@ class StudentService
     /**
      * @return array<int, string>
      */
-    private function censusCandidates(string $censusId): array
+    public function censusCandidatesForAssignment(string $censusId): array
     {
         $raw = trim($censusId);
         $candidates = collect([$raw])->filter(fn ($value): bool => $value !== '');
@@ -493,5 +493,125 @@ class StudentService
         }
 
         return $candidates->uniqueStrict()->values()->all();
+    }
+
+    public function upsertStudentAssignmentForYear(int $studentId, int $schoolGradeClassId, int $targetYear): void
+    {
+        if (!Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('school_grade_class_tbl')) {
+            return;
+        }
+
+        $existingAssignments = DB::table('student_grade_class_tbl as sgc')
+            ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+            ->where('sgc.std_id', $studentId)
+            ->where('sgct.year', $targetYear)
+            ->when(Schema::hasColumn('student_grade_class_tbl', 'is_deleted'), function ($query): void {
+                $query->where('sgc.is_deleted', 0);
+            })
+            ->when(Schema::hasColumn('school_grade_class_tbl', 'is_deleted'), function ($query): void {
+                $query->where('sgct.is_deleted', 0);
+            })
+            ->orderByDesc('sgc.st_gr_cl_id')
+            ->select(['sgc.st_gr_cl_id', 'sgc.sch_grd_cls_id'])
+            ->get();
+
+        $now = now();
+        $primaryAssignment = $existingAssignments->shift();
+
+        if ($primaryAssignment !== null) {
+            $updates = ['sch_grd_cls_id' => $schoolGradeClassId];
+            if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                $updates['is_deleted'] = 0;
+            }
+            if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+                $updates['date_updated'] = $now;
+            }
+
+            StudentGradeClass::query()
+                ->where('st_gr_cl_id', (int) $primaryAssignment->st_gr_cl_id)
+                ->update($updates);
+        } else {
+            $insert = [
+                'std_id' => $studentId,
+                'sch_grd_cls_id' => $schoolGradeClassId,
+            ];
+            if (Schema::hasColumn('student_grade_class_tbl', 'date_added')) {
+                $insert['date_added'] = $now;
+            }
+            if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+                $insert['date_updated'] = $now;
+            }
+            if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                $insert['is_deleted'] = 0;
+            }
+
+            StudentGradeClass::query()->create($insert);
+        }
+
+        foreach ($existingAssignments as $duplicateAssignment) {
+            if (!Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                StudentGradeClass::query()->where('st_gr_cl_id', (int) $duplicateAssignment->st_gr_cl_id)->delete();
+                continue;
+            }
+
+            $duplicateUpdates = ['is_deleted' => 1];
+            if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+                $duplicateUpdates['date_updated'] = $now;
+            }
+
+            StudentGradeClass::query()
+                ->where('st_gr_cl_id', (int) $duplicateAssignment->st_gr_cl_id)
+                ->update($duplicateUpdates);
+        }
+    }
+
+    public function replaceStudentAssignmentForYearHardDelete(int $studentId, int $schoolGradeClassId, int $targetYear): void
+    {
+        if (!Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('school_grade_class_tbl')) {
+            return;
+        }
+
+        $assignmentIds = DB::table('student_grade_class_tbl as sgc')
+            ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+            ->where('sgc.std_id', $studentId)
+            ->where('sgct.year', $targetYear)
+            ->select('sgc.st_gr_cl_id')
+            ->pluck('st_gr_cl_id')
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->values()
+            ->all();
+
+        if ($assignmentIds !== []) {
+            StudentGradeClass::query()->whereIn('st_gr_cl_id', $assignmentIds)->delete();
+        }
+
+        $insert = [
+            'std_id' => $studentId,
+            'sch_grd_cls_id' => $schoolGradeClassId,
+        ];
+        $now = now();
+        if (Schema::hasColumn('student_grade_class_tbl', 'date_added')) {
+            $insert['date_added'] = $now;
+        }
+        if (Schema::hasColumn('student_grade_class_tbl', 'date_updated')) {
+            $insert['date_updated'] = $now;
+        }
+        if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+            $insert['is_deleted'] = 0;
+        }
+
+        StudentGradeClass::query()->create($insert);
+    }
+
+    public function hardDeleteAssignmentsForSchoolGradeClass(int $schoolGradeClassId): int
+    {
+        if (!Schema::hasTable('student_grade_class_tbl') || $schoolGradeClassId <= 0) {
+            return 0;
+        }
+
+        return StudentGradeClass::query()
+            ->where('sch_grd_cls_id', $schoolGradeClassId)
+            ->delete();
     }
 }
