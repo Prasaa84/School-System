@@ -557,8 +557,26 @@ class StudentController extends Controller
         $year = (int) $validated['year'];
         $gradeId = (int) $validated['grade_id'];
         $classId = (int) $validated['class_id'];
+
+        Log::info('Students in classes upload requested.', [
+            'user_id' => $user->id ?? null,
+            'census_id' => $censusId,
+            'year' => $year,
+            'grade_id' => $gradeId,
+            'class_id' => $classId,
+            'original_file_name' => $request->file('file')?->getClientOriginalName(),
+        ]);
+
         $schoolGradeClassId = $this->studentService->resolveSchoolGradeClassIdForAssignment($gradeId, $classId, $year, $censusId);
         if ($schoolGradeClassId === null) {
+            Log::warning('Students in classes upload failed: grade/class/year mismatch.', [
+                'user_id' => $user->id ?? null,
+                'census_id' => $censusId,
+                'year' => $year,
+                'grade_id' => $gradeId,
+                'class_id' => $classId,
+            ]);
+
             return response()->json([
                 'message' => __('messages.students.grade_class_mismatch'),
                 'errors' => [
@@ -586,6 +604,16 @@ class StudentController extends Controller
         $uploadedBaseName = pathinfo((string) $request->file('file')?->getClientOriginalName(), PATHINFO_FILENAME);
 
         if (strcasecmp($uploadedBaseName, $expectedBaseName) !== 0) {
+            Log::warning('Students in classes upload failed: invalid file name.', [
+                'user_id' => $user->id ?? null,
+                'census_id' => $censusId,
+                'year' => $year,
+                'grade_id' => $gradeId,
+                'class_id' => $classId,
+                'expected_file_name' => "{$expectedBaseName}.xlsx",
+                'uploaded_file_name' => $request->file('file')?->getClientOriginalName(),
+            ]);
+
             return response()->json([
                 'message' => "Invalid file name. Expected {$expectedBaseName}.xlsx for the selected class.",
                 'errors' => [
@@ -597,6 +625,16 @@ class StudentController extends Controller
         try {
             $sheets = Excel::toArray([], $request->file('file'));
         } catch (Throwable $e) {
+            Log::warning('Students in classes upload failed: invalid spreadsheet file.', [
+                'user_id' => $user->id ?? null,
+                'census_id' => $censusId,
+                'year' => $year,
+                'grade_id' => $gradeId,
+                'class_id' => $classId,
+                'original_file_name' => $request->file('file')?->getClientOriginalName(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'message' => __('messages.students.import_file_invalid'),
             ], 422);
@@ -604,6 +642,15 @@ class StudentController extends Controller
 
         $sheet = $sheets[0] ?? [];
         if (count($sheet) === 0) {
+            Log::warning('Students in classes upload failed: empty sheet.', [
+                'user_id' => $user->id ?? null,
+                'census_id' => $censusId,
+                'year' => $year,
+                'grade_id' => $gradeId,
+                'class_id' => $classId,
+                'original_file_name' => $request->file('file')?->getClientOriginalName(),
+            ]);
+
             return response()->json([
                 'message' => __('messages.students.import_empty'),
             ], 422);
@@ -611,6 +658,16 @@ class StudentController extends Controller
 
         $indexRows = $this->extractStudentsInClassesUploadRows($sheet);
         if ($indexRows === []) {
+            Log::warning('Students in classes upload failed: no valid index numbers found.', [
+                'user_id' => $user->id ?? null,
+                'census_id' => $censusId,
+                'year' => $year,
+                'grade_id' => $gradeId,
+                'class_id' => $classId,
+                'original_file_name' => $request->file('file')?->getClientOriginalName(),
+                'sheet_row_count' => count($sheet),
+            ]);
+
             return response()->json([
                 'message' => 'No valid index numbers were found in the uploaded file.',
             ], 422);
@@ -626,6 +683,19 @@ class StudentController extends Controller
             }
             $uniqueIndexRows[$indexNo] = $rowInfo;
         }
+
+        Log::info('Students in classes upload parsed spreadsheet.', [
+            'user_id' => $user->id ?? null,
+            'census_id' => $censusId,
+            'year' => $year,
+            'grade_id' => $gradeId,
+            'class_id' => $classId,
+            'original_file_name' => $request->file('file')?->getClientOriginalName(),
+            'sheet_row_count' => count($sheet),
+            'parsed_index_row_count' => count($indexRows),
+            'unique_index_count' => count($uniqueIndexRows),
+            'duplicate_index_count' => count($duplicateIndexes),
+        ]);
 
         $missingIndexes = [];
         $successfulCount = 0;
@@ -658,6 +728,19 @@ class StudentController extends Controller
                 $successfulCount++;
             }
         });
+
+        Log::info('Students in classes upload completed.', [
+            'user_id' => $user->id ?? null,
+            'census_id' => $censusId,
+            'year' => $year,
+            'grade_id' => $gradeId,
+            'class_id' => $classId,
+            'school_grade_class_id' => $schoolGradeClassId,
+            'cleared_count' => $clearedCount,
+            'successful_count' => $successfulCount,
+            'missing_index_count' => count($missingIndexes),
+            'duplicate_index_count' => count($duplicateIndexes),
+        ]);
 
         return response()->json([
             'message' => 'Class list uploaded successfully.',
