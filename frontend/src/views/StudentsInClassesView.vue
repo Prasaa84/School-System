@@ -291,6 +291,8 @@ const openFileDialog = (classId: number): void => {
 const onFileSelected = (classId: number, event: Event): void => {
   const target = event.target as HTMLInputElement | null
   selectedFilesByClass.value[classId] = target?.files?.[0] ?? null
+  pageMessage.value = ''
+  pageError.value = ''
 }
 
 const loadOptions = async (): Promise<void> => {
@@ -453,7 +455,7 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
       duplicate_indexes: [],
     }
 
-    pageMessage.value = `${text.value.saveSuccess} ${text.value.successful}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].successful_count}, ${text.value.failed}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].failed_count}.`
+    pageMessage.value = `${classBox.class}: ${text.value.saveSuccess} ${text.value.successful}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].successful_count}, ${text.value.failed}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].failed_count}.`
     selectedFilesByClass.value[classBox.sch_grd_cls_id] = null
     if (fileInputsByClass.value[classBox.sch_grd_cls_id]) {
       fileInputsByClass.value[classBox.sch_grd_cls_id]!.value = ''
