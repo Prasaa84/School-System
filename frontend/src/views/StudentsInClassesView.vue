@@ -114,7 +114,7 @@
               :title="clearingClassId === classBox.sch_grd_cls_id ? text.clearing : text.clearClass"
               :aria-label="clearingClassId === classBox.sch_grd_cls_id ? text.clearing : text.clearClass"
               :disabled="clearingClassId === classBox.sch_grd_cls_id"
-              @click="clearClassList(classBox)"
+              @click="openClearClassDialog(classBox)"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
                 <path d="M7 2.5h6a1 1 0 0 1 1 1V5h2.25a.75.75 0 0 1 0 1.5h-.56l-.6 8.18A2 2 0 0 1 13.1 16.5H6.9a2 2 0 0 1-1.99-1.82L4.31 6.5h-.56a.75.75 0 0 1 0-1.5H6V3.5a1 1 0 0 1 1-1Zm1 2.5h4V4h-4v1Zm-1.59 1.5.57 7.96a.5.5 0 0 0 .5.46h6.04a.5.5 0 0 0 .5-.46l.57-7.96H6.41Z" />
@@ -162,7 +162,7 @@
                       :title="removingStudentAssignmentKey === `${classBox.sch_grd_cls_id}:${student.std_id}` ? text.removingStudent : text.removeStudent"
                       :aria-label="removingStudentAssignmentKey === `${classBox.sch_grd_cls_id}:${student.std_id}` ? text.removingStudent : text.removeStudent"
                       :disabled="removingStudentAssignmentKey === `${classBox.sch_grd_cls_id}:${student.std_id}`"
-                      @click="removeStudentFromClass(classBox, student)"
+                      @click="openRemoveStudentDialog(classBox, student)"
                     >
                       <svg viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3">
                         <path d="M7 2.5h6a1 1 0 0 1 1 1V5h2.25a.75.75 0 0 1 0 1.5h-.56l-.6 8.18A2 2 0 0 1 13.1 16.5H6.9a2 2 0 0 1-1.99-1.82L4.31 6.5h-.56a.75.75 0 0 1 0-1.5H6V3.5a1 1 0 0 1 1-1Zm1 2.5h4V4h-4v1Zm-1.59 1.5.57 7.96a.5.5 0 0 0 .5.46h6.04a.5.5 0 0 0 .5-.46l.57-7.96H6.41Z" />
@@ -226,6 +226,55 @@
         </div>
       </div>
     </div>
+
+    <div v-if="activeConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" @click="closeConfirmDialog">
+      <div class="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" @click.stop>
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-700">
+              <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                <path d="M7 2.5h6a1 1 0 0 1 1 1V5h2.25a.75.75 0 0 1 0 1.5h-.56l-.6 8.18A2 2 0 0 1 13.1 16.5H6.9a2 2 0 0 1-1.99-1.82L4.31 6.5h-.56a.75.75 0 0 1 0-1.5H6V3.5a1 1 0 0 1 1-1Zm1 2.5h4V4h-4v1Zm-1.59 1.5.57 7.96a.5.5 0 0 0 .5.46h6.04a.5.5 0 0 0 .5-.46l.57-7.96H6.41Z" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="font-display text-lg font-bold text-slate-900">{{ confirmDialogHeading }}</h3>
+            </div>
+          </div>
+          <button
+            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+            :title="text.close"
+            :aria-label="text.close"
+            :disabled="confirmDialogBusy"
+            @click="closeConfirmDialog"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+              <path d="M5 5l10 10M15 5 5 15" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="px-5 py-4">
+          <p class="text-sm leading-6 text-slate-600">{{ confirmDialogMessage }}</p>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <button
+            class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="confirmDialogBusy"
+            @click="closeConfirmDialog"
+          >
+            {{ text.cancel }}
+          </button>
+          <button
+            class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+            :disabled="confirmDialogBusy"
+            @click="confirmDialogAction"
+          >
+            {{ confirmDialogBusy ? text.deleting : text.delete }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -241,6 +290,11 @@ interface GradeResponse { year?: number | null; years?: number[]; data: GradeRow
 interface StudentRow { std_id: number; index_no: string; name_with_initials: string }
 interface ClassBox { sch_grd_cls_id: number; class_id: number; class: string; student_count: number; students: StudentRow[] }
 interface OverviewResponse { class_boxes: ClassBox[] }
+interface ConfirmDialogState {
+  kind: 'clearClass' | 'removeStudent'
+  classBox: ClassBox
+  student?: StudentRow
+}
 interface UploadSummary {
   cleared_count: number
   successful_count: number
@@ -329,6 +383,12 @@ const text = computed(() => ({
       ? 'இந்த மாணவரை இந்த வகுப்பிலிருந்து நீக்க விரும்புகிறீர்களா?'
       : 'Are you sure you want to remove this student from this class?',
   removeStudentSuccess: ui.language === 'si' ? 'සිසුවා පන්තියෙන් ඉවත් කරන ලදී.' : ui.language === 'ta' ? 'மாணவர் வகுப்பிலிருந்து நீக்கப்பட்டார்.' : 'Student removed from class successfully.',
+  delete: ui.language === 'si' ? 'මකන්න' : ui.language === 'ta' ? 'நீக்கு' : 'Delete',
+  deleting: ui.language === 'si' ? 'මකමින්...' : ui.language === 'ta' ? 'நீக்குகிறது...' : 'Deleting...',
+  cancel: ui.language === 'si' ? 'අවලංගු කරන්න' : ui.language === 'ta' ? 'ரத்து செய்' : 'Cancel',
+  close: ui.language === 'si' ? 'වසන්න' : ui.language === 'ta' ? 'மூடு' : 'Close',
+  clearClassDialogHeading: ui.language === 'si' ? 'පන්තිය හිස් කිරීම' : ui.language === 'ta' ? 'வகுப்பை காலி செய்தல்' : 'Clear Class',
+  removeStudentDialogHeading: ui.language === 'si' ? 'සිසුවා ඉවත් කිරීම' : ui.language === 'ta' ? 'மாணவரை நீக்குதல்' : 'Remove Student',
   noPermission: ui.language === 'si' ? 'ඔබට මෙම පංති පැවරීම් කළමනාකරණය කිරීමට අවසර නැත.' : ui.language === 'ta' ? 'இந்த வகுப்பு ஒதுக்கீட்டை நிர்வகிக்க உங்களுக்கு அனுமதி இல்லை.' : 'You do not have permission to manage class assignments.',
   selectTargetFirst: ui.language === 'si' ? 'පළමුව නව වර්ෂය සහ ශ්‍රේණිය තෝරන්න.' : ui.language === 'ta' ? 'முதலில் புதிய ஆண்டு மற்றும் தரத்தைத் தேர்ந்தெடுக்கவும்.' : 'Select the target year and grade first.',
   saveSuccess: ui.language === 'si' ? 'පංති ලැයිස්තුව සාර්ථකව යාවත්කාලීන විය.' : ui.language === 'ta' ? 'வகுப்பு பட்டியல் வெற்றிகரமாக புதுப்பிக்கப்பட்டது.' : 'Class list updated successfully.',
@@ -352,6 +412,7 @@ const uploadResultsByClass = ref<Record<number, UploadSummary>>({})
 const fileInputsByClass = ref<Record<number, HTMLInputElement | null>>({})
 const activeUploadErrorsClass = ref<ClassBox | null>(null)
 const activeUploadErrorsSummary = ref<UploadSummary | null>(null)
+const activeConfirmDialog = ref<ConfirmDialogState | null>(null)
 
 const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
@@ -365,6 +426,38 @@ const uploadErrorsContextLabel = computed(() => {
   }
 
   return `${selectedGradeLabel.value}${activeUploadErrorsClass.value.class} - ${selectedYear.value}`
+})
+const confirmDialogBusy = computed(() => {
+  if (!activeConfirmDialog.value) {
+    return false
+  }
+
+  if (activeConfirmDialog.value.kind === 'clearClass') {
+    return clearingClassId.value === activeConfirmDialog.value.classBox.sch_grd_cls_id
+  }
+
+  const studentId = activeConfirmDialog.value.student?.std_id ?? 0
+  return removingStudentAssignmentKey.value === `${activeConfirmDialog.value.classBox.sch_grd_cls_id}:${studentId}`
+})
+const confirmDialogHeading = computed(() => {
+  if (!activeConfirmDialog.value) {
+    return ''
+  }
+
+  return activeConfirmDialog.value.kind === 'clearClass'
+    ? text.value.clearClassDialogHeading
+    : text.value.removeStudentDialogHeading
+})
+const confirmDialogMessage = computed(() => {
+  if (!activeConfirmDialog.value) {
+    return ''
+  }
+
+  if (activeConfirmDialog.value.kind === 'clearClass') {
+    return text.value.clearClassConfirm
+  }
+
+  return text.value.removeStudentConfirm
 })
 
 const buildSchoolHeaders = (): Record<string, string> | undefined => {
@@ -436,6 +529,29 @@ const openUploadErrorsModal = (classBox: ClassBox): void => {
 const closeUploadErrorsModal = (): void => {
   activeUploadErrorsClass.value = null
   activeUploadErrorsSummary.value = null
+}
+
+const openClearClassDialog = (classBox: ClassBox): void => {
+  activeConfirmDialog.value = {
+    kind: 'clearClass',
+    classBox,
+  }
+}
+
+const openRemoveStudentDialog = (classBox: ClassBox, student: StudentRow): void => {
+  activeConfirmDialog.value = {
+    kind: 'removeStudent',
+    classBox,
+    student,
+  }
+}
+
+const closeConfirmDialog = (): void => {
+  if (confirmDialogBusy.value) {
+    return
+  }
+
+  activeConfirmDialog.value = null
 }
 
 const setFileInputRef = (classId: number, element: Element | null): void => {
@@ -627,10 +743,6 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
 }
 
 const clearClassList = async (classBox: ClassBox): Promise<void> => {
-  if (!window.confirm(text.value.clearClassConfirm)) {
-    return
-  }
-
   clearingClassId.value = classBox.sch_grd_cls_id
   pageMessage.value = ''
   pageError.value = ''
@@ -648,6 +760,7 @@ const clearClassList = async (classBox: ClassBox): Promise<void> => {
 
     pageMessage.value = text.value.clearSuccess
     await loadOverview()
+    activeConfirmDialog.value = null
   } catch (error: any) {
     pageError.value = extractApiMessage(error)
   } finally {
@@ -657,10 +770,6 @@ const clearClassList = async (classBox: ClassBox): Promise<void> => {
 
 const removeStudentFromClass = async (classBox: ClassBox, student: StudentRow): Promise<void> => {
   if (!isPrincipal.value) {
-    return
-  }
-
-  if (!window.confirm(text.value.removeStudentConfirm)) {
     return
   }
 
@@ -683,10 +792,26 @@ const removeStudentFromClass = async (classBox: ClassBox, student: StudentRow): 
 
     pageMessage.value = `${classBox.class}: ${student.index_no} - ${text.value.removeStudentSuccess}`
     await loadOverview()
+    activeConfirmDialog.value = null
   } catch (error: any) {
     pageError.value = extractApiMessage(error)
   } finally {
     removingStudentAssignmentKey.value = ''
+  }
+}
+
+const confirmDialogAction = async (): Promise<void> => {
+  if (!activeConfirmDialog.value) {
+    return
+  }
+
+  if (activeConfirmDialog.value.kind === 'clearClass') {
+    await clearClassList(activeConfirmDialog.value.classBox)
+    return
+  }
+
+  if (activeConfirmDialog.value.student) {
+    await removeStudentFromClass(activeConfirmDialog.value.classBox, activeConfirmDialog.value.student)
   }
 }
 
