@@ -54,6 +54,7 @@
               <th v-if="isAdmin" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.school }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.nameWithInitials }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gradeClass }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.year }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.phone }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.dob }}</th>
               <th v-if="showActionColumn" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.actions }}</th>
@@ -67,6 +68,7 @@
               </td>
               <td class="px-3 py-2 text-slate-700">{{ student.name_with_initials }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.grade_class }}</td>
+              <td class="px-3 py-2 text-slate-700">{{ student.current_year || '-' }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.phone_no || '-' }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.dob || '-' }}</td>
               <td v-if="showActionColumn" class="px-3 py-2">
@@ -91,7 +93,7 @@
               </td>
             </tr>
             <tr v-if="!loading && students.length === 0">
-              <td :colspan="5 + (isAdmin ? 1 : 0) + (showActionColumn ? 1 : 0)" class="px-3 py-6 text-center text-slate-500">{{ text.noStudentsFound }}</td>
+              <td :colspan="6 + (isAdmin ? 1 : 0) + (showActionColumn ? 1 : 0)" class="px-3 py-6 text-center text-slate-500">{{ text.noStudentsFound }}</td>
             </tr>
           </tbody>
         </table>
@@ -573,6 +575,7 @@ const text = computed(() => {
       school: 'පාසල',
       nameWithInitials: 'මුලකුරු සහිත නම',
       gradeClass: 'ශ්‍රේණිය/පංතිය',
+      year: 'වර්ෂය',
       phone: 'දුරකථන',
       dob: 'උපන්දිනය',
       actions: 'ක්‍රියා',
@@ -677,6 +680,7 @@ const text = computed(() => {
       school: 'பாடசாலை',
       nameWithInitials: 'முதற் எழுத்துகளுடன் பெயர்',
       gradeClass: 'தரம்/வகுப்பு',
+      year: 'ஆண்டு',
       phone: 'தொலைபேசி',
       dob: 'பிறந்த தேதி',
       actions: 'செயல்கள்',
@@ -780,6 +784,7 @@ const text = computed(() => {
     school: 'School',
     nameWithInitials: 'Name with Initials',
     gradeClass: 'Grade/Class',
+    year: 'Year',
     phone: 'Phone',
     dob: 'DOB',
     actions: 'Actions',
