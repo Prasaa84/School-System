@@ -1,9 +1,7 @@
 <template>
   <div class="space-y-5">
     <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p class="font-brand text-xs uppercase tracking-[0.2em] text-slate-500">{{ text.studentsModule }}</p>
-      <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ text.title }}</h1>
-      <p class="mt-2 text-sm text-slate-600">{{ text.subtitle }}</p>
+      <h1 class="font-display text-2xl font-bold text-slate-900">{{ text.title }}</h1>
     </header>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -322,13 +320,7 @@ const canAssign = computed(() => {
 })
 
 const text = computed(() => ({
-  studentsModule: ui.language === 'si' ? 'සිසුන් මොඩියුලය' : ui.language === 'ta' ? 'மாணவர்கள் தொகுதி' : 'Students Module',
   title: ui.language === 'si' ? 'පන්තිවල සිසුන්' : ui.language === 'ta' ? 'வகுப்புகளில் மாணவர்கள்' : 'Students in Classes',
-  subtitle: ui.language === 'si'
-    ? 'තෝරාගත් වර්ෂය සහ ශ්‍රේණියට අදාළ පන්තිවල සිසුන් මෙහි කළමනාකරණය කරන්න.'
-    : ui.language === 'ta'
-      ? 'தேர்ந்தெடுக்கப்பட்ட ஆண்டு மற்றும் தரத்திற்கான வகுப்புகளில் மாணவர்களை இங்கே நிர்வகிக்கவும்.'
-      : 'Manage students in the classes for the selected year and grade.',
   classSelection: ui.language === 'si' ? 'පන්ති තේරීම' : ui.language === 'ta' ? 'வகுப்பு தேர்வு' : 'Class Selection',
   school: ui.language === 'si' ? 'පාසල' : ui.language === 'ta' ? 'பாடசாலை' : 'School',
   selectSchool: ui.language === 'si' ? 'පාසල තෝරන්න' : ui.language === 'ta' ? 'பாடசாலையைத் தேர்ந்தெடுக்கவும்' : 'Select school',
