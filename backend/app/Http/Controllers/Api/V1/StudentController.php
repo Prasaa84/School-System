@@ -938,6 +938,84 @@ class StudentController extends Controller
         ]);
     }
 
+    public function removeStudentFromClass(Request $request): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => __('messages.auth.unauthorized')], 401);
+        }
+
+        if (!$this->isPrincipal($user)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        $validated = Validator::make($request->all(), [
+            'year' => ['required', 'integer', 'between:2000,2100'],
+            'grade_id' => ['required', 'integer', 'exists:grade_tbl,grade_id'],
+            'class_id' => ['required', 'integer', 'exists:class_tbl,class_id'],
+            'student_id' => ['required', 'integer'],
+        ], [
+            'student_id.required' => 'Student is required.',
+        ])->validate();
+
+        $censusId = $this->resolveStudentWriteCensusId($user);
+        if ($censusId === null) {
+            return response()->json(['message' => __('messages.students.census_required')], 422);
+        }
+
+        if (
+            !$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_UPDATE)
+            && !$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_CREATE)
+        ) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        $year = (int) $validated['year'];
+        $gradeId = (int) $validated['grade_id'];
+        $classId = (int) $validated['class_id'];
+        $studentId = (int) $validated['student_id'];
+
+        $schoolGradeClassId = $this->studentService->resolveSchoolGradeClassIdForAssignment(
+            $gradeId,
+            $classId,
+            $year,
+            $censusId,
+        );
+
+        if ($schoolGradeClassId === null) {
+            return response()->json([
+                'message' => __('messages.students.grade_class_mismatch'),
+            ], 422);
+        }
+
+        $studentExists = Student::query()
+            ->where('std_id', $studentId)
+            ->where('census_id', $censusId)
+            ->where('is_deleted', 0)
+            ->exists();
+
+        if (!$studentExists) {
+            return response()->json([
+                'message' => __('messages.students.not_found'),
+            ], 404);
+        }
+
+        $deletedCount = $this->studentService->hardDeleteStudentAssignmentForSchoolGradeClass($studentId, $schoolGradeClassId);
+
+        if ($deletedCount === 0) {
+            return response()->json([
+                'message' => 'Student is not assigned to the selected class.',
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Student removed from class successfully.',
+            'data' => [
+                'deleted_count' => $deletedCount,
+            ],
+        ]);
+    }
+
     public function downloadStudentsInClass(Request $request): JsonResponse|StreamedResponse
     {
         $user = $this->authUser();
@@ -1974,5 +2052,16 @@ class StudentController extends Controller
         }
 
         return $this->resolveUserCensusId($user);
+    }
+
+    private function isPrincipal(User $user): bool
+    {
+        if ((int) ($user->role_id ?? 0) === 2) {
+            return true;
+        }
+
+        $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
+
+        return $roleName === 'principal';
     }
 }

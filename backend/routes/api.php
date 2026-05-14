@@ -68,6 +68,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/students/in-classes/template', [StudentController::class, 'downloadStudentsInClassesTemplate']);
         Route::post('/students/in-classes/upload', [StudentController::class, 'uploadStudentsInClass']);
         Route::post('/students/in-classes/clear', [StudentController::class, 'clearStudentsInClass']);
+        Route::post('/students/in-classes/remove-student', [StudentController::class, 'removeStudentFromClass']);
         Route::get('/students/template', [StudentController::class, 'downloadTemplate']);
         Route::post('/students/import', [StudentController::class, 'import']);
         Route::post('/students', [StudentController::class, 'store']);

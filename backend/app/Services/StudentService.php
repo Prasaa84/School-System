@@ -614,4 +614,16 @@ class StudentService
             ->where('sch_grd_cls_id', $schoolGradeClassId)
             ->delete();
     }
+
+    public function hardDeleteStudentAssignmentForSchoolGradeClass(int $studentId, int $schoolGradeClassId): int
+    {
+        if (!Schema::hasTable('student_grade_class_tbl') || $studentId <= 0 || $schoolGradeClassId <= 0) {
+            return 0;
+        }
+
+        return StudentGradeClass::query()
+            ->where('std_id', $studentId)
+            ->where('sch_grd_cls_id', $schoolGradeClassId)
+            ->delete();
+    }
 }

@@ -129,23 +129,16 @@
             <span class="truncate">{{ selectedFilesByClass[classBox.sch_grd_cls_id]?.name }}</span>
           </p>
 
-            <div v-if="uploadResultsByClass[classBox.sch_grd_cls_id]" class="mt-3 rounded-lg border border-emerald-200 bg-white p-2.5 text-xs">
+            <div v-if="hasUploadErrors(uploadResultsByClass[classBox.sch_grd_cls_id])" class="mt-3 rounded-lg border border-emerald-200 bg-white p-2.5 text-xs">
               <p class="font-semibold text-emerald-700">{{ text.lastUpload }}</p>
-              <template v-if="hasUploadErrors(uploadResultsByClass[classBox.sch_grd_cls_id])">
-                <p class="mt-1 text-slate-700">{{ text.failed }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.failed_count ?? 0 }}</p>
-              </template>
-              <template v-else>
-                <p class="mt-1 text-slate-700">{{ text.successful }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.successful_count ?? 0 }}</p>
-                <p class="text-slate-700">{{ text.cleared }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.cleared_count ?? 0 }}</p>
-              </template>
+              <p class="mt-1 text-slate-700">{{ text.failed }}: {{ uploadResultsByClass[classBox.sch_grd_cls_id]?.failed_count ?? 0 }}</p>
               <button
-                v-if="hasUploadErrors(uploadResultsByClass[classBox.sch_grd_cls_id])"
-              class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-              @click="openUploadErrorsModal(classBox)"
-            >
-              {{ text.viewErrors }}
-            </button>
-          </div>
+                class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                @click="openUploadErrorsModal(classBox)"
+              >
+                {{ text.viewErrors }}
+              </button>
+            </div>
 
           <div class="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -153,15 +146,29 @@
                 <tr>
                   <th class="px-2 py-1.5 text-left text-xs font-semibold text-slate-600">{{ text.indexNo }}</th>
                   <th class="px-2 py-1.5 text-left text-xs font-semibold text-slate-600">{{ text.name }}</th>
+                  <th v-if="isPrincipal" class="w-8 px-1.5 py-1.5 text-right text-xs font-semibold text-slate-600"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
                 <tr v-if="classBox.students.length === 0">
-                  <td colspan="2" class="px-2 py-4 text-center text-xs text-slate-500">{{ text.emptyClass }}</td>
+                  <td :colspan="isPrincipal ? 3 : 2" class="px-2 py-4 text-center text-xs text-slate-500">{{ text.emptyClass }}</td>
                 </tr>
                 <tr v-for="student in classBox.students" :key="`class-student-${classBox.sch_grd_cls_id}-${student.std_id}`">
                   <td class="px-2 py-1.5 text-xs font-medium text-slate-800">{{ student.index_no }}</td>
                   <td class="px-2 py-1.5 text-xs text-slate-700">{{ student.name_with_initials }}</td>
+                  <td v-if="isPrincipal" class="px-1.5 py-1 text-right">
+                    <button
+                      class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                      :title="removingStudentAssignmentKey === `${classBox.sch_grd_cls_id}:${student.std_id}` ? text.removingStudent : text.removeStudent"
+                      :aria-label="removingStudentAssignmentKey === `${classBox.sch_grd_cls_id}:${student.std_id}` ? text.removingStudent : text.removeStudent"
+                      :disabled="removingStudentAssignmentKey === `${classBox.sch_grd_cls_id}:${student.std_id}`"
+                      @click="removeStudentFromClass(classBox, student)"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3">
+                        <path d="M7 2.5h6a1 1 0 0 1 1 1V5h2.25a.75.75 0 0 1 0 1.5h-.56l-.6 8.18A2 2 0 0 1 13.1 16.5H6.9a2 2 0 0 1-1.99-1.82L4.31 6.5h-.56a.75.75 0 0 1 0-1.5H6V3.5a1 1 0 0 1 1-1Zm1 2.5h4V4h-4v1Zm-1.59 1.5.57 7.96a.5.5 0 0 0 .5.46h6.04a.5.5 0 0 0 .5-.46l.57-7.96H6.41Z" />
+                      </svg>
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -249,6 +256,7 @@ const ui = useUiStore()
 const currentUser = getUser()
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
+const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
 const rawPermissions = currentUser?.feature_permissions
 const canAssign = computed(() => {
   if (!rawPermissions || typeof rawPermissions !== 'object') {
@@ -313,6 +321,14 @@ const text = computed(() => ({
   indexNo: ui.language === 'si' ? 'ඇතුළත් අංකය' : ui.language === 'ta' ? 'அனுமதி இலக்கம்' : 'Index No',
   name: ui.language === 'si' ? 'නම' : ui.language === 'ta' ? 'பெயர்' : 'Name',
   emptyClass: ui.language === 'si' ? 'තවම සිසුන් නැත.' : ui.language === 'ta' ? 'இன்னும் மாணவர்கள் இல்லை.' : 'No students yet.',
+  removeStudent: ui.language === 'si' ? 'සිසුවා ඉවත් කරන්න' : ui.language === 'ta' ? 'மாணவரை நீக்கு' : 'Remove Student',
+  removingStudent: ui.language === 'si' ? 'ඉවත් කරමින්...' : ui.language === 'ta' ? 'நீக்கப்படுகிறது...' : 'Removing...',
+  removeStudentConfirm: ui.language === 'si'
+    ? 'මෙම සිසුවා මෙම පන්තියෙන් ඉවත් කිරීමට ඔබට විශ්වාසද?'
+    : ui.language === 'ta'
+      ? 'இந்த மாணவரை இந்த வகுப்பிலிருந்து நீக்க விரும்புகிறீர்களா?'
+      : 'Are you sure you want to remove this student from this class?',
+  removeStudentSuccess: ui.language === 'si' ? 'සිසුවා පන්තියෙන් ඉවත් කරන ලදී.' : ui.language === 'ta' ? 'மாணவர் வகுப்பிலிருந்து நீக்கப்பட்டார்.' : 'Student removed from class successfully.',
   noPermission: ui.language === 'si' ? 'ඔබට මෙම පංති පැවරීම් කළමනාකරණය කිරීමට අවසර නැත.' : ui.language === 'ta' ? 'இந்த வகுப்பு ஒதுக்கீட்டை நிர்வகிக்க உங்களுக்கு அனுமதி இல்லை.' : 'You do not have permission to manage class assignments.',
   selectTargetFirst: ui.language === 'si' ? 'පළමුව නව වර්ෂය සහ ශ්‍රේණිය තෝරන්න.' : ui.language === 'ta' ? 'முதலில் புதிய ஆண்டு மற்றும் தரத்தைத் தேர்ந்தெடுக்கவும்.' : 'Select the target year and grade first.',
   saveSuccess: ui.language === 'si' ? 'පංති ලැයිස්තුව සාර්ථකව යාවත්කාලීන විය.' : ui.language === 'ta' ? 'வகுப்பு பட்டியல் வெற்றிகரமாக புதுப்பிக்கப்பட்டது.' : 'Class list updated successfully.',
@@ -330,6 +346,7 @@ const downloadingClassId = ref<number | null>(null)
 const downloadingTemplate = ref(false)
 const uploadingClassId = ref<number | null>(null)
 const clearingClassId = ref<number | null>(null)
+const removingStudentAssignmentKey = ref('')
 const selectedFilesByClass = ref<Record<number, File | null>>({})
 const uploadResultsByClass = ref<Record<number, UploadSummary>>({})
 const fileInputsByClass = ref<Record<number, HTMLInputElement | null>>({})
@@ -635,6 +652,41 @@ const clearClassList = async (classBox: ClassBox): Promise<void> => {
     pageError.value = extractApiMessage(error)
   } finally {
     clearingClassId.value = null
+  }
+}
+
+const removeStudentFromClass = async (classBox: ClassBox, student: StudentRow): Promise<void> => {
+  if (!isPrincipal.value) {
+    return
+  }
+
+  if (!window.confirm(text.value.removeStudentConfirm)) {
+    return
+  }
+
+  const assignmentKey = `${classBox.sch_grd_cls_id}:${student.std_id}`
+  removingStudentAssignmentKey.value = assignmentKey
+  pageMessage.value = ''
+  pageError.value = ''
+
+  try {
+    const headers = buildSchoolHeaders()
+    const config: { headers?: Record<string, string> } = {}
+    if (headers) config.headers = headers
+
+    await api.post('/students/in-classes/remove-student', {
+      year: selectedYear.value,
+      grade_id: selectedGradeId.value,
+      class_id: classBox.class_id,
+      student_id: student.std_id,
+    }, config)
+
+    pageMessage.value = `${classBox.class}: ${student.index_no} - ${text.value.removeStudentSuccess}`
+    await loadOverview()
+  } catch (error: any) {
+    pageError.value = extractApiMessage(error)
+  } finally {
+    removingStudentAssignmentKey.value = ''
   }
 }
 
