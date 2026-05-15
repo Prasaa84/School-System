@@ -1,10 +1,142 @@
 <template>
   <div class="space-y-5">
     <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ text.studentsTitle }}</h1>
+      <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ isReportView ? text.studentReports : text.studentsTitle }}</h1>
     </header>
 
-    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section v-if="isReportView" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 class="font-display text-xl font-bold">{{ text.studentReports }}</h2>
+          <p class="text-sm text-slate-500">{{ text.studentReportFilterHelp }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" :disabled="loadingReport" @click="resetReportFilters">
+            {{ text.reset }}
+          </button>
+          <button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="loadingReport" @click="loadStudentReport">
+            {{ loadingReport ? text.loadingReport : text.viewReport }}
+          </button>
+        </div>
+      </div>
+
+      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <label v-if="isAdmin" class="text-sm text-slate-700">
+          {{ text.school }}
+          <select :value="reportFilters.school_census_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportSchoolChange">
+            <option :value="0">{{ text.allSchools }}</option>
+            <option v-for="row in schools" :key="`report-school-${row.id}`" :value="row.id">{{ row.label }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.search }}
+          <input v-model="reportFilters.q" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :placeholder="text.searchPlaceholder" @keyup.enter="loadStudentReport" />
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.gender }}
+          <select v-model.number="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option :value="0">{{ text.all }}</option>
+            <option v-for="row in genderOptions" :key="`report-gender-${row.id}`" :value="row.id">{{ row.label }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.ethnicGroup }}
+          <select v-model.number="reportFilters.ethnic_group_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option :value="0">{{ text.all }}</option>
+            <option v-for="row in ethnicGroups" :key="`report-ethnic-${row.id}`" :value="row.id">{{ row.label }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.religion }}
+          <select v-model.number="reportFilters.religion_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option :value="0">{{ text.all }}</option>
+            <option v-for="row in religions" :key="`report-religion-${row.id}`" :value="row.id">{{ row.label }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.academicYear }}
+          <select v-model.number="reportFilters.year" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="isAdmin && reportFilters.school_census_id <= 0">
+            <option :value="0">{{ text.allYears }}</option>
+            <option v-for="year in reportAcademicYears" :key="`report-year-${year}`" :value="year">{{ year }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.grade }}
+          <select v-model.number="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="reportFilters.year <= 0">
+            <option :value="0">{{ text.allGrades }}</option>
+            <option v-for="row in reportGrades" :key="`report-grade-${row.grade_id}`" :value="row.grade_id">{{ row.grade }}</option>
+          </select>
+        </label>
+
+        <label class="text-sm text-slate-700">
+          {{ text.classLabel }}
+          <select v-model.number="reportFilters.class_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="reportFilters.year <= 0 || reportFilters.grade_id <= 0">
+            <option :value="0">{{ text.allClasses }}</option>
+            <option v-for="row in reportClasses" :key="`report-class-${row.class_id}`" :value="row.class_id">{{ row.class }}</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-sm text-slate-600">
+          {{ text.totalMatches }}
+          <span class="ml-2 text-lg font-semibold text-slate-900">{{ reportRows.length }}</span>
+        </p>
+        <button
+          class="whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="downloadingReport"
+          @click="downloadStudentReport"
+        >
+          {{ downloadingReport ? text.downloadingTemplate : text.downloadReport }}
+        </button>
+      </div>
+
+      <div class="mt-4 overflow-auto rounded-xl border border-slate-200">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.admissionNoShort }}</th>
+              <th v-if="isAdmin" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.school }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.nameWithInitials }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gender }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gradeClass }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.year }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.phone }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.dob }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <tr v-if="!loadingReport && reportRows.length === 0">
+              <td :colspan="isAdmin ? 8 : 7" class="px-3 py-6 text-center text-slate-500">{{ text.noReportStudentsFound }}</td>
+            </tr>
+            <tr v-for="student in reportRows" :key="`report-student-${student.std_id}`" class="hover:bg-slate-50">
+              <td class="px-3 py-2 font-medium text-slate-800">{{ student.index_no }}</td>
+              <td v-if="isAdmin" class="px-3 py-2 text-slate-700">
+                <span :title="censusTooltip(student.census_id)">{{ student.school_name || '-' }}</span>
+              </td>
+              <td class="px-3 py-2 text-slate-700">{{ student.name_with_initials }}</td>
+              <td class="px-3 py-2 text-slate-700">{{ studentGenderLabel(student.gender_id) }}</td>
+              <td class="px-3 py-2 text-slate-700">{{ student.grade_class }}</td>
+              <td class="px-3 py-2 text-slate-700">{{ student.current_year || '-' }}</td>
+              <td class="px-3 py-2 text-slate-700">{{ student.phone_no || '-' }}</td>
+              <td class="px-3 py-2 text-slate-700">{{ student.dob || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p v-if="reportErrorMessage" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        {{ reportErrorMessage }}
+      </p>
+    </section>
+
+    <section v-else class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <input
           v-model="search"
@@ -410,6 +542,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import api from '../services/api'
 import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
 import { useUiStore } from '../stores/ui'
@@ -421,8 +554,10 @@ interface Student {
   school_name?: string | null
   name_with_initials: string
   grade_class: string
+  current_year?: number | null
   phone_no: string | null
   dob: string | null
+  gender_id?: number
   can_edit?: boolean
   can_delete?: boolean
 }
@@ -506,6 +641,21 @@ interface StudentOptionsResponse {
   schools: OptionRow[]
 }
 
+interface StudentReportResponse {
+  data: Student[]
+}
+
+interface StudentReportFilters {
+  q: string
+  school_census_id: number
+  gender_id: number
+  ethnic_group_id: number
+  religion_id: number
+  year: number
+  grade_id: number
+  class_id: number
+}
+
 interface CreateStudentPayload {
   index_no: string
   full_name: string
@@ -558,13 +708,20 @@ interface StudentImportResponse {
 }
 
 const ui = useUiStore()
+const route = useRoute()
 const text = computed(() => {
   if (ui.language === 'si') {
     return {
       studentsTitle: 'සිසුන්',
+      studentReports: 'සිසු වාර්තා',
+      studentReportFilterHelp: 'Staff report එකේ වගේ පෙරහන් භාවිතා කර අවශ්‍ය සිසු වාර්තාව ලබාගන්න.',
       searchPlaceholder: 'ඇතුළත් අංකය හෝ නම අනුව සොයන්න',
       allSchools: 'සියලු පාසල්',
+      all: 'සියල්ල',
+      reset: 'යළි සකසන්න',
       search: 'සොයන්න',
+      viewReport: 'වාර්තාව බලන්න',
+      loadingReport: 'පූරණය වෙමින්...',
       downloadTemplate: 'Template බාගන්න',
       downloadingTemplate: 'බාගත කරමින්...',
       importStudents: 'Excel මගින් එක්කරන්න',
@@ -601,10 +758,13 @@ const text = computed(() => {
       selectSchool: 'පාසල තෝරන්න',
       admissionDate: 'ඇතුළත් වූ දිනය',
       academicYear: 'අධ්‍යයන වර්ෂය',
+      allYears: 'සියලු වර්ෂ',
       selectAcademicYear: 'අධ්‍යයන වර්ෂය තෝරන්න',
       selectSchoolFirst: 'පළමුව පාසල තෝරන්න.',
       grade: 'ශ්‍රේණිය',
       classLabel: 'පංතිය',
+      allGrades: 'සියලු ශ්‍රේණි',
+      allClasses: 'සියලු පංති',
       selectGrade: 'ශ්‍රේණිය තෝරන්න',
       selectClass: 'පංතිය තෝරන්න',
       contactAddressOptional: 'සම්බන්ධතා සහ ලිපිනය (විකල්ප)',
@@ -658,7 +818,11 @@ const text = computed(() => {
       failedCount: 'අසාර්ථක පේළි',
       failedRows: 'අසාර්ථක පේළි විස්තර',
       row: 'පේළිය',
+      totalMatches: 'ගැළපෙන සිසුන්',
+      downloadReport: 'වාර්තාව බාගන්න',
+      noReportStudentsFound: 'තෝරාගත් පෙරහන් සඳහා සිසුන් හමු නොවීය.',
       unableToImportStudents: 'සිසුන් import කළ නොහැකි විය. නැවත උත්සාහ කරන්න.',
+      unableToDownloadReport: 'සිසු වාර්තාව බාගත කළ නොහැකි විය.',
       unableToDownloadTemplate: 'Template ගොනුව බාගත කළ නොහැකි විය.',
     }
   }
@@ -666,9 +830,15 @@ const text = computed(() => {
   if (ui.language === 'ta') {
     return {
       studentsTitle: 'மாணவர்கள்',
+      studentReports: 'மாணவர் அறிக்கைகள்',
+      studentReportFilterHelp: 'பணியாளர் அறிக்கையைப் போல தேவையான மாணவர் அறிக்கையை வடிகட்டல்களுடன் பார்க்கவும்.',
       searchPlaceholder: 'அனுமதி இலக்கம் அல்லது பெயரால் தேடவும்',
       allSchools: 'அனைத்து பாடசாலைகள்',
+      all: 'அனைத்தும்',
+      reset: 'மீட்டமை',
       search: 'தேடுக',
+      viewReport: 'அறிக்கையைப் பார்',
+      loadingReport: 'ஏற்றப்படுகிறது...',
       downloadTemplate: 'Template பதிவிறக்கு',
       downloadingTemplate: 'பதிவிறக்கப்படுகிறது...',
       importStudents: 'Excel மூலம் சேர்க்கவும்',
@@ -705,10 +875,13 @@ const text = computed(() => {
       selectSchool: 'பாடசாலையைத் தேர்ந்தெடுக்கவும்',
       admissionDate: 'சேர்க்கை தேதி',
       academicYear: 'கல்வியாண்டு',
+      allYears: 'அனைத்து ஆண்டுகள்',
       selectAcademicYear: 'கல்வியாண்டைத் தேர்ந்தெடுக்கவும்',
       selectSchoolFirst: 'முதலில் பாடசாலையைத் தேர்ந்தெடுக்கவும்.',
       grade: 'தரம்',
       classLabel: 'வகுப்பு',
+      allGrades: 'அனைத்து தரங்கள்',
+      allClasses: 'அனைத்து வகுப்புகள்',
       selectGrade: 'தரத்தைத் தேர்ந்தெடுக்கவும்',
       selectClass: 'வகுப்பைத் தேர்ந்தெடுக்கவும்',
       contactAddressOptional: 'தொடர்பு மற்றும் முகவரி (விருப்பம்)',
@@ -762,16 +935,26 @@ const text = computed(() => {
       failedCount: 'தோல்வியுற்ற வரிகள்',
       failedRows: 'தோல்வியுற்ற வரி விவரங்கள்',
       row: 'வரி',
+      totalMatches: 'பொருந்திய மாணவர்கள்',
+      downloadReport: 'அறிக்கையை பதிவிறக்கு',
+      noReportStudentsFound: 'தேர்ந்தெடுத்த வடிகட்டல்களுக்கு பொருந்தும் மாணவர்கள் இல்லை.',
       unableToImportStudents: 'மாணவர்களை import செய்ய முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+      unableToDownloadReport: 'மாணவர் அறிக்கையை பதிவிறக்க முடியவில்லை.',
       unableToDownloadTemplate: 'Template கோப்பை பதிவிறக்க முடியவில்லை.',
     }
   }
 
   return {
     studentsTitle: 'Students',
+    studentReports: 'Student Reports',
+    studentReportFilterHelp: 'Use the same kind of filters as staff reports to narrow the result set.',
     searchPlaceholder: 'Search by admission number or name',
     allSchools: 'All schools',
+    all: 'All',
+    reset: 'Reset',
     search: 'Search',
+    viewReport: 'View Report',
+    loadingReport: 'Loading...',
     downloadTemplate: 'Download Template',
     downloadingTemplate: 'Downloading...',
     importStudents: 'Import Students',
@@ -808,10 +991,13 @@ const text = computed(() => {
     selectSchool: 'Select school',
     admissionDate: 'Admission Date',
     academicYear: 'Academic Year',
+    allYears: 'All Years',
     selectAcademicYear: 'Select academic year',
     selectSchoolFirst: 'Select school first.',
     grade: 'Grade',
     classLabel: 'Class',
+    allGrades: 'All Grades',
+    allClasses: 'All Classes',
     selectGrade: 'Select grade',
     selectClass: 'Select class',
     contactAddressOptional: 'Contact & Address (Optional)',
@@ -865,7 +1051,11 @@ const text = computed(() => {
     failedCount: 'Failed Rows',
     failedRows: 'Failed Row Details',
     row: 'Row',
+    totalMatches: 'Matching Students',
+    downloadReport: 'Download Report',
+    noReportStudentsFound: 'No students matched the selected filters.',
     unableToImportStudents: 'Unable to import students. Please try again.',
+    unableToDownloadReport: 'Unable to download student report.',
     unableToDownloadTemplate: 'Unable to download template.',
   }
 })
@@ -885,20 +1075,39 @@ const deleteStudentConfirmText = (admissionNo: string): string => {
 
   return `Delete student ${admissionNo}?`
 }
+
+const createDefaultReportFilters = (): StudentReportFilters => ({
+  q: '',
+  school_census_id: initialSchoolContextCensusId ?? 0,
+  gender_id: 0,
+  ethnic_group_id: 0,
+  religion_id: 0,
+  year: 0,
+  grade_id: 0,
+  class_id: 0,
+})
+
 const search = ref('')
 const loading = ref(false)
+const loadingReport = ref(false)
+const downloadingReport = ref(false)
 const creating = ref(false)
 const importing = ref(false)
 const downloadingTemplate = ref(false)
 const showAddDialog = ref(false)
 const showImportDialog = ref(false)
 const errorMessage = ref('')
+const reportErrorMessage = ref('')
 const createErrorMessage = ref('')
 const createSuccessMessage = ref('')
 const importErrorMessage = ref('')
 const students = ref<Student[]>([])
+const reportRows = ref<Student[]>([])
 const grades = ref<GradeRow[]>([])
 const classes = ref<ClassRow[]>([])
+const reportAcademicYears = ref<number[]>([])
+const reportGrades = ref<GradeRow[]>([])
+const reportClasses = ref<ClassRow[]>([])
 const ethnicGroups = ref<OptionRow[]>([])
 const religions = ref<OptionRow[]>([])
 const schools = ref<OptionRow[]>([])
@@ -912,8 +1121,10 @@ const createErrorMessageRef = ref<HTMLElement | null>(null)
 const currentUser = getUser()
 const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
+const reportFilters = ref<StudentReportFilters>(createDefaultReportFilters())
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
+const isReportView = computed(() => route.name === 'students-report')
 const fallbackStudentPermissions = computed<Record<string, boolean>>(() => {
   const roleId = currentUser?.role_id ?? 0
   const canManageByRole = roleId === 1 || roleId === 2 || roleId === 4 || roleName === 'admin' || roleName === 'administrator' || roleName === 'principal' || roleName === 'class teacher' || roleName === 'class_teacher'
@@ -941,6 +1152,10 @@ const sessionStudentPermissions = computed<Record<string, boolean>>(() => {
 const canCreateStudents = computed(() => sessionStudentPermissions.value['student.create'] ?? false)
 const canEditStudents = computed(() => sessionStudentPermissions.value['student.update'] ?? false)
 const canDeleteStudents = computed(() => sessionStudentPermissions.value['student.delete'] ?? false)
+const genderOptions = computed<OptionRow[]>(() => [
+  { id: 1, label: text.value.male },
+  { id: 2, label: text.value.female },
+])
 
 const editStudentId = ref<number | null>(null)
 const isEditMode = computed(() => editStudentId.value !== null)
@@ -970,6 +1185,18 @@ const inputClass = (field: string): string[] => {
     'mt-1 w-full rounded-lg border px-3 py-2',
     fieldErrors.value[field] ? 'border-red-300' : 'border-slate-300',
   ]
+}
+
+const studentGenderLabel = (genderId: number | undefined): string => {
+  if (Number(genderId) === 1) {
+    return text.value.male
+  }
+
+  if (Number(genderId) === 2) {
+    return text.value.female
+  }
+
+  return text.value.notAvailable
 }
 
 const createForm = ref({
@@ -1258,6 +1485,96 @@ const loadStudents = async (page = 1): Promise<void> => {
   }
 }
 
+const reportRequestHeaders = (): Record<string, string> | undefined => {
+  if (!isAdmin.value) {
+    return undefined
+  }
+
+  const selectedCensusId = Number(reportFilters.value.school_census_id)
+  if (selectedCensusId <= 0) {
+    return undefined
+  }
+
+  return {
+    'X-School-Census-Id': String(selectedCensusId),
+  }
+}
+
+const loadStudentReport = async (): Promise<void> => {
+  loadingReport.value = true
+  reportErrorMessage.value = ''
+
+  try {
+    const params: Record<string, string | number> = {}
+    const filters = reportFilters.value
+
+    if (filters.q.trim() !== '') params.q = filters.q.trim()
+    if (filters.school_census_id > 0) params.school_census_id = String(filters.school_census_id)
+    if (filters.gender_id > 0) params.gender_id = filters.gender_id
+    if (filters.ethnic_group_id > 0) params.ethnic_group_id = filters.ethnic_group_id
+    if (filters.religion_id > 0) params.religion_id = filters.religion_id
+    if (filters.year > 0) params.year = filters.year
+    if (filters.grade_id > 0) params.grade_id = filters.grade_id
+    if (filters.class_id > 0) params.class_id = filters.class_id
+
+    const requestConfig: {
+      params: Record<string, string | number>
+      headers?: Record<string, string>
+    } = { params }
+    const headers = reportRequestHeaders()
+    if (headers) {
+      requestConfig.headers = headers
+    }
+
+    const { data } = await api.get<StudentReportResponse>('/students/report', requestConfig)
+    reportRows.value = Array.isArray(data.data) ? data.data : []
+  } catch (error) {
+    reportRows.value = []
+    reportErrorMessage.value = extractApiMessage(error) || text.value.noReportStudentsFound
+  } finally {
+    loadingReport.value = false
+  }
+}
+
+const downloadStudentReport = async (): Promise<void> => {
+  downloadingReport.value = true
+  reportErrorMessage.value = ''
+
+  try {
+    const params: Record<string, string | number> = {}
+    const filters = reportFilters.value
+
+    if (filters.q.trim() !== '') params.q = filters.q.trim()
+    if (filters.school_census_id > 0) params.school_census_id = String(filters.school_census_id)
+    if (filters.gender_id > 0) params.gender_id = filters.gender_id
+    if (filters.ethnic_group_id > 0) params.ethnic_group_id = filters.ethnic_group_id
+    if (filters.religion_id > 0) params.religion_id = filters.religion_id
+    if (filters.year > 0) params.year = filters.year
+    if (filters.grade_id > 0) params.grade_id = filters.grade_id
+    if (filters.class_id > 0) params.class_id = filters.class_id
+
+    const response = await api.get('/students/report/download', {
+      headers: reportRequestHeaders(),
+      params,
+      responseType: 'blob',
+    })
+
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'student-report.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    reportErrorMessage.value = extractApiMessage(error) || text.value.unableToDownloadReport
+  } finally {
+    downloadingReport.value = false
+  }
+}
+
 const loadGrades = async (year?: number): Promise<void> => {
   const parsedYear = Number(year)
   const hasSelectedYear = Number.isFinite(parsedYear) && parsedYear >= 2000 && parsedYear <= 2100
@@ -1300,6 +1617,49 @@ const loadGrades = async (year?: number): Promise<void> => {
     if (academicYears.value.length === 0) {
       academicYears.value = []
     }
+  }
+}
+
+const loadReportGrades = async (year?: number): Promise<void> => {
+  const parsedYear = Number(year)
+  const hasSelectedYear = Number.isFinite(parsedYear) && parsedYear >= 2000 && parsedYear <= 2100
+
+  if (isAdmin.value && Number(reportFilters.value.school_census_id) <= 0) {
+    reportAcademicYears.value = []
+    reportGrades.value = []
+    return
+  }
+
+  try {
+    const headers = reportRequestHeaders()
+    const requestConfig: { headers?: Record<string, string>; params?: { year: number } } = {}
+    if (headers) {
+      requestConfig.headers = headers
+    }
+    if (hasSelectedYear) {
+      requestConfig.params = { year: parsedYear }
+    }
+
+    const { data } = await api.get<GradeResponse>('/grades', Object.keys(requestConfig).length > 0 ? requestConfig : undefined)
+
+    const normalizedYears = Array.isArray(data.years)
+      ? data.years
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value) && value >= 2000 && value <= 2100)
+      : []
+
+    if (normalizedYears.length > 0) {
+      reportAcademicYears.value = normalizedYears
+    } else if (typeof data.year === 'number' && Number.isFinite(data.year)) {
+      reportAcademicYears.value = [Number(data.year)]
+    } else {
+      reportAcademicYears.value = []
+    }
+
+    reportGrades.value = hasSelectedYear && Array.isArray(data.data) ? data.data : []
+  } catch {
+    reportAcademicYears.value = []
+    reportGrades.value = []
   }
 }
 const loadStudentOptions = async (): Promise<void> => {
@@ -1360,6 +1720,63 @@ const loadClasses = async (gradeId: number, year = Number(createForm.value.year)
     createForm.value.class_id = 0
   }
 }
+
+const loadReportClasses = async (gradeId: number, year = Number(reportFilters.value.year)): Promise<void> => {
+  const parsedGradeId = Number(gradeId)
+  const parsedYear = Number(year)
+
+  if (isAdmin.value && Number(reportFilters.value.school_census_id) <= 0) {
+    reportClasses.value = []
+    reportFilters.value.class_id = 0
+    return
+  }
+
+  if (!Number.isFinite(parsedGradeId) || parsedGradeId <= 0 || !Number.isFinite(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
+    reportClasses.value = []
+    reportFilters.value.class_id = 0
+    return
+  }
+
+  try {
+    const headers = reportRequestHeaders()
+    const requestConfig: { headers?: Record<string, string>; params: { year: number } } = {
+      params: { year: parsedYear },
+    }
+
+    if (headers) {
+      requestConfig.headers = headers
+    }
+
+    const { data } = await api.get<ClassResponse>(`/classes/by-grade/${parsedGradeId}`, requestConfig)
+    reportClasses.value = Array.isArray(data.data) ? data.data : []
+
+    if (!reportClasses.value.some((row) => row.class_id === reportFilters.value.class_id)) {
+      reportFilters.value.class_id = 0
+    }
+  } catch {
+    reportClasses.value = []
+    reportFilters.value.class_id = 0
+  }
+}
+
+const resetReportFilters = async (): Promise<void> => {
+  reportFilters.value = createDefaultReportFilters()
+  reportClasses.value = []
+  await loadReportGrades()
+  await loadStudentReport()
+}
+
+const onReportSchoolChange = async (event: Event): Promise<void> => {
+  const value = Number((event.target as HTMLSelectElement).value)
+  reportFilters.value.school_census_id = Number.isFinite(value) ? value : 0
+  reportFilters.value.year = 0
+  reportFilters.value.grade_id = 0
+  reportFilters.value.class_id = 0
+  reportAcademicYears.value = []
+  reportGrades.value = []
+  reportClasses.value = []
+  await loadReportGrades()
+}
 watch(
   () => createForm.value.year,
   async (year) => {
@@ -1378,9 +1795,32 @@ watch(
 )
 
 watch(
+  () => reportFilters.value.year,
+  async (year) => {
+    reportFilters.value.grade_id = 0
+    reportFilters.value.class_id = 0
+    reportClasses.value = []
+
+    const parsedYear = Number(year)
+    if (Number.isFinite(parsedYear) && parsedYear >= 2000 && parsedYear <= 2100) {
+      await loadReportGrades(parsedYear)
+    } else {
+      await loadReportGrades()
+    }
+  },
+)
+
+watch(
   () => createForm.value.grade_id,
   async (gradeId) => {
     await loadClasses(Number(gradeId), Number(createForm.value.year))
+  },
+)
+
+watch(
+  () => reportFilters.value.grade_id,
+  async (gradeId) => {
+    await loadReportClasses(Number(gradeId), Number(reportFilters.value.year))
   },
 )
 
@@ -1416,6 +1856,24 @@ watch(
   async () => {
     await loadStudentOptions()
 
+    if (isReportView.value) {
+      const selectedReportYear = Number(reportFilters.value.year)
+      const selectedReportGradeId = Number(reportFilters.value.grade_id)
+
+      if (Number.isFinite(selectedReportYear) && selectedReportYear >= 2000 && selectedReportYear <= 2100) {
+        await loadReportGrades(selectedReportYear)
+      } else {
+        await loadReportGrades()
+      }
+
+      if (selectedReportGradeId > 0) {
+        await loadReportClasses(selectedReportGradeId, selectedReportYear)
+      }
+
+      await loadStudentReport()
+      return
+    }
+
     const selectedYear = Number(createForm.value.year)
     const selectedGradeId = Number(createForm.value.grade_id)
 
@@ -1426,6 +1884,24 @@ watch(
     if (selectedGradeId > 0) {
       await loadClasses(selectedGradeId, selectedYear)
     }
+  },
+)
+
+watch(
+  () => route.name,
+  async () => {
+    errorMessage.value = ''
+    reportErrorMessage.value = ''
+    createSuccessMessage.value = ''
+
+    if (isReportView.value) {
+      reportRows.value = []
+      await loadReportGrades(Number(reportFilters.value.year) > 0 ? Number(reportFilters.value.year) : undefined)
+      await loadStudentReport()
+      return
+    }
+
+    await loadStudents(1)
   },
 )
 
@@ -1652,7 +2128,15 @@ const downloadTemplate = async (): Promise<void> => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadGrades(), loadStudentOptions()])
+  await loadStudentOptions()
+
+  if (isReportView.value) {
+    await loadReportGrades()
+    await loadStudentReport()
+    return
+  }
+
+  await loadGrades()
   await loadStudents(1)
 })
 </script>

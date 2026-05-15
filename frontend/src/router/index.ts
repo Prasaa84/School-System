@@ -44,6 +44,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/students/report',
+      name: 'students-report',
+      component: StudentsView,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/students/in-classes',
       name: 'students-in-classes',
       component: StudentsInClassesView,

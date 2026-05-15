@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -212,6 +213,93 @@ class StudentController extends Controller
                 'total' => $students->total(),
                 'last_page' => $students->lastPage(),
             ],
+        ]);
+    }
+
+    public function report(Request $request): JsonResponse
+    {
+        $data = $this->buildStudentReportRows($this->validateStudentReportFilters($request));
+
+        return response()->json([
+            'data' => $data,
+        ]);
+    }
+
+    public function downloadReport(Request $request): StreamedResponse
+    {
+        $rows = $this->buildStudentReportRows($this->validateStudentReportFilters($request));
+        $includeSchool = $this->isAdministrator($this->authUser());
+        $filename = 'student-report-' . now()->format('Ymd_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($rows, $includeSchool): void {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Student Report');
+
+            $headers = [
+                'No.',
+                'Admission No',
+                'Full Name',
+                'Name With Initials',
+                'Class',
+                'Address 1',
+                'Address 2',
+                'Phone No',
+                'WhatsApp No',
+                'Home Phone',
+                'DOB',
+                'Gender',
+                'Ethnic Group',
+                'Religion',
+                'Admission Date',
+            ];
+
+            if ($includeSchool) {
+                $headers[] = 'School';
+            }
+
+            foreach ($headers as $index => $header) {
+                $column = chr(65 + $index);
+                $sheet->setCellValue("{$column}1", $header);
+            }
+
+            foreach (array_values($rows) as $index => $row) {
+                $rowNumber = $index + 2;
+                $columnIndex = 0;
+                $write = function (string $value) use ($sheet, $rowNumber, &$columnIndex): void {
+                    $sheet->setCellValue(chr(65 + $columnIndex) . $rowNumber, $value);
+                    $columnIndex++;
+                };
+
+                $write((string) ($index + 1));
+                $write((string) ($row['index_no'] ?? ''));
+                $write((string) ($row['full_name'] ?? ''));
+                $write((string) ($row['name_with_initials'] ?? ''));
+                $write($this->studentReportExportGradeClass((string) ($row['grade_class'] ?? '')));
+                $write((string) ($row['address1'] ?? ''));
+                $write((string) ($row['address2'] ?? ''));
+                $write((string) ($row['phone_no'] ?? ''));
+                $write((string) ($row['whatsapp_no'] ?? ''));
+                $write((string) ($row['phone_home'] ?? ''));
+                $write((string) ($row['dob'] ?? ''));
+                $write($this->studentGenderLabel((int) ($row['gender_id'] ?? 0)));
+                $write((string) ($row['ethnic_group'] ?? ''));
+                $write((string) ($row['religion'] ?? ''));
+                $write((string) ($row['d_o_admission'] ?? ''));
+                if ($includeSchool) {
+                    $write((string) ($row['school_name'] ?? ''));
+                }
+            }
+
+            foreach (range('A', chr(64 + count($headers))) as $column) {
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+            }
+
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 
@@ -2015,33 +2103,292 @@ class StudentController extends Controller
         }
     }
 
-    private function loadStudentForWrite(int $studentId, ?User $user): ?object
+    private function loadStudentForWrite(int $studentId, ?User $user): ?Student
     {
         $query = DB::table('student_tbl as st')
-            ->select([
-                'st.std_id',
-                'st.index_no',
-                DB::raw('st.fullname as full_name'),
-                'st.name_with_initials',
-                'st.address1',
-                'st.address2',
-                'st.phone_no',
-                'st.whatsapp_no',
-                'st.phone_home',
-                'st.email',
-                'st.dob',
-                'st.d_o_admission',
-                'st.gender_id',
-                'st.ethnic_group_id',
-                'st.religion_id',
-                'st.census_id',
-            ])
+            ->select('st.std_id')
             ->where('st.std_id', $studentId)
             ->where('st.is_deleted', 0);
 
         $this->applySchoolScope($query, $user, 'st', 'census_id');
 
-        return $query->first();
+        $resolvedStudentId = $query->value('st.std_id');
+        if (!is_numeric($resolvedStudentId)) {
+            return null;
+        }
+
+        return Student::query()
+            ->where('std_id', (int) $resolvedStudentId)
+            ->where('is_deleted', 0)
+            ->first();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateStudentReportFilters(Request $request): array
+    {
+        return Validator::make($request->all(), [
+            'q' => ['nullable', 'string', 'max:255'],
+            'school_census_id' => ['nullable', 'string', 'regex:/^[0-9]{4,7}$/'],
+            'gender_id' => ['nullable', 'integer', 'in:1,2'],
+            'ethnic_group_id' => ['nullable', 'integer'],
+            'religion_id' => ['nullable', 'integer'],
+            'year' => ['nullable', 'integer', 'between:2000,2100'],
+            'grade_id' => ['nullable', 'integer', 'exists:grade_tbl,grade_id'],
+            'class_id' => ['nullable', 'integer', 'exists:class_tbl,class_id'],
+        ])->validate();
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildStudentReportRows(array $validated): array
+    {
+        $search = isset($validated['q']) ? trim((string) $validated['q']) : '';
+        $schoolCensusId = isset($validated['school_census_id']) ? trim((string) $validated['school_census_id']) : '';
+        $genderId = isset($validated['gender_id']) ? (int) $validated['gender_id'] : 0;
+        $ethnicGroupId = isset($validated['ethnic_group_id']) ? (int) $validated['ethnic_group_id'] : 0;
+        $religionId = isset($validated['religion_id']) ? (int) $validated['religion_id'] : 0;
+        $year = isset($validated['year']) ? (int) $validated['year'] : 0;
+        $gradeId = isset($validated['grade_id']) ? (int) $validated['grade_id'] : 0;
+        $classId = isset($validated['class_id']) ? (int) $validated['class_id'] : 0;
+        $hasSchoolTable = Schema::hasTable('school_details_tbl');
+
+        $studentsQuery = DB::table('student_tbl as st')
+            ->select([
+                'st.std_id',
+                'st.index_no',
+                'st.name_with_initials',
+                DB::raw('st.fullname as full_name'),
+                'st.address1',
+                'st.address2',
+                'st.phone_no',
+                'st.whatsapp_no',
+                'st.phone_home',
+                'st.dob',
+                'st.d_o_admission',
+                'st.census_id',
+                'st.gender_id',
+                'st.ethnic_group_id',
+                'st.religion_id',
+            ])
+            ->where('st.is_deleted', 0)
+            ->when($search !== '', function ($builder) use ($search, $hasSchoolTable): void {
+                $builder->where(function ($inner) use ($search, $hasSchoolTable): void {
+                    $inner
+                        ->where('st.index_no', 'like', "%{$search}%")
+                        ->orWhere('st.name_with_initials', 'like', "%{$search}%")
+                        ->orWhere('st.fullname', 'like', "%{$search}%");
+
+                    if ($hasSchoolTable) {
+                        $inner
+                            ->orWhere('st.census_id', 'like', "%{$search}%")
+                            ->orWhere('sc.sch_name', 'like', "%{$search}%");
+                    }
+                });
+            })
+            ->when($schoolCensusId !== '', function ($builder) use ($schoolCensusId): void {
+                $builder->where('st.census_id', $schoolCensusId);
+            })
+            ->when($genderId > 0, fn ($builder) => $builder->where('st.gender_id', $genderId))
+            ->when($ethnicGroupId > 0, fn ($builder) => $builder->where('st.ethnic_group_id', $ethnicGroupId))
+            ->when($religionId > 0, fn ($builder) => $builder->where('st.religion_id', $religionId))
+            ->orderBy('st.census_id')
+            ->orderBy('st.index_no');
+
+        if ($hasSchoolTable) {
+            $schoolHasIsDeleted = Schema::hasColumn('school_details_tbl', 'is_deleted');
+            $studentsQuery
+                ->leftJoin('school_details_tbl as sc', function ($join) use ($schoolHasIsDeleted): void {
+                    $join->on('st.census_id', '=', 'sc.census_id');
+                    if ($schoolHasIsDeleted) {
+                        $join->where('sc.is_deleted', 0);
+                    }
+                })
+                ->addSelect(DB::raw('sc.sch_name as school_name'));
+        }
+
+        if (Schema::hasTable('ethnic_group_tbl')) {
+            $ethnicLabelColumn = $this->resolveLookupLabelColumn('ethnic_group_tbl', [
+                'ethnic_group_en',
+                'ethnic_group_si',
+                'ethnic_group_ta',
+            ]);
+
+            $studentsQuery->leftJoin('ethnic_group_tbl as eg', 'st.ethnic_group_id', '=', 'eg.ethnic_group_id');
+            if ($ethnicLabelColumn !== null) {
+                $studentsQuery->addSelect(DB::raw("eg.{$ethnicLabelColumn} as ethnic_group"));
+            }
+        }
+
+        if (Schema::hasTable('religion_tbl')) {
+            $religionLabelColumn = $this->resolveLookupLabelColumn('religion_tbl', [
+                'religion_en',
+                'religion_si',
+                'religion_ta',
+            ]);
+
+            $studentsQuery->leftJoin('religion_tbl as rt', 'st.religion_id', '=', 'rt.religion_id');
+            if ($religionLabelColumn !== null) {
+                $studentsQuery->addSelect(DB::raw("rt.{$religionLabelColumn} as religion"));
+            }
+        }
+
+        $this->applySchoolScope($studentsQuery, $this->authUser(), 'st', 'census_id');
+
+        $students = $studentsQuery->get();
+        $studentIds = $students->pluck('std_id')
+            ->filter(fn ($value): bool => is_numeric($value))
+            ->map(fn ($value): int => (int) $value)
+            ->values()
+            ->all();
+
+        $currentGradeClasses = collect();
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+            'grade_en',
+            'grade_si',
+            'grade_ta',
+        ]);
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+            'class_en',
+            'class_si',
+            'class_ta',
+            'class',
+        ]);
+
+        if (!empty($studentIds) && Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
+            $gradeClassQuery = DB::table('student_grade_class_tbl as sgc')
+                ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+                ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+                ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+                ->whereIn('sgc.std_id', $studentIds)
+                ->when(Schema::hasColumn('student_grade_class_tbl', 'is_deleted'), function ($query): void {
+                    $query->where('sgc.is_deleted', 0);
+                })
+                ->when(Schema::hasColumn('school_grade_class_tbl', 'is_deleted'), function ($query): void {
+                    $query->where('sgct.is_deleted', 0);
+                })
+                ->select([
+                    'sgc.std_id',
+                    'sgc.st_gr_cl_id',
+                    'sgct.year',
+                    'sgct.grade_id',
+                    'sgct.class_id',
+                ])
+                ->orderByDesc('sgct.year')
+                ->orderByDesc('sgc.st_gr_cl_id');
+
+            if ($gradeLabelColumn !== null) {
+                $gradeClassQuery->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));
+            }
+
+            if ($classLabelColumn !== null) {
+                $gradeClassQuery->addSelect(DB::raw("ct.{$classLabelColumn} as class"));
+            }
+
+            $currentGradeClasses = $gradeClassQuery->get()
+                ->unique(fn ($row): int => (int) ($row->std_id ?? 0))
+                ->keyBy(fn ($row): int => (int) ($row->std_id ?? 0));
+        }
+
+        return $students
+            ->map(function ($student) use ($currentGradeClasses): array {
+                $gradeClass = $currentGradeClasses->get((int) ($student->std_id ?? 0));
+                $grade = trim((string) ($gradeClass->grade ?? ''));
+                $className = trim((string) ($gradeClass->class ?? ''));
+                $gradeClassLabel = trim("{$grade} {$className}") !== '' ? trim("{$grade} {$className}") : 'N/A';
+                $currentYear = isset($gradeClass->year) ? (int) $gradeClass->year : null;
+
+                return [
+                    'std_id' => (int) ($student->std_id ?? 0),
+                    'index_no' => (string) ($student->index_no ?? ''),
+                    'name_with_initials' => (string) ($student->name_with_initials ?? ''),
+                    'full_name' => (string) ($student->full_name ?? ''),
+                    'address1' => (string) ($student->address1 ?? ''),
+                    'address2' => (string) ($student->address2 ?? ''),
+                    'census_id' => isset($student->census_id) ? (string) $student->census_id : null,
+                    'school_name' => $student->school_name ?? null,
+                    'phone_no' => $student->phone_no,
+                    'whatsapp_no' => $student->whatsapp_no,
+                    'phone_home' => $student->phone_home,
+                    'dob' => $student->dob,
+                    'd_o_admission' => $student->d_o_admission,
+                    'gender_id' => isset($student->gender_id) ? (int) $student->gender_id : 0,
+                    'ethnic_group' => (string) ($student->ethnic_group ?? ''),
+                    'religion' => (string) ($student->religion ?? ''),
+                    'grade_class' => $gradeClassLabel,
+                    'class_label' => $className,
+                    'current_year' => $currentYear,
+                    'grade_id' => isset($gradeClass->grade_id) ? (int) $gradeClass->grade_id : 0,
+                    'class_id' => isset($gradeClass->class_id) ? (int) $gradeClass->class_id : 0,
+                ];
+            })
+            ->filter(function (array $student) use ($year, $gradeId, $classId): bool {
+                if ($year > 0 && (int) ($student['current_year'] ?? 0) !== $year) {
+                    return false;
+                }
+
+                if ($gradeId > 0 && (int) ($student['grade_id'] ?? 0) !== $gradeId) {
+                    return false;
+                }
+
+                if ($classId > 0 && (int) ($student['class_id'] ?? 0) !== $classId) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->sort(function (array $left, array $right): int {
+                $schoolCompare = strcmp((string) ($left['census_id'] ?? ''), (string) ($right['census_id'] ?? ''));
+                if ($schoolCompare !== 0) {
+                    return $schoolCompare;
+                }
+
+                $gradeCompare = ((int) ($left['grade_id'] ?? 0)) <=> ((int) ($right['grade_id'] ?? 0));
+                if ($gradeCompare !== 0) {
+                    return $gradeCompare;
+                }
+
+                $classCompare = strnatcasecmp(
+                    (string) ($left['class_label'] ?? ''),
+                    (string) ($right['class_label'] ?? ''),
+                );
+                if ($classCompare !== 0) {
+                    return $classCompare;
+                }
+
+                $leftAdmission = trim((string) ($left['index_no'] ?? ''));
+                $rightAdmission = trim((string) ($right['index_no'] ?? ''));
+
+                if (ctype_digit($leftAdmission) && ctype_digit($rightAdmission)) {
+                    return ((int) $leftAdmission) <=> ((int) $rightAdmission);
+                }
+
+                return strnatcasecmp($leftAdmission, $rightAdmission);
+            })
+            ->map(function (array $student): array {
+                unset($student['grade_id'], $student['class_id'], $student['class_label']);
+                return $student;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function studentGenderLabel(int $genderId): string
+    {
+        return match ($genderId) {
+            1 => 'Male',
+            2 => 'Female',
+            default => '',
+        };
+    }
+
+    private function studentReportExportGradeClass(string $gradeClass): string
+    {
+        $value = preg_replace('/^Grade\s+/i', '', trim($gradeClass)) ?? trim($gradeClass);
+        return preg_replace('/\s+/', '', $value) ?? $value;
     }
 
     private function resolveStudentWriteCensusId(User $user): ?string

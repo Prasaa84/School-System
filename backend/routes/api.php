@@ -60,6 +60,8 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/staff/{staff}', [StaffController::class, 'update']);
 
         Route::get('/students', [StudentController::class, 'index']);
+        Route::get('/students/report', [StudentController::class, 'report']);
+        Route::get('/students/report/download', [StudentController::class, 'downloadReport']);
         Route::get('/students/options', [StudentController::class, 'options']);
         Route::get('/students/in-classes/roster', [StudentController::class, 'studentsInClassesRoster']);
         Route::post('/students/in-classes/save', [StudentController::class, 'saveStudentsInClasses']);
