@@ -567,6 +567,7 @@
             <label class="text-sm text-slate-700 md:col-span-2">
               {{ text.selectPhoto }}
               <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" type="file" accept=".jpg,.jpeg,.png,.webp" @change="onStaffPhotoChange" />
+              <p class="mt-1 text-xs text-slate-500">{{ text.photoHelp }}</p>
             </label>
 
             <div class="text-sm text-slate-700">
@@ -1048,6 +1049,7 @@ const text = useLocalizedText({
     photo: 'Profile Photo',
     selectPhoto: 'Choose photo',
     photoPreview: 'Preview',
+    photoHelp: 'Accepted formats: JPG, JPEG, PNG, WEBP. Maximum file size: 2 MB. A clear portrait photo works best.',
   },
   si: {
     moduleFallbackTitle: 'මොඩියුලය',
@@ -1182,6 +1184,7 @@ const text = useLocalizedText({
     photo: 'පැතිකඩ ඡායාරූපය',
     selectPhoto: 'ඡායාරූපය තෝරන්න',
     photoPreview: 'පෙරදසුන',
+    photoHelp: 'JPG, JPEG, PNG, WEBP ගොනු පමණක්. උපරිම ගොනු ප්‍රමාණය 2 MB. පැහැදිලි portrait ඡායාරූපයක් වඩා හොඳයි.',
   },
   ta: {
     moduleFallbackTitle: 'தொகுதி',
@@ -1316,6 +1319,7 @@ const text = useLocalizedText({
     photo: 'சுயவிவர புகைப்படம்',
     selectPhoto: 'புகைப்படத்தைத் தேர்ந்தெடுக்கவும்',
     photoPreview: 'முன்னோட்டம்',
+    photoHelp: 'JPG, JPEG, PNG, WEBP கோப்புகள் மட்டும். அதிகபட்ச கோப்பு அளவு 2 MB. தெளிவான portrait புகைப்படம் சிறந்தது.',
   },
 })
 

@@ -1251,6 +1251,7 @@ class StudentController extends Controller
 
         try {
             $saved = $this->studentService->createStudent($validated, $censusId);
+            $this->storeStudentPhoto($request->file('profile_photo'), (int) $saved['std_id']);
 
             return response()->json([
                 'message' => __('messages.students.create_success'),
@@ -1521,7 +1522,7 @@ class StudentController extends Controller
                 'std_id' => (int) $student->std_id,
                 'census_id' => $censusId,
                 'index_no' => (string) ($student->index_no ?? ''),
-                'full_name' => (string) ($student->full_name ?? ''),
+                'full_name' => (string) ($student->fullname ?? $student->full_name ?? ''),
                 'name_with_initials' => (string) ($student->name_with_initials ?? ''),
                 'address1' => (string) ($student->address1 ?? ''),
                 'address2' => (string) ($student->address2 ?? ''),
@@ -1546,6 +1547,7 @@ class StudentController extends Controller
                 'guardian_name' => (string) ($guardian->guardian_name ?? ''),
                 'guardian_job' => (string) ($guardian->guardian_job ?? ''),
                 'guardian_mobile' => (string) ($guardian->guardian_mobile ?? ''),
+                'photo_url' => $this->resolveStudentPhotoUrl((int) $student->std_id),
             ],
         ]);
     }
@@ -1584,6 +1586,7 @@ class StudentController extends Controller
 
         try {
             $saved = $this->studentService->updateStudent($student, $validated, $censusId);
+            $this->storeStudentPhoto($request->file('profile_photo'), $studentId);
 
             return response()->json([
                 'message' => __('messages.students.update_success'),
@@ -2383,6 +2386,48 @@ class StudentController extends Controller
             2 => 'Female',
             default => '',
         };
+    }
+
+    private function storeStudentPhoto(mixed $photo, int $studentId): void
+    {
+        if ($studentId <= 0 || !$photo instanceof \Illuminate\Http\UploadedFile) {
+            return;
+        }
+
+        $targetDir = public_path('uploads/students');
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+
+        $extension = strtolower((string) $photo->getClientOriginalExtension());
+        if ($extension === '') {
+            $extension = 'jpg';
+        }
+
+        foreach (glob($targetDir . DIRECTORY_SEPARATOR . $studentId . '.*') ?: [] as $existingFile) {
+            if (is_file($existingFile)) {
+                @unlink($existingFile);
+            }
+        }
+
+        $photo->move($targetDir, $studentId . '.' . $extension);
+    }
+
+    private function resolveStudentPhotoUrl(int $studentId): string
+    {
+        if ($studentId <= 0) {
+            return '';
+        }
+
+        $baseDir = public_path('uploads/students');
+        foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
+            $path = $baseDir . DIRECTORY_SEPARATOR . $studentId . '.' . $extension;
+            if (is_file($path)) {
+                return asset('uploads/students/' . $studentId . '.' . $extension);
+            }
+        }
+
+        return '';
     }
 
     private function studentReportExportGradeClass(string $gradeClass): string

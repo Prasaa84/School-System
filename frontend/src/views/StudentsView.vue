@@ -418,6 +418,26 @@
           </fieldset>
 
           <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.profilePhoto }}</legend>
+            <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px] md:items-start">
+              <label class="text-sm text-slate-700">
+                {{ text.selectPhoto }}
+                <input type="file" accept=".jpg,.jpeg,.png,.webp" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" @change="onStudentPhotoChange" />
+                <p class="mt-1 text-xs text-slate-500">{{ text.photoHelp }}</p>
+                <p v-if="fieldErrors.profile_photo" class="mt-1 text-xs text-red-600">{{ fieldErrors.profile_photo }}</p>
+              </label>
+
+              <div class="text-sm text-slate-700">
+                <p>{{ text.photoPreview }}</p>
+                <img v-if="studentPhotoPreview" :src="studentPhotoPreview" alt="Student photo preview" class="mt-2 h-28 w-24 rounded-lg border border-slate-200 object-cover" />
+                <div v-else class="mt-2 flex h-28 w-24 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-xs text-slate-400">
+                  {{ text.photoPreview }}
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
             <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.parentsGuardianOptional }}</legend>
             <div class="grid gap-3 md:grid-cols-3">
               <label class="text-sm text-slate-700">
@@ -603,6 +623,7 @@ interface StudentDetail {
   guardian_name: string
   guardian_job: string
   guardian_mobile: string
+  photo_url?: string
 }
 
 interface StudentDetailResponse {
@@ -775,6 +796,10 @@ const text = computed(() => {
       addressLine2: 'ලිපිනය 2',
       email: 'ඊමේල්',
       demographicsOptional: 'ජනගහන තොරතුරු (විකල්ප)',
+      profilePhoto: 'පැතිකඩ ඡායාරූපය',
+      selectPhoto: 'ඡායාරූපය තෝරන්න',
+      photoPreview: 'පෙරදසුන',
+      photoHelp: 'JPG, JPEG, PNG, WEBP ගොනු පමණක්. උපරිම ගොනු ප්‍රමාණය 2 MB. පැහැදිලි portrait ඡායාරූපයක් වඩා හොඳයි.',
       ethnicGroup: 'ජාතික කණ්ඩායම',
       selectEthnicGroup: 'ජාතික කණ්ඩායම තෝරන්න',
       religion: 'ආගම',
@@ -892,6 +917,10 @@ const text = computed(() => {
       addressLine2: 'முகவரி 2',
       email: 'மின்னஞ்சல்',
       demographicsOptional: 'மக்கள்தொகை விவரங்கள் (விருப்பம்)',
+      profilePhoto: 'சுயவிவர புகைப்படம்',
+      selectPhoto: 'புகைப்படத்தை தேர்ந்தெடுக்கவும்',
+      photoPreview: 'முன்னோட்டம்',
+      photoHelp: 'JPG, JPEG, PNG, WEBP கோப்புகள் மட்டும். அதிகபட்ச கோப்பு அளவு 2 MB. தெளிவான portrait புகைப்படம் சிறந்தது.',
       ethnicGroup: 'இனக்குழு',
       selectEthnicGroup: 'இனக்குழுவைத் தேர்ந்தெடுக்கவும்',
       religion: 'மதம்',
@@ -1008,6 +1037,10 @@ const text = computed(() => {
     addressLine2: 'Address Line 2',
     email: 'Email',
     demographicsOptional: 'Demographics (Optional)',
+    profilePhoto: 'Profile Photo',
+    selectPhoto: 'Choose Photo',
+    photoPreview: 'Preview',
+    photoHelp: 'Accepted formats: JPG, JPEG, PNG, WEBP. Maximum file size: 2 MB. A clear portrait photo works best.',
     ethnicGroup: 'Ethnic Group',
     selectEthnicGroup: 'Select ethnic group',
     religion: 'Religion',
@@ -1118,6 +1151,8 @@ const importFile = ref<File | null>(null)
 const importFileName = ref('')
 const importResult = ref<ImportResult | null>(null)
 const createErrorMessageRef = ref<HTMLElement | null>(null)
+const studentPhotoFile = ref<File | null>(null)
+const studentPhotoPreview = ref('')
 const currentUser = getUser()
 const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
@@ -1266,7 +1301,16 @@ const resetCreateForm = (): void => {
   createForm.value.guardian_name = ''
   createForm.value.guardian_job = ''
   createForm.value.guardian_mobile = ''
+  studentPhotoFile.value = null
+  studentPhotoPreview.value = ''
   classes.value = []
+}
+
+const onStudentPhotoChange = (event: Event): void => {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  studentPhotoFile.value = file
+  studentPhotoPreview.value = file ? URL.createObjectURL(file) : ''
 }
 
 const applyStudentDetailToForm = async (detail: StudentDetail): Promise<void> => {
@@ -1297,6 +1341,8 @@ const applyStudentDetailToForm = async (detail: StudentDetail): Promise<void> =>
   createForm.value.guardian_name = detail.guardian_name ?? ''
   createForm.value.guardian_job = detail.guardian_job ?? ''
   createForm.value.guardian_mobile = detail.guardian_mobile ?? ''
+  studentPhotoFile.value = null
+  studentPhotoPreview.value = detail.photo_url ?? ''
 
   if (createForm.value.year > 0) {
     await loadGrades(createForm.value.year)
@@ -2010,9 +2056,26 @@ const submitAddStudent = async (): Promise<void> => {
   if (createForm.value.guardian_mobile.trim() !== '') payload.guardian_mobile = createForm.value.guardian_mobile.trim()
 
   try {
+    const requestBody = studentPhotoFile.value
+      ? (() => {
+          const formData = new FormData()
+          Object.entries(payload).forEach(([key, value]) => {
+            formData.append(key, String(value))
+          })
+          formData.append('profile_photo', studentPhotoFile.value as File)
+          return formData
+        })()
+      : payload
+
+    const requestConfig = studentPhotoFile.value ? {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    } : undefined
+
     const { data } = isEditMode.value && editStudentId.value !== null
-      ? await api.put(`/students/${editStudentId.value}`, payload)
-      : await api.post('/students', payload)
+      ? await api.put(`/students/${editStudentId.value}`, requestBody, requestConfig)
+      : await api.post('/students', requestBody, requestConfig)
 
     createSuccessMessage.value = typeof data?.message === 'string' ? data.message : ''
     if (isAdmin.value && !isEditMode.value && Number(createForm.value.census_id) > 0) {

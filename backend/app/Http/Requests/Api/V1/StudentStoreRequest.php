@@ -37,6 +37,7 @@ class StudentStoreRequest extends FormRequest
             'whatsapp_no' => ['nullable', 'string', 'max:12'],
             'phone_home' => ['nullable', 'string', 'max:12'],
             'email' => ['nullable', 'string', 'email', 'max:255'],
+            'profile_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'dob' => ['nullable', 'date'],
             'd_o_admission' => ['nullable', 'date'],
             'gender_id' => ['required', 'integer', 'in:1,2'],
