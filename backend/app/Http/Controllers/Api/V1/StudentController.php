@@ -26,6 +26,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
@@ -1479,6 +1480,143 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
+        return response()->json([
+            'data' => $this->buildStudentDetailPayload($student, $censusId),
+        ]);
+    }
+
+    public function downloadProfileExport(int $studentId): JsonResponse|StreamedResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => __('messages.auth.unauthorized')], 401);
+        }
+
+        $student = $this->loadStudentForWrite($studentId, $user);
+        if ($student === null) {
+            return response()->json(['message' => __('messages.students.not_found')], 404);
+        }
+
+        $censusId = $this->normalizeCensusId($student->census_id ?? null);
+        if ($censusId === null) {
+            return response()->json(['message' => __('messages.students.census_required')], 422);
+        }
+
+        if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_UPDATE)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        $detail = $this->buildStudentDetailPayload($student, $censusId);
+        $includeSchool = $this->isAdministrator($user);
+        $fileName = 'student-profile-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($detail['index_no'] ?? $studentId)) . '.xlsx';
+
+        return response()->streamDownload(function () use ($detail, $includeSchool): void {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Student Profile');
+
+            foreach (['A' => 18, 'B' => 26, 'C' => 18, 'D' => 26, 'E' => 18, 'F' => 24] as $column => $width) {
+                $sheet->getColumnDimension($column)->setWidth($width);
+            }
+
+            $sheet->mergeCells('A1:F1');
+            $sheet->setCellValue('A1', 'Student Profile');
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
+
+            $sheet->setCellValue('A3', 'Admission No');
+            $sheet->setCellValue('B3', (string) ($detail['index_no'] ?? ''));
+            $sheet->setCellValue('A4', 'Full Name');
+            $sheet->mergeCells('B4:D4');
+            $sheet->setCellValue('B4', (string) ($detail['full_name'] ?? ''));
+            $sheet->setCellValue('A5', 'Name With Initials');
+            $sheet->mergeCells('B5:D5');
+            $sheet->setCellValue('B5', (string) ($detail['name_with_initials'] ?? ''));
+            $sheet->setCellValue('A6', 'Gender');
+            $sheet->setCellValue('B6', (string) ($detail['gender_label'] ?? ''));
+            $sheet->setCellValue('C6', 'DOB');
+            $sheet->setCellValue('D6', (string) ($detail['dob'] ?? ''));
+            $sheet->setCellValue('A7', 'Admission Date');
+            $sheet->setCellValue('B7', (string) ($detail['d_o_admission'] ?? ''));
+            $sheet->setCellValue('C7', 'Class');
+            $sheet->setCellValue('D7', (string) ($detail['grade_class'] ?? ''));
+            $sheet->setCellValue('A8', 'Ethnic Group');
+            $sheet->setCellValue('B8', (string) ($detail['ethnic_group_label'] ?? ''));
+            $sheet->setCellValue('C8', 'Religion');
+            $sheet->setCellValue('D8', (string) ($detail['religion_label'] ?? ''));
+
+            if ($includeSchool) {
+                $sheet->setCellValue('A9', 'School');
+                $sheet->mergeCells('B9:D9');
+                $sheet->setCellValue('B9', (string) ($detail['school_name'] ?? ''));
+            }
+
+            $sheet->mergeCells('A11:F11');
+            $sheet->setCellValue('A11', 'Contact Details');
+            $sheet->getStyle('A11')->getFont()->setBold(true);
+            $sheet->setCellValue('A12', 'Phone No');
+            $sheet->setCellValue('B12', (string) ($detail['phone_no'] ?? ''));
+            $sheet->setCellValue('C12', 'WhatsApp No');
+            $sheet->setCellValue('D12', (string) ($detail['whatsapp_no'] ?? ''));
+            $sheet->setCellValue('A13', 'Home Phone');
+            $sheet->setCellValue('B13', (string) ($detail['phone_home'] ?? ''));
+            $sheet->setCellValue('C13', 'Email');
+            $sheet->mergeCells('D13:F13');
+            $sheet->setCellValue('D13', (string) ($detail['email'] ?? ''));
+            $sheet->setCellValue('A14', 'Address 1');
+            $sheet->mergeCells('B14:F14');
+            $sheet->setCellValue('B14', (string) ($detail['address1'] ?? ''));
+            $sheet->setCellValue('A15', 'Address 2');
+            $sheet->mergeCells('B15:F15');
+            $sheet->setCellValue('B15', (string) ($detail['address2'] ?? ''));
+
+            $sheet->mergeCells('A17:F17');
+            $sheet->setCellValue('A17', 'Parent / Guardian Details');
+            $sheet->getStyle('A17')->getFont()->setBold(true);
+            $sheet->setCellValue('A18', 'Father');
+            $sheet->setCellValue('B18', (string) ($detail['father_name'] ?? ''));
+            $sheet->setCellValue('C18', 'Job');
+            $sheet->setCellValue('D18', (string) ($detail['father_job'] ?? ''));
+            $sheet->setCellValue('E18', 'Mobile');
+            $sheet->setCellValue('F18', (string) ($detail['father_mobile'] ?? ''));
+            $sheet->setCellValue('A19', 'Mother');
+            $sheet->setCellValue('B19', (string) ($detail['mother_name'] ?? ''));
+            $sheet->setCellValue('C19', 'Job');
+            $sheet->setCellValue('D19', (string) ($detail['mother_job'] ?? ''));
+            $sheet->setCellValue('E19', 'Mobile');
+            $sheet->setCellValue('F19', (string) ($detail['mother_mobile'] ?? ''));
+            $sheet->setCellValue('A20', 'Guardian');
+            $sheet->setCellValue('B20', (string) ($detail['guardian_name'] ?? ''));
+            $sheet->setCellValue('C20', 'Job');
+            $sheet->setCellValue('D20', (string) ($detail['guardian_job'] ?? ''));
+            $sheet->setCellValue('E20', 'Mobile');
+            $sheet->setCellValue('F20', (string) ($detail['guardian_mobile'] ?? ''));
+
+            foreach (['A3', 'A4', 'A5', 'A6', 'C6', 'A7', 'C7', 'A8', 'C8', 'A9', 'A12', 'C12', 'A13', 'C13', 'A14', 'A15', 'A18', 'C18', 'E18', 'A19', 'C19', 'E19', 'A20', 'C20', 'E20'] as $cell) {
+                $sheet->getStyle($cell)->getFont()->setBold(true);
+            }
+
+            $photoPath = $this->resolveStudentPhotoPath((int) ($detail['std_id'] ?? 0));
+            if ($photoPath !== '') {
+                $drawing = new Drawing();
+                $drawing->setPath($photoPath);
+                $drawing->setHeight(150);
+                $drawing->setCoordinates('E3');
+                $drawing->setWorksheet($sheet);
+            } else {
+                $sheet->setCellValue('E3', 'No Photo');
+            }
+
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    private function buildStudentDetailPayload(Student $student, string $censusId): array
+    {
+        $studentId = (int) $student->std_id;
         $gradeClass = null;
         if (Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
             $gradeClass = StudentGradeClass::query()
@@ -1517,39 +1655,90 @@ class StudentController extends Controller
             $guardian = $guardianQuery->first();
         }
 
-        return response()->json([
-            'data' => [
-                'std_id' => (int) $student->std_id,
-                'census_id' => $censusId,
-                'index_no' => (string) ($student->index_no ?? ''),
-                'full_name' => (string) ($student->fullname ?? $student->full_name ?? ''),
-                'name_with_initials' => (string) ($student->name_with_initials ?? ''),
-                'address1' => (string) ($student->address1 ?? ''),
-                'address2' => (string) ($student->address2 ?? ''),
-                'phone_no' => (string) ($student->phone_no ?? ''),
-                'whatsapp_no' => (string) ($student->whatsapp_no ?? ''),
-                'phone_home' => (string) ($student->phone_home ?? ''),
-                'email' => (string) ($student->email ?? ''),
-                'dob' => $student->dob,
-                'd_o_admission' => $student->d_o_admission ?? null,
-                'gender_id' => isset($student->gender_id) ? (int) $student->gender_id : 0,
-                'ethnic_group_id' => isset($student->ethnic_group_id) ? (int) $student->ethnic_group_id : 0,
-                'religion_id' => isset($student->religion_id) ? (int) $student->religion_id : 0,
-                'grade_id' => isset($gradeClass?->schoolGradeClass?->grade_id) ? (int) $gradeClass->schoolGradeClass->grade_id : 0,
-                'class_id' => isset($gradeClass?->schoolGradeClass?->class_id) ? (int) $gradeClass->schoolGradeClass->class_id : 0,
-                'year' => isset($gradeClass?->schoolGradeClass?->year) ? (int) $gradeClass->schoolGradeClass->year : null,
-                'father_name' => (string) ($guardian->father_name ?? ''),
-                'father_job' => (string) ($guardian->father_job ?? ''),
-                'father_mobile' => (string) ($guardian->father_mobile ?? ''),
-                'mother_name' => (string) ($guardian->mother_name ?? ''),
-                'mother_job' => (string) ($guardian->mother_job ?? ''),
-                'mother_mobile' => (string) ($guardian->mother_mobile ?? ''),
-                'guardian_name' => (string) ($guardian->guardian_name ?? ''),
-                'guardian_job' => (string) ($guardian->guardian_job ?? ''),
-                'guardian_mobile' => (string) ($guardian->guardian_mobile ?? ''),
-                'photo_url' => $this->resolveStudentPhotoUrl((int) $student->std_id),
-            ],
-        ]);
+        $gradeLabel = '';
+        if (isset($gradeClass?->schoolGradeClass?->grade_id)) {
+            $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', ['grade_en', 'grade_si', 'grade_ta']);
+            if ($gradeLabelColumn !== null) {
+                $gradeLabel = (string) (DB::table('grade_tbl')
+                    ->where('grade_id', (int) $gradeClass->schoolGradeClass->grade_id)
+                    ->value($gradeLabelColumn) ?? '');
+            }
+        }
+
+        $classLabel = '';
+        if (isset($gradeClass?->schoolGradeClass?->class_id)) {
+            $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', ['class_en', 'class_si', 'class_ta', 'class']);
+            if ($classLabelColumn !== null) {
+                $classLabel = (string) (DB::table('class_tbl')
+                    ->where('class_id', (int) $gradeClass->schoolGradeClass->class_id)
+                    ->value($classLabelColumn) ?? '');
+            }
+        }
+
+        $ethnicGroupLabel = '';
+        if (isset($student->ethnic_group_id) && (int) $student->ethnic_group_id > 0) {
+            $ethnicLabelColumn = $this->resolveLookupLabelColumn('ethnic_group_tbl', ['ethnic_group_en', 'ethnic_group_si', 'ethnic_group_ta']);
+            if ($ethnicLabelColumn !== null) {
+                $ethnicGroupLabel = (string) (DB::table('ethnic_group_tbl')
+                    ->where('ethnic_group_id', (int) $student->ethnic_group_id)
+                    ->value($ethnicLabelColumn) ?? '');
+            }
+        }
+
+        $religionLabel = '';
+        if (isset($student->religion_id) && (int) $student->religion_id > 0) {
+            $religionLabelColumn = $this->resolveLookupLabelColumn('religion_tbl', ['religion_en', 'religion_si', 'religion_ta']);
+            if ($religionLabelColumn !== null) {
+                $religionLabel = (string) (DB::table('religion_tbl')
+                    ->where('religion_id', (int) $student->religion_id)
+                    ->value($religionLabelColumn) ?? '');
+            }
+        }
+
+        $schoolName = '';
+        if (Schema::hasTable('school_details_tbl')) {
+            $schoolName = (string) (DB::table('school_details_tbl')
+                ->where('census_id', $censusId)
+                ->value('sch_name') ?? '');
+        }
+
+        return [
+            'std_id' => (int) $student->std_id,
+            'is_active' => !Schema::hasColumn('student_tbl', 'is_deleted') || (int) ($student->is_deleted ?? 0) === 0,
+            'census_id' => $censusId,
+            'school_name' => $schoolName,
+            'index_no' => (string) ($student->index_no ?? ''),
+            'full_name' => (string) ($student->fullname ?? $student->full_name ?? ''),
+            'name_with_initials' => (string) ($student->name_with_initials ?? ''),
+            'address1' => (string) ($student->address1 ?? ''),
+            'address2' => (string) ($student->address2 ?? ''),
+            'phone_no' => (string) ($student->phone_no ?? ''),
+            'whatsapp_no' => (string) ($student->whatsapp_no ?? ''),
+            'phone_home' => (string) ($student->phone_home ?? ''),
+            'email' => (string) ($student->email ?? ''),
+            'dob' => $student->dob,
+            'd_o_admission' => $student->d_o_admission ?? null,
+            'gender_id' => isset($student->gender_id) ? (int) $student->gender_id : 0,
+            'gender_label' => $this->studentGenderLabel(isset($student->gender_id) ? (int) $student->gender_id : 0),
+            'ethnic_group_id' => isset($student->ethnic_group_id) ? (int) $student->ethnic_group_id : 0,
+            'ethnic_group_label' => $ethnicGroupLabel,
+            'religion_id' => isset($student->religion_id) ? (int) $student->religion_id : 0,
+            'religion_label' => $religionLabel,
+            'grade_id' => isset($gradeClass?->schoolGradeClass?->grade_id) ? (int) $gradeClass->schoolGradeClass->grade_id : 0,
+            'class_id' => isset($gradeClass?->schoolGradeClass?->class_id) ? (int) $gradeClass->schoolGradeClass->class_id : 0,
+            'year' => isset($gradeClass?->schoolGradeClass?->year) ? (int) $gradeClass->schoolGradeClass->year : null,
+            'grade_class' => $this->studentReportExportGradeClass(trim($gradeLabel . ' ' . $classLabel)),
+            'father_name' => (string) ($guardian->father_name ?? ''),
+            'father_job' => (string) ($guardian->father_job ?? ''),
+            'father_mobile' => (string) ($guardian->father_mobile ?? ''),
+            'mother_name' => (string) ($guardian->mother_name ?? ''),
+            'mother_job' => (string) ($guardian->mother_job ?? ''),
+            'mother_mobile' => (string) ($guardian->mother_mobile ?? ''),
+            'guardian_name' => (string) ($guardian->guardian_name ?? ''),
+            'guardian_job' => (string) ($guardian->guardian_job ?? ''),
+            'guardian_mobile' => (string) ($guardian->guardian_mobile ?? ''),
+            'photo_url' => $this->resolveStudentPhotoUrl((int) $student->std_id),
+        ];
     }
 
     public function update(StudentStoreRequest $request, int $studentId): JsonResponse
@@ -2424,6 +2613,23 @@ class StudentController extends Controller
             $path = $baseDir . DIRECTORY_SEPARATOR . $studentId . '.' . $extension;
             if (is_file($path)) {
                 return asset('uploads/students/' . $studentId . '.' . $extension);
+            }
+        }
+
+        return '';
+    }
+
+    private function resolveStudentPhotoPath(int $studentId): string
+    {
+        if ($studentId <= 0) {
+            return '';
+        }
+
+        $baseDir = public_path('uploads/students');
+        foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
+            $path = $baseDir . DIRECTORY_SEPARATOR . $studentId . '.' . $extension;
+            if (is_file($path)) {
+                return $path;
             }
         }
 

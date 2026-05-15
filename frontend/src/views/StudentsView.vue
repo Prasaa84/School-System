@@ -1,10 +1,10 @@
 <template>
   <div class="space-y-5">
-    <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
       <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ isReportView ? text.studentReports : text.studentsTitle }}</h1>
     </header>
 
-    <section v-if="isReportView" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section v-if="isReportView" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
       <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 class="font-display text-xl font-bold">{{ text.studentReports }}</h2>
@@ -109,11 +109,12 @@
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.year }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.phone }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.dob }}</th>
+              <th v-if="showReportExportColumn" class="px-3 py-2 text-left font-semibold text-slate-600"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-if="!loadingReport && reportRows.length === 0">
-              <td :colspan="isAdmin ? 8 : 7" class="px-3 py-6 text-center text-slate-500">{{ text.noReportStudentsFound }}</td>
+              <td :colspan="7 + (isAdmin ? 1 : 0) + (showReportExportColumn ? 1 : 0)" class="px-3 py-6 text-center text-slate-500">{{ text.noReportStudentsFound }}</td>
             </tr>
             <tr v-for="student in reportRows" :key="`report-student-${student.std_id}`" class="hover:bg-slate-50">
               <td class="px-3 py-2 font-medium text-slate-800">{{ student.index_no }}</td>
@@ -126,6 +127,23 @@
               <td class="px-3 py-2 text-slate-700">{{ student.current_year || '-' }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.phone_no || '-' }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.dob || '-' }}</td>
+              <td v-if="showReportExportColumn" class="px-3 py-2">
+                <button
+                  class="inline-flex h-8 w-8 items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="openingProfileStudentId === student.std_id"
+                  @click="openStudentProfile(student)"
+                  :aria-label="text.viewProfile"
+                  :title="text.viewProfile"
+                >
+                  <svg v-if="openingProfileStudentId !== student.std_id" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                    <path d="M10 4c4.6 0 8 4.2 8.1 4.4a1 1 0 0 1 0 1.2C18 9.8 14.6 14 10 14S2 9.8 1.9 9.6a1 1 0 0 1 0-1.2C2 8.2 5.4 4 10 4Zm0 2C7 6 4.5 8.3 3.4 9c1.1.7 3.6 3 6.6 3s5.5-2.3 6.6-3C15.5 8.3 13 6 10 6Zm0 1.5A2.5 2.5 0 1 1 7.5 10 2.5 2.5 0 0 1 10 7.5Z" />
+                  </svg>
+                  <svg v-else viewBox="0 0 20 20" fill="none" class="h-4 w-4 animate-spin">
+                    <circle cx="10" cy="10" r="7" class="opacity-25" stroke="currentColor" stroke-width="2" />
+                    <path d="M17 10a7 7 0 0 0-7-7" class="opacity-90" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  </svg>
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -136,7 +154,7 @@
       </p>
     </section>
 
-    <section v-else class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section v-else class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
       <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <input
           v-model="search"
@@ -256,7 +274,7 @@
       </p>
     </section>
 
-    <div v-if="showAddDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeAddDialog">
+    <div v-if="showAddDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 print:hidden" @click.self="closeAddDialog">
       <section class="max-h-[90vh] w-full max-w-6xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
         <div class="mb-4 flex items-center justify-between">
           <h2 class="font-display text-xl font-bold text-slate-900">{{ isEditMode ? text.editStudentManual : text.addStudentManual }}</h2>
@@ -499,7 +517,7 @@
       </section>
     </div>
 
-    <div v-if="showImportDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeImportDialog">
+    <div v-if="showImportDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 print:hidden" @click.self="closeImportDialog">
       <section class="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
         <div class="mb-4 flex items-center justify-between">
           <h2 class="font-display text-xl font-bold text-slate-900">{{ text.importStudents }}</h2>
@@ -557,12 +575,205 @@
         </div>
       </section>
     </div>
+
+    <div
+      v-if="showProfileDialog"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 print:static print:block print:bg-white print:p-0"
+      @click.self="closeProfileDialog"
+    >
+      <section class="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl print:max-h-none print:max-w-none print:overflow-visible print:rounded-none print:border-0 print:p-0 print:shadow-none">
+        <div class="mb-4 flex items-center justify-between gap-3 print:hidden">
+          <div>
+            <h2 class="font-display text-xl font-bold text-slate-900">{{ text.studentProfileTitle }}</h2>
+            <p class="text-sm text-slate-500">{{ text.profileCardHint }}</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="closeProfileDialog">
+              {{ text.close }}
+            </button>
+            <button
+              class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="loadingProfileDialog || !profileDetail"
+              @click="exportProfilePdf"
+            >
+              {{ text.exportPdf }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="loadingProfileDialog" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+          {{ text.loadingStudentProfile }}
+        </div>
+
+        <p v-else-if="profileErrorMessage" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {{ profileErrorMessage }}
+        </p>
+
+        <div v-else-if="profileDetail" class="space-y-4">
+          <section class="rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_58%,#eef8fb_100%)] p-5 print:border-0 print:bg-white print:p-0">
+            <div class="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
+              <div class="rounded-2xl border border-slate-200 bg-white p-4 text-center">
+                <div class="mx-auto flex h-40 w-32 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  <img v-if="profileDetail.photo_url" :src="profileDetail.photo_url" alt="Student profile photo" class="h-full w-full object-cover" />
+                  <div v-else class="px-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ text.noPhoto }}</div>
+                </div>
+                <p class="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">{{ text.studentProfileTitle }}</p>
+                <p class="mt-2 text-lg font-bold text-slate-900">{{ profileDetail.name_with_initials || '-' }}</p>
+                <p class="text-sm text-slate-500">{{ profileDetail.grade_class || '-' }}</p>
+              </div>
+
+              <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{{ text.admissionNo }}</p>
+                  <p class="mt-1 text-sm font-semibold text-slate-900">{{ profileDetail.index_no || '-' }}</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{{ text.classLabel }}</p>
+                  <p class="mt-1 text-sm font-semibold text-slate-900">{{ profileDetail.grade_class || '-' }}</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{{ text.academicYear }}</p>
+                  <p class="mt-1 text-sm font-semibold text-slate-900">{{ profileDetail.year || '-' }}</p>
+                </div>
+                <div v-if="isAdmin" class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{{ text.school }}</p>
+                  <p class="mt-1 text-sm font-semibold text-slate-900">{{ profileDetail.school_name || '-' }}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <fieldset class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.personalDetails }}</legend>
+            <div class="grid gap-3 md:grid-cols-3">
+              <label class="text-sm text-slate-700">
+                {{ text.fullName }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.full_name || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.nameWithInitials }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.name_with_initials || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.gender }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileGenderLabel }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.dob }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.dob || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.admissionDate }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.d_o_admission || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.ethnicGroup }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileEthnicGroupLabel }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.religion }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileReligionLabel }}</div>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.contactDetails }}</legend>
+            <div class="grid gap-3 md:grid-cols-3">
+              <label class="text-sm text-slate-700">
+                {{ text.mobile }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.phone_no || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.whatsapp }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.whatsapp_no || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.homePhone }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.phone_home || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.email }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 break-words">{{ profileDetail.email || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.addressLine1 }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.address1 || '-' }}</div>
+              </label>
+              <label class="text-sm text-slate-700">
+                {{ text.addressLine2 }}
+                <div class="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900">{{ profileDetail.address2 || '-' }}</div>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.guardianDetails }}</legend>
+            <div class="grid gap-4 md:grid-cols-3">
+              <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <p class="font-semibold text-slate-900">{{ text.father }}</p>
+                <div class="mt-3 space-y-3">
+                  <label class="block text-sm text-slate-700">
+                    {{ text.name }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.father_name || '-' }}</div>
+                  </label>
+                  <label class="block text-sm text-slate-700">
+                    {{ text.mobile }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.father_mobile || '-' }}</div>
+                  </label>
+                  <label class="block text-sm text-slate-700">
+                    {{ text.job }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.father_job || '-' }}</div>
+                  </label>
+                </div>
+              </div>
+
+              <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <p class="font-semibold text-slate-900">{{ text.mother }}</p>
+                <div class="mt-3 space-y-3">
+                  <label class="block text-sm text-slate-700">
+                    {{ text.name }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.mother_name || '-' }}</div>
+                  </label>
+                  <label class="block text-sm text-slate-700">
+                    {{ text.mobile }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.mother_mobile || '-' }}</div>
+                  </label>
+                  <label class="block text-sm text-slate-700">
+                    {{ text.job }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.mother_job || '-' }}</div>
+                  </label>
+                </div>
+              </div>
+
+              <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <p class="font-semibold text-slate-900">{{ text.guardian }}</p>
+                <div class="mt-3 space-y-3">
+                  <label class="block text-sm text-slate-700">
+                    {{ text.name }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.guardian_name || '-' }}</div>
+                  </label>
+                  <label class="block text-sm text-slate-700">
+                    {{ text.mobile }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.guardian_mobile || '-' }}</div>
+                  </label>
+                  <label class="block text-sm text-slate-700">
+                    {{ text.job }}
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900">{{ profileDetail.guardian_job || '-' }}</div>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api'
 import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
 import { useUiStore } from '../stores/ui'
@@ -596,11 +807,13 @@ interface StudentsResponse {
 
 interface StudentDetail {
   std_id: number
-  census_id: number
+  census_id: number | string
+  school_name?: string
   index_no: string
   full_name: string
   name_with_initials: string
   gender_id: number
+  gender_label?: string
   phone_no: string
   whatsapp_no: string
   phone_home: string
@@ -610,9 +823,12 @@ interface StudentDetail {
   dob: string
   d_o_admission: string
   ethnic_group_id: number
+  ethnic_group_label?: string
   religion_id: number
+  religion_label?: string
   grade_id: number
   class_id: number
+  grade_class?: string
   year?: number
   father_name: string
   father_job: string
@@ -730,6 +946,7 @@ interface StudentImportResponse {
 
 const ui = useUiStore()
 const route = useRoute()
+const router = useRouter()
 const text = computed(() => {
   if (ui.language === 'si') {
     return {
@@ -755,6 +972,20 @@ const text = computed(() => {
       phone: 'දුරකථන',
       dob: 'උපන්දිනය',
       actions: 'ක්‍රියා',
+      viewProfile: 'පැතිකඩ බලන්න',
+      studentProfileTitle: 'සිසු පැතිකඩ',
+      profileCardHint: 'සංස්කරණ කවුළුව මෙන් සිසුවාගේ සම්පූර්ණ තොරතුරු මෙතැනින් බලන්න.',
+      exportPdf: 'PDF Export',
+      loadingStudentProfile: 'සිසු පැතිකඩ පූරණය වෙමින්...',
+      noPhoto: 'ඡායාරූපයක් නැත',
+      personalDetails: 'පෞද්ගලික තොරතුරු',
+      contactDetails: 'සම්බන්ධතා තොරතුරු',
+      guardianDetails: 'මව්පිය / භාරකරු තොරතුරු',
+      father: 'පියා',
+      mother: 'මව',
+      guardian: 'භාරකරු',
+      name: 'නම',
+      job: 'රැකියාව',
       censusId: 'සංගණන අංකය',
       notAvailable: 'නැත',
       edit: 'සංස්කරණය',
@@ -820,6 +1051,7 @@ const text = computed(() => {
       updateStudent: 'සිසුවා යාවත්කාලීන කරන්න',
       saveStudent: 'සිසුවා සුරකින්න',
       unableToLoadStudentDetails: 'සිසුවාගේ විස්තර පූරණය කළ නොහැකි විය.',
+      unableToOpenStudentProfile: 'සිසුවාගේ පැතිකඩ විවෘත කළ නොහැකි විය.',
       studentDeletedSuccessfully: 'සිසුවා සාර්ථකව මකා දමන ලදී.',
       unableToDeleteStudent: 'සිසුවා මකා දැමිය නොහැකි විය.',
       selectGradeAndClassTogether: 'ශ්‍රේණිය සහ පංතිය දෙකම තෝරන්න, නැතිනම් දෙකම හිස් තබන්න.',
@@ -876,6 +1108,20 @@ const text = computed(() => {
       phone: 'தொலைபேசி',
       dob: 'பிறந்த தேதி',
       actions: 'செயல்கள்',
+      viewProfile: 'சுயவிவரத்தை பார்',
+      studentProfileTitle: 'மாணவர் சுயவிவரம்',
+      profileCardHint: 'திருத்தக் காட்சி போல மாணவரின் முழு விபரத்தையும் இங்கு பார்க்கலாம்.',
+      exportPdf: 'PDF Export',
+      loadingStudentProfile: 'மாணவர் சுயவிவரம் ஏற்றப்படுகிறது...',
+      noPhoto: 'புகைப்படம் இல்லை',
+      personalDetails: 'தனிப்பட்ட விவரங்கள்',
+      contactDetails: 'தொடர்பு விவரங்கள்',
+      guardianDetails: 'பெற்றோர் / பாதுகாவலர் விவரங்கள்',
+      father: 'தந்தை',
+      mother: 'தாய்',
+      guardian: 'பாதுகாவலர்',
+      name: 'பெயர்',
+      job: 'தொழில்',
       censusId: 'கணக்கெடுப்பு இலக்கம்',
       notAvailable: 'இல்லை',
       edit: 'திருத்து',
@@ -941,6 +1187,7 @@ const text = computed(() => {
       updateStudent: 'மாணவரை புதுப்பிக்கவும்',
       saveStudent: 'மாணவரை சேமிக்கவும்',
       unableToLoadStudentDetails: 'மாணவர் விவரங்களை ஏற்ற முடியவில்லை.',
+      unableToOpenStudentProfile: 'மாணவர் சுயவிவரத்தை திறக்க முடியவில்லை.',
       studentDeletedSuccessfully: 'மாணவர் வெற்றிகரமாக நீக்கப்பட்டார்.',
       unableToDeleteStudent: 'மாணவரை நீக்க முடியவில்லை.',
       selectGradeAndClassTogether: 'தரமும் வகுப்பும் இரண்டையும் தேர்ந்தெடுக்கவும், இல்லையெனில் இரண்டையும் காலியாக விடவும்.',
@@ -996,6 +1243,20 @@ const text = computed(() => {
     phone: 'Phone',
     dob: 'DOB',
     actions: 'Actions',
+    viewProfile: 'View Profile',
+    studentProfileTitle: 'Student Profile',
+    profileCardHint: 'View the full student record in a popup styled closer to the edit form.',
+    exportPdf: 'Export PDF',
+    loadingStudentProfile: 'Loading student profile...',
+    noPhoto: 'No Photo',
+    personalDetails: 'Personal Details',
+    contactDetails: 'Contact Details',
+    guardianDetails: 'Parent / Guardian Details',
+    father: 'Father',
+    mother: 'Mother',
+    guardian: 'Guardian',
+    name: 'Name',
+    job: 'Job',
     censusId: 'Census ID',
     notAvailable: 'N/A',
     edit: 'Edit',
@@ -1061,6 +1322,7 @@ const text = computed(() => {
     updateStudent: 'Update Student',
     saveStudent: 'Save Student',
     unableToLoadStudentDetails: 'Unable to load student details.',
+    unableToOpenStudentProfile: 'Unable to open student profile.',
     studentDeletedSuccessfully: 'Student deleted successfully.',
     unableToDeleteStudent: 'Unable to delete student.',
     selectGradeAndClassTogether: 'Please select both grade and class, or leave both empty.',
@@ -1124,16 +1386,20 @@ const search = ref('')
 const loading = ref(false)
 const loadingReport = ref(false)
 const downloadingReport = ref(false)
+const openingProfileStudentId = ref<number | null>(null)
+const loadingProfileDialog = ref(false)
 const creating = ref(false)
 const importing = ref(false)
 const downloadingTemplate = ref(false)
 const showAddDialog = ref(false)
 const showImportDialog = ref(false)
+const showProfileDialog = ref(false)
 const errorMessage = ref('')
 const reportErrorMessage = ref('')
 const createErrorMessage = ref('')
 const createSuccessMessage = ref('')
 const importErrorMessage = ref('')
+const profileErrorMessage = ref('')
 const students = ref<Student[]>([])
 const reportRows = ref<Student[]>([])
 const grades = ref<GradeRow[]>([])
@@ -1141,6 +1407,7 @@ const classes = ref<ClassRow[]>([])
 const reportAcademicYears = ref<number[]>([])
 const reportGrades = ref<GradeRow[]>([])
 const reportClasses = ref<ClassRow[]>([])
+const profileDetail = ref<StudentDetail | null>(null)
 const ethnicGroups = ref<OptionRow[]>([])
 const religions = ref<OptionRow[]>([])
 const schools = ref<OptionRow[]>([])
@@ -1187,6 +1454,7 @@ const sessionStudentPermissions = computed<Record<string, boolean>>(() => {
 const canCreateStudents = computed(() => sessionStudentPermissions.value['student.create'] ?? false)
 const canEditStudents = computed(() => sessionStudentPermissions.value['student.update'] ?? false)
 const canDeleteStudents = computed(() => sessionStudentPermissions.value['student.delete'] ?? false)
+const showReportExportColumn = computed(() => reportRows.value.length > 0)
 const genderOptions = computed<OptionRow[]>(() => [
   { id: 1, label: text.value.male },
   { id: 2, label: text.value.female },
@@ -1233,6 +1501,39 @@ const studentGenderLabel = (genderId: number | undefined): string => {
 
   return text.value.notAvailable
 }
+
+const optionLabelById = (rows: OptionRow[], id: number | undefined, fallback?: string): string => {
+  if (typeof fallback === 'string' && fallback.trim() !== '') {
+    return fallback
+  }
+
+  const match = rows.find((row) => row.id === Number(id))
+  return match?.label || text.value.notAvailable
+}
+
+const profileGenderLabel = computed(() => {
+  if (!profileDetail.value) {
+    return text.value.notAvailable
+  }
+
+  return profileDetail.value.gender_label || studentGenderLabel(profileDetail.value.gender_id)
+})
+
+const profileEthnicGroupLabel = computed(() => {
+  if (!profileDetail.value) {
+    return text.value.notAvailable
+  }
+
+  return optionLabelById(ethnicGroups.value, profileDetail.value.ethnic_group_id, profileDetail.value.ethnic_group_label)
+})
+
+const profileReligionLabel = computed(() => {
+  if (!profileDetail.value) {
+    return text.value.notAvailable
+  }
+
+  return optionLabelById(religions.value, profileDetail.value.religion_id, profileDetail.value.religion_label)
+})
 
 const createForm = ref({
   index_no: '',
@@ -1618,6 +1919,30 @@ const downloadStudentReport = async (): Promise<void> => {
     reportErrorMessage.value = extractApiMessage(error) || text.value.unableToDownloadReport
   } finally {
     downloadingReport.value = false
+  }
+}
+
+const closeProfileDialog = (): void => {
+  showProfileDialog.value = false
+  loadingProfileDialog.value = false
+  profileErrorMessage.value = ''
+  profileDetail.value = null
+}
+
+const exportProfilePdf = (): void => {
+  window.print()
+}
+
+const openStudentProfile = async (student: Student): Promise<void> => {
+  openingProfileStudentId.value = student.std_id
+  reportErrorMessage.value = ''
+
+  try {
+    await router.push(`/students/profile/${student.std_id}`)
+  } catch (error) {
+    reportErrorMessage.value = extractApiMessage(error) || text.value.unableToOpenStudentProfile
+  } finally {
+    openingProfileStudentId.value = null
   }
 }
 

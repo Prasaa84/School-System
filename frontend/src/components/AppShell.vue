@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-screen bg-slate-100 text-slate-900">
-    <div v-if="isMobile && ui.mobileSidebarOpen" class="fixed inset-0 z-30 bg-slate-900/40" @click="ui.closeMobileSidebar" />
+  <div class="min-h-screen bg-slate-100 text-slate-900 print:bg-white">
+    <div v-if="isMobile && ui.mobileSidebarOpen" class="fixed inset-0 z-30 bg-slate-900/40 print:hidden" @click="ui.closeMobileSidebar" />
 
-    <div class="mx-auto flex min-h-screen max-w-[1600px]">
+    <div class="mx-auto flex min-h-screen max-w-[1600px] print:block print:max-w-none">
       <aside
-        class="border-r border-slate-200 bg-white/95 backdrop-blur transition-all duration-300"
+        class="border-r border-slate-200 bg-white/95 backdrop-blur transition-all duration-300 print:hidden"
         :class="sidebarClasses"
       >
         <div class="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
@@ -95,8 +95,8 @@
         </nav>
       </aside>
 
-      <main class="min-w-0 flex-1" :class="isMobile ? '' : 'overflow-hidden'">
-        <header class="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/90 px-3 sm:px-5 backdrop-blur">
+      <main class="min-w-0 flex-1 print:min-w-full print:overflow-visible" :class="isMobile ? '' : 'overflow-hidden'">
+        <header class="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/90 px-3 sm:px-5 backdrop-blur print:hidden">
           <div class="min-w-0 flex items-center gap-2 sm:gap-3">
             <button
               v-if="isMobile"
@@ -136,7 +136,7 @@
           </div>
         </header>
 
-        <section class="p-4 sm:p-6 md:p-8">
+        <section class="p-4 sm:p-6 md:p-8 print:p-0">
           <slot />
         </section>
       </main>

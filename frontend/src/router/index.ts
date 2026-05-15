@@ -3,6 +3,7 @@ import DashboardView from '../views/DashboardView.vue'
 import SchoolView from '../views/SchoolView.vue'
 import LoginView from '../views/LoginView.vue'
 import ModulePlaceholderView from '../views/ModulePlaceholderView.vue'
+import StudentProfileView from '../views/StudentProfileView.vue'
 import StudentsInClassesView from '../views/StudentsInClassesView.vue'
 import StudentsView from '../views/StudentsView.vue'
 import { isAuthenticated } from '../services/auth'
@@ -47,6 +48,12 @@ const router = createRouter({
       path: '/students/report',
       name: 'students-report',
       component: StudentsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/students/profile/:studentId',
+      name: 'student-profile',
+      component: StudentProfileView,
       meta: { requiresAuth: true },
     },
     {
