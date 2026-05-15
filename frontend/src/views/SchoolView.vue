@@ -1,9 +1,7 @@
 <template>
   <div class="space-y-6">
     <header class="rounded-3xl border border-slate-200 bg-gradient-to-r from-cyan-900 via-cyan-700 to-emerald-600 p-7 text-white shadow-xl">
-      <p class="font-brand text-xs uppercase tracking-[0.2em] text-cyan-100">{{ text.schoolModule }}</p>
       <h1 class="mt-2 font-display text-3xl font-bold md:text-4xl">{{ text.schoolTitle }}</h1>
-      <p class="mt-2 max-w-3xl text-sm text-cyan-50 md:text-base">{{ text.schoolSubtitle }}</p>
     </header>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -663,9 +661,7 @@ const text = computed(() => {
   }
 
   return {
-    schoolModule: 'School',
     schoolTitle: 'School Details',
-    schoolSubtitle: 'View and manage school records based on your role.',
     searchSchool: 'Search School',
     searchPlaceholder: 'Search by school name or census ID',
     typeToSearch: 'Type school name or census ID to search.',

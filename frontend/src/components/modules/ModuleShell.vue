@@ -38,17 +38,14 @@ defineEmits<{
 
 const text = useLocalizedText({
   en: {
-    workspace: 'Module Workspace',
     view: 'View',
     reports: 'Reports',
   },
   si: {
-    workspace: 'මොඩියුල වැඩබිම',
     view: 'දර්ශනය',
     reports: 'වාර්තා',
   },
   ta: {
-    workspace: 'தொகுதி பணியிடம்',
     view: 'பார்வை',
     reports: 'அறிக்கைகள்',
   },

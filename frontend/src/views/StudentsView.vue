@@ -1,7 +1,6 @@
 <template>
   <div class="space-y-5">
     <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p class="font-brand text-xs uppercase tracking-[0.2em] text-slate-500">{{ text.studentsModule }}</p>
       <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ text.studentsTitle }}</h1>
     </header>
 
@@ -562,7 +561,6 @@ const ui = useUiStore()
 const text = computed(() => {
   if (ui.language === 'si') {
     return {
-      studentsModule: 'සිසුන් මොඩියුලය',
       studentsTitle: 'සිසුන්',
       searchPlaceholder: 'ඇතුළත් අංකය හෝ නම අනුව සොයන්න',
       allSchools: 'සියලු පාසල්',
@@ -667,7 +665,6 @@ const text = computed(() => {
 
   if (ui.language === 'ta') {
     return {
-      studentsModule: 'மாணவர்கள் தொகுதி',
       studentsTitle: 'மாணவர்கள்',
       searchPlaceholder: 'அனுமதி இலக்கம் அல்லது பெயரால் தேடவும்',
       allSchools: 'அனைத்து பாடசாலைகள்',
@@ -771,7 +768,6 @@ const text = computed(() => {
   }
 
   return {
-    studentsModule: 'Students Module',
     studentsTitle: 'Students',
     searchPlaceholder: 'Search by admission number or name',
     allSchools: 'All schools',
