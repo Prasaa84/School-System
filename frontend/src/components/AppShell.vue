@@ -8,10 +8,10 @@
         :class="sidebarClasses"
       >
         <div class="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
-          <img src="/images/richmond_logo_28_32.png" alt="Richmond" class="h-10 w-10 rounded-lg object-contain" />
+          <img :src="schoolCrestUrl || '/images/default_school_crest.svg'" :alt="schoolName ? `${schoolName} crest` : 'School crest'" class="h-10 w-10 rounded-lg object-contain" />
           <div v-if="showSidebarText" class="leading-tight">
             <p class="font-brand text-sm uppercase tracking-[0.2em] text-slate-500">SDS</p>
-            <p class="font-display text-lg font-bold">{{ shellText.adminPlatform }}</p>
+            <p class="font-display text-lg font-bold">{{ platformTitle }}</p>
           </div>
         </div>
 
@@ -107,12 +107,39 @@
             </button>
             <button
               v-else
-              class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              :aria-label="ui.sidebarOpen ? shellText.collapse : shellText.expand"
+              :title="ui.sidebarOpen ? shellText.collapse : shellText.expand"
               @click="ui.toggleSidebar"
             >
-              {{ ui.sidebarOpen ? shellText.collapse : shellText.expand }}
+              <svg
+                v-if="ui.sidebarOpen"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="h-5 w-5"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M12.78 4.22a.75.75 0 0 1 0 1.06L8.06 10l4.72 4.72a.75.75 0 1 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              <svg
+                v-else
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="h-5 w-5"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M7.22 4.22a.75.75 0 0 1 1.06 0l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06L11.94 10 7.22 5.28a.75.75 0 0 1 0-1.06Z"
+                  clip-rule="evenodd"
+                />
+              </svg>
             </button>
-            <p class="font-display text-sm sm:text-xl truncate">{{ shellText.headerTitle }}</p>
+            <p class="font-display text-sm sm:text-xl truncate">{{ headerTitle }}</p>
           </div>
 
           <div class="flex items-center gap-2 sm:gap-3">
@@ -160,18 +187,35 @@ interface MenuItem {
   children?: MenuItem[]
 }
 
+interface SchoolDetailsResponse {
+  school?: {
+    sch_name?: string | null
+    crest_url?: string | null
+  } | null
+}
+
 const ui = useUiStore()
 const route = useRoute()
 const router = useRouter()
+const currentUser = getUser()
+const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
+const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
+const schoolName = ref('')
+const schoolCrestUrl = ref('')
+type SchoolIdentityDetail = {
+  schoolName?: string | null
+  crestUrl?: string | null
+}
 
 const shellText = computed(() => {
   if (ui.language === 'si') {
     return {
       adminPlatform: 'පරිපාලන වේදිකාව',
+      userPlatform: 'පරිශීලක වේදිකාව',
       menu: 'මෙනු',
       collapse: 'සඟවන්න',
       expand: 'විහිදුවන්න',
-      headerTitle: 'රිච්මන්ඩ් විද්‍යාල SDS වාර්තා',
+      headerTitle: 'SDS වාර්තා',
       logout: 'ඉවත්වන්න',
       language: 'භාෂාව',
       authenticatedUser: 'සත්‍යාපිත පරිශීලකයා',
@@ -182,10 +226,11 @@ const shellText = computed(() => {
   if (ui.language === 'ta') {
     return {
       adminPlatform: 'நிர்வாக தளம்',
+      userPlatform: 'பயனர் தளம்',
       menu: 'பட்டியல்',
       collapse: 'சுருக்கு',
       expand: 'விரிவு',
-      headerTitle: 'ரிச்மண்ட் கல்லூரி SDS பதிவுகள்',
+      headerTitle: 'SDS பதிவுகள்',
       logout: 'வெளியேறு',
       language: 'மொழி',
       authenticatedUser: 'உறுதிப்படுத்தப்பட்ட பயனர்',
@@ -195,10 +240,11 @@ const shellText = computed(() => {
 
   return {
     adminPlatform: 'Admin Platform',
+    userPlatform: 'User Platform',
     menu: 'Menu',
     collapse: 'Collapse',
     expand: 'Expand',
-    headerTitle: 'Richmond College SDS Records',
+    headerTitle: 'SDS Records',
     logout: 'Logout',
     language: 'Language',
     authenticatedUser: 'Authenticated User',
@@ -206,12 +252,26 @@ const shellText = computed(() => {
   }
 })
 
+const headerTitle = computed(() => {
+  if (isAdmin.value) {
+    return shellText.value.headerTitle
+  }
+
+  const normalizedSchoolName = schoolName.value.trim()
+  if (normalizedSchoolName === '') {
+    return shellText.value.headerTitle
+  }
+
+  return `${normalizedSchoolName} ${shellText.value.headerTitle}`
+})
+
+const platformTitle = computed(() => (isAdmin.value ? shellText.value.adminPlatform : shellText.value.userPlatform))
+
 const selectedLanguage = computed<UiLanguage>({
   get: () => ui.language,
   set: (value) => ui.setLanguage(value),
 })
 
-const currentUser = getUser()
 const menu = ref<MenuItem[]>([
   { key: 'dashboard', label: 'Dashboard', to: '/' },
 ])
@@ -354,6 +414,30 @@ const loadMenu = async (): Promise<void> => {
     ...orderedModules,
   ]
 }
+
+const loadHeaderSchoolName = async (): Promise<void> => {
+  if (isAdmin.value) {
+    schoolName.value = ''
+    schoolCrestUrl.value = ''
+    return
+  }
+
+  try {
+    const { data } = await api.get<SchoolDetailsResponse>('/school/details')
+    schoolName.value = String(data.school?.sch_name ?? '').trim()
+    schoolCrestUrl.value = String(data.school?.crest_url ?? '').trim()
+  } catch {
+    schoolName.value = ''
+    schoolCrestUrl.value = ''
+  }
+}
+
+const handleSchoolIdentityUpdated = (event: Event): void => {
+  const detail = (event as CustomEvent<SchoolIdentityDetail>).detail
+  schoolName.value = String(detail?.schoolName ?? '').trim()
+  schoolCrestUrl.value = String(detail?.crestUrl ?? '').trim()
+}
+
 const onMenuClick = (): void => {
   if (isMobile.value) {
     ui.closeMobileSidebar()
@@ -382,9 +466,13 @@ onMounted(async () => {
   }
 
   await loadMenu()
+  await loadHeaderSchoolName()
+  window.addEventListener('sds:school-identity-updated', handleSchoolIdentityUpdated as EventListener)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('sds:school-identity-updated', handleSchoolIdentityUpdated as EventListener)
+
   if (!mediaQuery) {
     return
   }

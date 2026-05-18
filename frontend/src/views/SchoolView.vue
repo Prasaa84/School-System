@@ -134,6 +134,24 @@
               <input v-model="schoolForm.web_address" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" />
             </label>
 
+            <div class="text-sm text-slate-700 md:col-span-2">
+              <span class="font-medium">{{ text.schoolCrest }}</span>
+              <div class="mt-2 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-start">
+                <div class="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <img :src="crestPreviewUrl || '/images/default_school_crest.svg'" :alt="text.schoolCrestPreviewAlt" class="h-full w-full object-contain" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <input :key="crestInputKey" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-600 file:px-3 file:py-2 file:font-semibold file:text-white hover:file:bg-cyan-700" @change="onCrestFileChange" />
+                  <p class="mt-2 text-xs text-slate-500">{{ text.schoolCrestHint }}</p>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100" :disabled="!crestPreviewUrl" @click="removeSelectedCrest">
+                      {{ text.removeCrest }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <label v-if="canToggleStatus" class="text-sm text-slate-700 md:col-span-2">
               {{ text.schoolStatus }}
               <select v-model="statusValue" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2">
@@ -231,6 +249,12 @@
           <p><strong>{{ text.censusId }}:</strong> {{ school.census_id }}</p>
           <p><strong>{{ text.examNumber }}:</strong> {{ school.exam_no || text.notAvailable }}</p>
           <p class="md:col-span-2"><strong>{{ text.schoolName }}:</strong> {{ school.sch_name || text.notAvailable }}</p>
+          <div class="md:col-span-2">
+            <strong>{{ text.schoolCrest }}:</strong>
+            <div class="mt-2 flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <img :src="school.crest_url || '/images/default_school_crest.svg'" :alt="text.schoolCrestPreviewAlt" class="h-full w-full object-contain" />
+            </div>
+          </div>
           <p class="md:col-span-2"><strong>{{ text.address }}:</strong> {{ [school.address1, school.address2].filter(Boolean).join(', ') || text.notAvailable }}</p>
           <p><strong>{{ text.contactNumber }}:</strong> {{ school.contact_no || text.notAvailable }}</p>
           <p><strong>{{ text.email }}:</strong> {{ school.email || text.notAvailable }}</p>
@@ -436,6 +460,7 @@ interface SchoolDetails {
   contact_no: string | null
   email: string | null
   web_address: string | null
+  crest_url?: string | null
   pro_id: number
   dis_id: number
   zone_id: number
@@ -504,6 +529,11 @@ interface SchoolForm {
   grd_span_id: number
 }
 
+type SchoolIdentityDetail = {
+  schoolName: string
+  crestUrl: string
+}
+
 const currentUser = getUser()
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
@@ -534,6 +564,11 @@ const text = computed(() => {
       email: 'විද්‍යුත් තැපෑල',
       website: 'වෙබ් අඩවිය',
       schoolStatus: 'පාසල් තත්ත්වය',
+      schoolCrest: 'පාසල් ලාංඡනය',
+      schoolCrestHint: 'JPG, PNG හෝ WebP ගොනුවක් තෝරන්න. උපරිම ප්‍රමාණය 2MB.',
+      schoolCrestPreviewAlt: 'පාසල් ලාංඡන පෙරදසුන',
+      noCrestSelected: 'ලාංඡනයක් නැත',
+      removeCrest: 'ලාංඡනය ඉවත් කරන්න',
       setDisabledHint: 'මෙම පාසල මකා දමනවා වෙනුවට අක්‍රිය කරන්න.',
       province: 'පළාත',
       selectProvince: 'පළාත තෝරන්න',
@@ -609,6 +644,11 @@ const text = computed(() => {
       email: 'மின்னஞ்சல்',
       website: 'இணையதளம்',
       schoolStatus: 'பள்ளி நிலை',
+      schoolCrest: 'பள்ளி சின்னம்',
+      schoolCrestHint: 'JPG, PNG அல்லது WebP கோப்பை தேர்ந்தெடுக்கவும். அதிகபட்சம் 2MB.',
+      schoolCrestPreviewAlt: 'பள்ளி சின்ன முன்பார்வு',
+      noCrestSelected: 'சின்னம் இல்லை',
+      removeCrest: 'சின்னத்தை அகற்று',
       setDisabledHint: 'இந்த பள்ளியை நீக்குவதற்குப் பதிலாக முடக்கமாக அமைக்கவும்.',
       province: 'மாகாணம்',
       selectProvince: 'மாகாணத்தை தேர்ந்தெடுக்கவும்',
@@ -681,6 +721,11 @@ const text = computed(() => {
     email: 'Email',
     website: 'Website',
     schoolStatus: 'School Status',
+    schoolCrest: 'School Crest',
+    schoolCrestHint: 'Choose a JPG, PNG, or WebP file. Maximum size 2MB.',
+    schoolCrestPreviewAlt: 'School crest preview',
+    noCrestSelected: 'No crest',
+    removeCrest: 'Remove Crest',
     setDisabledHint: 'Set to Disabled instead of deleting this school.',
     province: 'Province',
     selectProvince: 'Select province',
@@ -751,6 +796,10 @@ const showSchoolDialog = computed(() => isCreatingSchool.value || isEditDialog.v
 const dialogErrorMessage = ref('')
 const dialogErrorMessageRef = ref<HTMLElement | null>(null)
 const deletingSchoolId = ref<number | null>(null)
+const crestFile = ref<File | null>(null)
+const crestPreviewUrl = ref('')
+const removeCrest = ref(false)
+const crestInputKey = ref(0)
 
 const schoolForm = reactive<SchoolForm>({
   census_id: '',
@@ -889,6 +938,45 @@ const buildSchoolContextRequestConfig = (): { params?: Record<string, string>; h
   }
 }
 
+const resetCrestSelection = (): void => {
+  crestFile.value = null
+  removeCrest.value = false
+  crestInputKey.value += 1
+}
+
+const syncCrestPreview = (url: string | null | undefined): void => {
+  crestPreviewUrl.value = String(url ?? '').trim()
+}
+
+const removeSelectedCrest = (): void => {
+  crestFile.value = null
+  removeCrest.value = true
+  crestPreviewUrl.value = ''
+  crestInputKey.value += 1
+}
+
+const onCrestFileChange = (event: Event): void => {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0] ?? null
+
+  if (!file) {
+    return
+  }
+
+  crestFile.value = file
+  removeCrest.value = false
+  crestPreviewUrl.value = URL.createObjectURL(file)
+}
+
+const notifySchoolIdentityUpdated = (details: SchoolDetails | null): void => {
+  window.dispatchEvent(new CustomEvent<SchoolIdentityDetail>('sds:school-identity-updated', {
+    detail: {
+      schoolName: String(details?.sch_name ?? '').trim(),
+      crestUrl: String(details?.crest_url ?? '').trim(),
+    },
+  }))
+}
+
 const resetSchoolForm = (): void => {
   schoolForm.census_id = ''
   schoolForm.exam_no = ''
@@ -908,6 +996,8 @@ const resetSchoolForm = (): void => {
   schoolForm.belongs_to_id = 0
   schoolForm.grd_span_id = 0
   statusValue.value = 'active'
+  crestPreviewUrl.value = ''
+  resetCrestSelection()
 }
 
 const applySchoolToForm = (details: SchoolDetails): void => {
@@ -929,6 +1019,8 @@ const applySchoolToForm = (details: SchoolDetails): void => {
   schoolForm.belongs_to_id = Number(details.belongs_to_id ?? 0)
   schoolForm.grd_span_id = Number(details.grd_span_id ?? 0)
   statusValue.value = Number(details.is_deleted ?? 0) === 1 ? 'disabled' : 'active'
+  syncCrestPreview(details.crest_url)
+  resetCrestSelection()
 }
 
 const ensureOptionValue = (value: number, options: OptionRow[]): number => {
@@ -1037,10 +1129,12 @@ const loadSchoolDetails = async (keepMessages: boolean = false): Promise<void> =
 
     if (school.value) {
       applySchoolToForm(school.value)
+      notifySchoolIdentityUpdated(school.value)
       await loadSchoolLookupOptions()
     } else {
       resetSchoolForm()
       clearSchoolOptions()
+      notifySchoolIdentityUpdated(null)
     }
   } catch (reason) {
     school.value = null
@@ -1048,6 +1142,7 @@ const loadSchoolDetails = async (keepMessages: boolean = false): Promise<void> =
     canToggleStatus.value = false
     resetSchoolForm()
     clearSchoolOptions()
+    notifySchoolIdentityUpdated(null)
     errorText.value = extractApiMessage(reason) || text.value.unableToLoadSchoolDetails
   } finally {
     isLoading.value = false
@@ -1280,31 +1375,44 @@ const saveSchoolDetails = async (useDialogError: boolean = false, closeDialogAft
   noticeText.value = ''
 
   try {
-    const payload: Record<string, string | number> = {
-      exam_no: schoolForm.exam_no,
-      sch_name: schoolForm.sch_name,
-      address1: schoolForm.address1,
-      address2: schoolForm.address2,
-      contact_no: schoolForm.contact_no,
-      email: schoolForm.email,
-      web_address: schoolForm.web_address,
-      pro_id: schoolForm.pro_id,
-      dis_id: schoolForm.dis_id,
-      zone_id: schoolForm.zone_id,
-      div_id: schoolForm.div_id,
-      div_sec_id: schoolForm.div_sec_id,
-      gs_div_id: schoolForm.gs_div_id,
-      sch_type_id: schoolForm.sch_type_id,
-      belongs_to_id: schoolForm.belongs_to_id,
-      grd_span_id: schoolForm.grd_span_id,
-    }
+    const payload = new FormData()
+    payload.append('exam_no', schoolForm.exam_no)
+    payload.append('sch_name', schoolForm.sch_name)
+    payload.append('address1', schoolForm.address1)
+    payload.append('address2', schoolForm.address2)
+    payload.append('contact_no', schoolForm.contact_no)
+    payload.append('email', schoolForm.email)
+    payload.append('web_address', schoolForm.web_address)
+    payload.append('pro_id', String(schoolForm.pro_id))
+    payload.append('dis_id', String(schoolForm.dis_id))
+    payload.append('zone_id', String(schoolForm.zone_id))
+    payload.append('div_id', String(schoolForm.div_id))
+    payload.append('div_sec_id', String(schoolForm.div_sec_id))
+    payload.append('gs_div_id', String(schoolForm.gs_div_id))
+    payload.append('sch_type_id', String(schoolForm.sch_type_id))
+    payload.append('belongs_to_id', String(schoolForm.belongs_to_id))
+    payload.append('grd_span_id', String(schoolForm.grd_span_id))
 
     if (canToggleStatus.value) {
-      payload.is_deleted = statusValue.value === 'disabled' ? 1 : 0
+      payload.append('is_deleted', statusValue.value === 'disabled' ? '1' : '0')
+    }
+
+    if (removeCrest.value) {
+      payload.append('remove_crest', '1')
+    }
+
+    if (crestFile.value) {
+      payload.append('crest_image', crestFile.value)
     }
 
     const contextConfig = buildSchoolContextRequestConfig()
-    const { data } = await api.put<{ message?: string; school?: SchoolDetails | null }>('/school/details', payload, contextConfig)
+    const { data } = await api.put<{ message?: string; school?: SchoolDetails | null }>('/school/details', payload, {
+      ...contextConfig,
+      headers: {
+        ...(contextConfig?.headers ?? {}),
+        'Content-Type': 'multipart/form-data',
+      },
+    })
 
     if (data.school) {
       school.value = data.school
@@ -1336,9 +1444,6 @@ onMounted(async () => {
   await loadSchoolDetails()
 })
 </script>
-
-
-
 
 
 

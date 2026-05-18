@@ -212,7 +212,9 @@ class SchoolController extends Controller
             ], 422);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validator = Validator::make(array_merge($request->all(), [
+            'crest_image' => $request->file('crest_image'),
+        ]), [
             'exam_no' => ['sometimes', 'nullable', 'string', 'max:50'],
             'sch_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'address1' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -220,6 +222,8 @@ class SchoolController extends Controller
             'contact_no' => ['sometimes', 'nullable', 'string', 'max:50'],
             'email' => ['sometimes', 'nullable', 'email', 'max:150'],
             'web_address' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'crest_image' => ['sometimes', 'nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_crest' => ['sometimes', 'boolean'],
             'pro_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'dis_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'zone_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
@@ -247,6 +251,8 @@ class SchoolController extends Controller
         }
 
         $updates = [];
+        $crestUploaded = $request->hasFile('crest_image');
+        $removeCrest = filter_var($validated['remove_crest'] ?? false, FILTER_VALIDATE_BOOL);
 
         foreach (['exam_no', 'sch_name', 'address1', 'address2', 'contact_no', 'email', 'web_address'] as $field) {
             if (!array_key_exists($field, $validated)) {
@@ -300,9 +306,19 @@ class SchoolController extends Controller
             $updates['date_updated'] = now();
         }
 
-        DB::table($schoolTable)
-            ->whereIn('census_id', $this->censusCandidates($selectedSchoolCensusId))
-            ->update($updates);
+        if ($updates !== []) {
+            DB::table($schoolTable)
+                ->whereIn('census_id', $this->censusCandidates($selectedSchoolCensusId))
+                ->update($updates);
+        }
+
+        if ($removeCrest) {
+            $this->removeSchoolCrest($selectedSchoolCensusId);
+        }
+
+        if ($crestUploaded) {
+            $this->storeSchoolCrest($request->file('crest_image'), $selectedSchoolCensusId);
+        }
 
         $school = $this->loadSchoolDetails($selectedSchoolCensusId, $this->isAdministrator($user));
 
@@ -324,7 +340,9 @@ class SchoolController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validator = Validator::make(array_merge($request->all(), [
+            'crest_image' => $request->file('crest_image'),
+        ]), [
             'census_id' => ['required', 'string', 'regex:/^[0-9]{4,7}$/'],
             'exam_no' => ['sometimes', 'nullable', 'string', 'max:50'],
             'sch_name' => ['required', 'string', 'max:255'],
@@ -333,6 +351,7 @@ class SchoolController extends Controller
             'contact_no' => ['sometimes', 'nullable', 'string', 'max:50'],
             'email' => ['sometimes', 'nullable', 'email', 'max:150'],
             'web_address' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'crest_image' => ['sometimes', 'nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'pro_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'dis_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'zone_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
@@ -410,6 +429,10 @@ class SchoolController extends Controller
         }
 
         DB::table($schoolTable)->insert($insert);
+
+        if ($request->hasFile('crest_image')) {
+            $this->storeSchoolCrest($request->file('crest_image'), $censusId);
+        }
 
         return response()->json([
             'message' => 'School added successfully.',
@@ -598,6 +621,7 @@ class SchoolController extends Controller
             'contact_no' => $this->toNullableString($row->contact_no ?? null),
             'email' => $this->toNullableString($row->email ?? null),
             'web_address' => $this->toNullableString($row->web_address ?? null),
+            'crest_url' => $this->resolveSchoolCrestUrl((string) ($row->census_id ?? '')),
             'pro_id' => $this->toIntOrZero($row->pro_id ?? null),
             'dis_id' => $this->toIntOrZero($row->dis_id ?? null),
             'zone_id' => $this->toIntOrZero($row->zone_id ?? null),
@@ -621,6 +645,62 @@ class SchoolController extends Controller
         $school['grade_span_name'] = $this->resolveOptionLabel('grade_span_tbl', 'grd_span_id', $school['grd_span_id'], ['grd_span_en', 'grd_span_si', 'grd_span_ta', 'grd_span']);
 
         return $school;
+    }
+
+    private function storeSchoolCrest(mixed $photo, string $censusId): void
+    {
+        $normalizedCensusId = trim($censusId);
+        if ($normalizedCensusId === '' || !$photo instanceof \Illuminate\Http\UploadedFile) {
+            return;
+        }
+
+        $targetDir = public_path('uploads/schools');
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+
+        $extension = strtolower((string) $photo->getClientOriginalExtension());
+        if ($extension === '') {
+            $extension = 'jpg';
+        }
+
+        $this->removeSchoolCrest($normalizedCensusId);
+
+        $photo->move($targetDir, $normalizedCensusId . '.' . $extension);
+    }
+
+    private function removeSchoolCrest(string $censusId): void
+    {
+        $normalizedCensusId = trim($censusId);
+        if ($normalizedCensusId === '') {
+            return;
+        }
+
+        $targetDir = public_path('uploads/schools');
+        foreach (glob($targetDir . DIRECTORY_SEPARATOR . $normalizedCensusId . '.*') ?: [] as $existingFile) {
+            if (is_file($existingFile)) {
+                @unlink($existingFile);
+            }
+        }
+    }
+
+    private function resolveSchoolCrestUrl(string $censusId): ?string
+    {
+        $normalizedCensusId = trim($censusId);
+        if ($normalizedCensusId === '') {
+            return null;
+        }
+
+        $matches = glob(public_path('uploads/schools/' . $normalizedCensusId . '.*')) ?: [];
+        $path = $matches[0] ?? null;
+
+        if ($path === null || !is_file($path)) {
+            return null;
+        }
+
+        $version = @filemtime($path);
+
+        return url('/uploads/schools/' . basename($path)) . ($version ? ('?v=' . $version) : '');
     }
 
     /**
