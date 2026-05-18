@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\GradeController;
 use App\Http\Controllers\Api\V1\GradeReportController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\ModuleCatalogController;
+use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\SchoolController;
 use App\Http\Controllers\Api\V1\StaffController;
 use App\Http\Controllers\Api\V1\StudentController;
@@ -35,6 +36,11 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/school/details', [SchoolController::class, 'store']);
         Route::put('/school/details', [SchoolController::class, 'update']);
         Route::delete('/school/details', [SchoolController::class, 'destroy']);
+
+        Route::get('/payments/options', [PaymentController::class, 'options']);
+        Route::get('/payments/student', [PaymentController::class, 'student']);
+        Route::get('/payments/fee', [PaymentController::class, 'fee']);
+        Route::post('/payments', [PaymentController::class, 'store']);
 
         Route::get('/grades', GradeController::class);
         Route::post('/grades/initialize-year', [GradeController::class, 'initializeYear']);

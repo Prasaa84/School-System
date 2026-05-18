@@ -3,6 +3,7 @@ import DashboardView from '../views/DashboardView.vue'
 import SchoolView from '../views/SchoolView.vue'
 import LoginView from '../views/LoginView.vue'
 import ModulePlaceholderView from '../views/ModulePlaceholderView.vue'
+import PaymentsView from '../views/PaymentsView.vue'
 import StudentProfileView from '../views/StudentProfileView.vue'
 import StudentsInClassesView from '../views/StudentsInClassesView.vue'
 import StudentsView from '../views/StudentsView.vue'
@@ -65,6 +66,12 @@ const router = createRouter({
     {
       path: '/students/class-assignment',
       redirect: '/students/in-classes',
+    },
+    {
+      path: '/module/payments',
+      name: 'payments',
+      component: PaymentsView,
+      meta: { requiresAuth: true },
     },
     {
       path: '/module/:moduleKey',
