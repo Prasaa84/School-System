@@ -538,6 +538,11 @@ const openRemoveStudentDialog = (classBox: ClassBox, student: StudentRow): void 
   }
 }
 
+const clearPageStatus = (): void => {
+  pageMessage.value = ''
+  pageError.value = ''
+}
+
 const closeConfirmDialog = (): void => {
   if (confirmDialogBusy.value) {
     return
@@ -550,7 +555,15 @@ const setFileInputRef = (classId: number, element: Element | null): void => {
   fileInputsByClass.value[classId] = element instanceof HTMLInputElement ? element : null
 }
 
+const clearSelectedFile = (classId: number): void => {
+  selectedFilesByClass.value[classId] = null
+  if (fileInputsByClass.value[classId]) {
+    fileInputsByClass.value[classId]!.value = ''
+  }
+}
+
 const openFileDialog = (classId: number): void => {
+  clearSelectedFile(classId)
   fileInputsByClass.value[classId]?.click()
 }
 
@@ -716,10 +729,7 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
     uploadResultsByClass.value[classBox.sch_grd_cls_id] = normalizeUploadSummary(data?.data)
 
     pageMessage.value = `${classBox.class}: ${text.value.saveSuccess} ${text.value.successful}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].successful_count}, ${text.value.failed}: ${uploadResultsByClass.value[classBox.sch_grd_cls_id].failed_count}.`
-    selectedFilesByClass.value[classBox.sch_grd_cls_id] = null
-    if (fileInputsByClass.value[classBox.sch_grd_cls_id]) {
-      fileInputsByClass.value[classBox.sch_grd_cls_id]!.value = ''
-    }
+    clearSelectedFile(classBox.sch_grd_cls_id)
     await loadOverview()
   } catch (error: any) {
     if (error?.response?.status === 422 && error?.response?.data?.data) {
@@ -729,6 +739,8 @@ const uploadClassFile = async (classBox: ClassBox): Promise<void> => {
     } else {
       pageError.value = extractApiMessage(error)
     }
+
+    clearSelectedFile(classBox.sch_grd_cls_id)
   } finally {
     uploadingClassId.value = null
   }
@@ -812,6 +824,7 @@ const onSchoolChange = async (): Promise<void> => {
     return
   }
 
+  clearPageStatus()
   const censusId = Number(adminSchoolContextCensusId.value)
   setSchoolContextCensusId(censusId > 0 ? censusId : null)
   selectedYear.value = 0
@@ -822,12 +835,14 @@ const onSchoolChange = async (): Promise<void> => {
 }
 
 watch(() => selectedYear.value, async (year) => {
+  clearPageStatus()
   selectedGradeId.value = 0
   classBoxes.value = []
   gradesForYear.value = year > 0 ? await loadGradesForYear(year) : []
 })
 
 watch(() => selectedGradeId.value, async () => {
+  clearPageStatus()
   await loadOverview()
 })
 
