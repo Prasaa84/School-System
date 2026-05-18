@@ -40,6 +40,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/payments/options', [PaymentController::class, 'options']);
         Route::get('/payments/student', [PaymentController::class, 'student']);
         Route::get('/payments/fee', [PaymentController::class, 'fee']);
+        Route::get('/payments/fee-types', [PaymentController::class, 'feeTypes']);
+        Route::post('/payments/fee-types', [PaymentController::class, 'storeFeeType']);
+        Route::put('/payments/fee-types/{feeTypeId}', [PaymentController::class, 'updateFeeType'])->whereNumber('feeTypeId');
         Route::post('/payments', [PaymentController::class, 'store']);
 
         Route::get('/grades', GradeController::class);

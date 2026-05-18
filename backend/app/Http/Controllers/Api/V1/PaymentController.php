@@ -145,6 +145,185 @@ class PaymentController extends Controller
         return response()->json($fee);
     }
 
+    public function feeTypes(): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canManageFeeTypes($user)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        Log::info('Payments fee types requested.', [
+            'user_id' => $user->user_id ?? null,
+            'role_id' => $user->role_id ?? null,
+        ]);
+
+        return response()->json([
+            'fee_types' => $this->loadFeeTypeRows(),
+        ]);
+    }
+
+    public function storeFeeType(Request $request): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canManageFeeTypes($user)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $validated = Validator::make($request->all(), [
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'annual_fee' => ['required', 'numeric', 'min:0'],
+            'member_fee' => ['required', 'numeric', 'min:0'],
+        ])->validate();
+
+        $table = 'sds_annual_fee_type_tbl';
+        if (!Schema::hasTable($table)) {
+            Log::error('Payments fee type create failed: fee types table missing.', [
+                'user_id' => $user->user_id ?? null,
+                'table' => $table,
+            ]);
+
+            return response()->json([
+                'message' => 'Annual fee types table is missing.',
+            ], 500);
+        }
+
+        $year = (int) ($validated['year'] ?? 0);
+        $annualFee = (float) ($validated['annual_fee'] ?? 0);
+        $memberFee = (float) ($validated['member_fee'] ?? 0);
+
+        Log::info('Payments fee type create requested.', [
+            'user_id' => $user->user_id ?? null,
+            'role_id' => $user->role_id ?? null,
+            'year' => $year,
+            'annual_fee' => $annualFee,
+            'member_fee' => $memberFee,
+        ]);
+
+        if ($this->feeTypeYearExists($year)) {
+            Log::warning('Payments fee type create blocked: year already exists.', [
+                'user_id' => $user->user_id ?? null,
+                'year' => $year,
+            ]);
+
+            return response()->json([
+                'message' => 'Annual fee type already exists for this year.',
+            ], 422);
+        }
+
+        $feeTypeId = (int) DB::table($table)->insertGetId([
+            'year' => $year,
+            'sds_annual_fee' => $annualFee,
+            'sds_member_fee' => $memberFee,
+            'date_added' => now(),
+        ], 'sds_annual_fee_id');
+
+        Log::info('Payments fee type create completed.', [
+            'user_id' => $user->user_id ?? null,
+            'fee_type_id' => $feeTypeId,
+            'year' => $year,
+        ]);
+
+        return response()->json([
+            'message' => 'Annual fee type added successfully.',
+            'fee_type' => $this->loadFeeTypeById($feeTypeId),
+        ], 201);
+    }
+
+    public function updateFeeType(Request $request, int $feeTypeId): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canManageFeeTypes($user)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $validated = Validator::make($request->all(), [
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'annual_fee' => ['required', 'numeric', 'min:0'],
+            'member_fee' => ['required', 'numeric', 'min:0'],
+        ])->validate();
+
+        $table = 'sds_annual_fee_type_tbl';
+        if (!Schema::hasTable($table)) {
+            Log::error('Payments fee type update failed: fee types table missing.', [
+                'user_id' => $user->user_id ?? null,
+                'table' => $table,
+                'fee_type_id' => $feeTypeId,
+            ]);
+
+            return response()->json([
+                'message' => 'Annual fee types table is missing.',
+            ], 500);
+        }
+
+        $existing = $this->loadFeeTypeById($feeTypeId);
+        if ($existing === null) {
+            Log::warning('Payments fee type update failed: record not found.', [
+                'user_id' => $user->user_id ?? null,
+                'fee_type_id' => $feeTypeId,
+            ]);
+
+            return response()->json([
+                'message' => 'Annual fee type not found.',
+            ], 404);
+        }
+
+        $year = (int) ($validated['year'] ?? 0);
+        $annualFee = (float) ($validated['annual_fee'] ?? 0);
+        $memberFee = (float) ($validated['member_fee'] ?? 0);
+
+        Log::info('Payments fee type update requested.', [
+            'user_id' => $user->user_id ?? null,
+            'role_id' => $user->role_id ?? null,
+            'fee_type_id' => $feeTypeId,
+            'year' => $year,
+            'annual_fee' => $annualFee,
+            'member_fee' => $memberFee,
+        ]);
+
+        if ($this->feeTypeYearExists($year, $feeTypeId)) {
+            Log::warning('Payments fee type update blocked: year already exists on another record.', [
+                'user_id' => $user->user_id ?? null,
+                'fee_type_id' => $feeTypeId,
+                'year' => $year,
+            ]);
+
+            return response()->json([
+                'message' => 'Annual fee type already exists for this year.',
+            ], 422);
+        }
+
+        DB::table($table)
+            ->where('sds_annual_fee_id', $feeTypeId)
+            ->update([
+                'year' => $year,
+                'sds_annual_fee' => $annualFee,
+                'sds_member_fee' => $memberFee,
+            ]);
+
+        Log::info('Payments fee type update completed.', [
+            'user_id' => $user->user_id ?? null,
+            'fee_type_id' => $feeTypeId,
+            'year' => $year,
+        ]);
+
+        return response()->json([
+            'message' => 'Annual fee type updated successfully.',
+            'fee_type' => $this->loadFeeTypeById($feeTypeId),
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $user = $this->authUser();
@@ -295,6 +474,22 @@ class PaymentController extends Controller
         return in_array($roleName, ['admin', 'administrator', 'principal'], true);
     }
 
+    private function canManageFeeTypes(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        $roleId = (int) ($user->role_id ?? 0);
+        if (in_array($roleId, [1, 2], true)) {
+            return true;
+        }
+
+        $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
+
+        return in_array($roleName, ['admin', 'administrator', 'principal'], true);
+    }
+
     private function resolveTargetSchoolCensusId(?User $user): ?string
     {
         if ($this->isAdministrator($user)) {
@@ -378,6 +573,69 @@ class PaymentController extends Controller
             'annual_fee' => (float) ($row->sds_annual_fee ?? 0),
             'member_fee' => (float) ($row->sds_member_fee ?? 0),
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadFeeTypeRows(): array
+    {
+        if (!Schema::hasTable('sds_annual_fee_type_tbl')) {
+            return [];
+        }
+
+        return DB::table('sds_annual_fee_type_tbl')
+            ->orderByDesc('year')
+            ->orderByDesc('sds_annual_fee_id')
+            ->get()
+            ->map(fn (object $row): array => [
+                'id' => (int) ($row->sds_annual_fee_id ?? 0),
+                'year' => (int) ($row->year ?? 0),
+                'annual_fee' => (float) ($row->sds_annual_fee ?? 0),
+                'member_fee' => (float) ($row->sds_member_fee ?? 0),
+                'date_added' => (string) ($row->date_added ?? ''),
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadFeeTypeById(int $feeTypeId): ?array
+    {
+        if ($feeTypeId <= 0 || !Schema::hasTable('sds_annual_fee_type_tbl')) {
+            return null;
+        }
+
+        $row = DB::table('sds_annual_fee_type_tbl')
+            ->where('sds_annual_fee_id', $feeTypeId)
+            ->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) ($row->sds_annual_fee_id ?? 0),
+            'year' => (int) ($row->year ?? 0),
+            'annual_fee' => (float) ($row->sds_annual_fee ?? 0),
+            'member_fee' => (float) ($row->sds_member_fee ?? 0),
+            'date_added' => (string) ($row->date_added ?? ''),
+        ];
+    }
+
+    private function feeTypeYearExists(int $year, ?int $exceptId = null): bool
+    {
+        if ($year <= 0 || !Schema::hasTable('sds_annual_fee_type_tbl')) {
+            return false;
+        }
+
+        $query = DB::table('sds_annual_fee_type_tbl')->where('year', $year);
+        if ($exceptId !== null && $exceptId > 0) {
+            $query->where('sds_annual_fee_id', '!=', $exceptId);
+        }
+
+        return $query->exists();
     }
 
     /**

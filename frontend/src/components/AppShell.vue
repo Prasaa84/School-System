@@ -200,6 +200,7 @@ const router = useRouter()
 const currentUser = getUser()
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
+const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
 const schoolName = ref('')
 const schoolCrestUrl = ref('')
 type SchoolIdentityDetail = {
@@ -324,14 +325,17 @@ const localizedMenu = computed(() => {
           en: {
             'students-in-classes': 'Students in Classes',
             'students-report': 'Student Reports',
+            'payments-fee-types': 'Fee Types',
           }[child.key] ?? child.label,
           si: {
             'students-in-classes': 'පන්තිවල සිසුන්',
             'students-report': 'සිසු වාර්තා',
+            'payments-fee-types': 'ගාස්තු වර්ග',
           }[child.key] ?? child.label,
           ta: {
             'students-in-classes': 'வகுப்புகளில் மாணவர்கள்',
             'students-report': 'மாணவர் அறிக்கைகள்',
+            'payments-fee-types': 'கட்டண வகைகள்',
           }[child.key] ?? child.label,
         }),
       })),
@@ -394,12 +398,17 @@ const loadMenu = async (): Promise<void> => {
       key: module.key,
       label: module.label,
       to: resolveModulePath(module),
-      children: module.key === 'students'
-        ? [
-            { key: 'students-in-classes', label: 'Students in Classes', to: '/students/in-classes' },
-            { key: 'students-report', label: 'Student Reports', to: '/students/report' },
-          ]
-        : undefined,
+      children:
+        module.key === 'students'
+          ? [
+              { key: 'students-in-classes', label: 'Students in Classes', to: '/students/in-classes' },
+              { key: 'students-report', label: 'Student Reports', to: '/students/report' },
+            ]
+          : module.key === 'payments' && (isAdmin.value || isPrincipal.value)
+            ? [
+                { key: 'payments-fee-types', label: 'Fee Types', to: '/module/payments/fee-types' },
+              ]
+            : undefined,
     }))
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
 

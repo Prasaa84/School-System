@@ -74,6 +74,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/module/payments/fee-types',
+      name: 'payments-fee-types',
+      component: PaymentsView,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/module/:moduleKey',
       name: 'module',
       component: ModulePlaceholderView,
