@@ -1,14 +1,14 @@
 <template>
   <div class="min-h-screen bg-slate-100">
     <header class="bg-gradient-to-r from-cyan-700 via-cyan-600 to-teal-600 py-4 text-center text-white shadow-sm">
-      <h1 class="font-display text-2xl font-bold tracking-wide">SCHOOL DATA SYSTEM</h1>
+      <h1 class="font-display text-2xl font-bold tracking-wide">SCHOOL RECORDS</h1>
       <p class="mt-1 text-sm">Multi-School Management Portal</p>
     </header>
 
     <main class="mx-auto grid w-full max-w-6xl gap-6 px-4 py-10 md:grid-cols-[1.1fr_1fr] md:items-center">
       <section class="hidden items-center justify-center md:flex">
         <div class="max-w-md rounded-2xl border border-slate-200 bg-white/80 p-8 text-slate-700 shadow-lg">
-          <h3 class="font-display text-2xl font-bold text-slate-900">Welcome to SDS</h3>
+          <h3 class="font-display text-2xl font-bold text-slate-900">Welcome to School Records</h3>
           <p class="mt-3 text-sm leading-6">
             Manage student records, staff information, classes, and reports in one place.
           </p>
@@ -22,7 +22,7 @@
         <div class="mb-4 text-center">
           <img src="/images/login_page_user.png" alt="User icon" class="mx-auto mb-3 h-20 w-20 rounded-full" />
           <h2 class="font-display text-2xl font-bold text-slate-900">Sign in to continue</h2>
-          <p class="mt-1 text-sm text-slate-600">Use your SDS account credentials</p>
+          <p class="mt-1 text-sm text-slate-600">Use your account credentials</p>
         </div>
 
         <form class="space-y-4" @submit.prevent="submitLogin">
@@ -71,7 +71,7 @@
     </main>
 
     <footer class="border-t border-slate-800 bg-slate-900 py-5 text-center text-xs text-slate-300">
-      © {{ year }} School Data System
+      © {{ year }} School Records
     </footer>
   </div>
 </template>

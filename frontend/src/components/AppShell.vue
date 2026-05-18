@@ -10,7 +10,7 @@
         <div class="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
           <img :src="schoolCrestUrl || '/images/default_school_crest.svg'" :alt="schoolName ? `${schoolName} crest` : 'School crest'" class="h-10 w-10 rounded-lg object-contain" />
           <div v-if="showSidebarText" class="leading-tight">
-            <p class="font-brand text-sm uppercase tracking-[0.2em] text-slate-500">SDS</p>
+            <p class="font-brand text-sm uppercase tracking-[0.2em] text-slate-500">{{ shellText.recordsBadge }}</p>
             <p class="font-display text-lg font-bold">{{ platformTitle }}</p>
           </div>
         </div>
@@ -212,10 +212,12 @@ const shellText = computed(() => {
     return {
       adminPlatform: 'පරිපාලන වේදිකාව',
       userPlatform: 'පරිශීලක වේදිකාව',
+      recordsBadge: 'වාර්තා',
       menu: 'මෙනු',
       collapse: 'සඟවන්න',
       expand: 'විහිදුවන්න',
-      headerTitle: 'SDS වාර්තා',
+      headerTitle: 'වාර්තා',
+      adminHeaderTitle: 'පාසල් වාර්තා',
       logout: 'ඉවත්වන්න',
       language: 'භාෂාව',
       authenticatedUser: 'සත්‍යාපිත පරිශීලකයා',
@@ -227,10 +229,12 @@ const shellText = computed(() => {
     return {
       adminPlatform: 'நிர்வாக தளம்',
       userPlatform: 'பயனர் தளம்',
+      recordsBadge: 'பதிவுகள்',
       menu: 'பட்டியல்',
       collapse: 'சுருக்கு',
       expand: 'விரிவு',
-      headerTitle: 'SDS பதிவுகள்',
+      headerTitle: 'பதிவுகள்',
+      adminHeaderTitle: 'பள்ளி பதிவுகள்',
       logout: 'வெளியேறு',
       language: 'மொழி',
       authenticatedUser: 'உறுதிப்படுத்தப்பட்ட பயனர்',
@@ -241,10 +245,12 @@ const shellText = computed(() => {
   return {
     adminPlatform: 'Admin Platform',
     userPlatform: 'User Platform',
+    recordsBadge: 'Records',
     menu: 'Menu',
     collapse: 'Collapse',
     expand: 'Expand',
-    headerTitle: 'SDS Records',
+    headerTitle: 'Records',
+    adminHeaderTitle: 'School Records',
     logout: 'Logout',
     language: 'Language',
     authenticatedUser: 'Authenticated User',
@@ -254,7 +260,7 @@ const shellText = computed(() => {
 
 const headerTitle = computed(() => {
   if (isAdmin.value) {
-    return shellText.value.headerTitle
+    return shellText.value.adminHeaderTitle
   }
 
   const normalizedSchoolName = schoolName.value.trim()
