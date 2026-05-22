@@ -143,9 +143,13 @@
           </div>
 
           <div class="flex items-center gap-2 sm:gap-3">
-            <div class="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 md:flex">
-              <span class="text-xs font-semibold text-slate-600">{{ shellText.language }}</span>
-              <select v-model="selectedLanguage" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none ring-cyan-500 focus:ring-2">
+            <div class="hidden items-center gap-2 md:flex">
+              <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500" :title="shellText.language">
+                <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM6.84 5.2A10.9 10.9 0 0 0 5.9 9.25h2.24c.08-1.45.36-2.84.82-4.05H6.84Zm3.16 0c-.5 1.16-.81 2.57-.9 4.05h1.8c-.08-1.48-.4-2.89-.9-4.05Zm1.94 0c.46 1.21.74 2.6.82 4.05H15.1a10.9 10.9 0 0 0-.94-4.05h-2.22ZM15.1 10.75h-2.34a12.8 12.8 0 0 1-.82 4.05h2.22c.5-1.18.82-2.57.94-4.05ZM10.94 14.8c.5-1.16.81-2.57.9-4.05h-1.8c.08 1.48.4 2.89.9 4.05Zm-1.98 0a12.8 12.8 0 0 1-.82-4.05H5.9c.12 1.48.44 2.87.94 4.05h2.12Z" clip-rule="evenodd" />
+                </svg>
+              </span>
+              <select v-model="selectedLanguage" :aria-label="shellText.language" :title="shellText.language" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none ring-cyan-500 focus:ring-2">
                 <option value="en">English</option>
                 <option value="si">සිංහල</option>
                 <option value="ta">தமிழ்</option>
