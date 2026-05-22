@@ -22,6 +22,11 @@ class FeatureAccessService
     {
         return [
             [
+                'key' => self::STUDENT_VIEW,
+                'label' => 'Studentt View',
+                'description' => 'View student records.',
+            ],
+            [
                 'key' => self::STUDENT_CREATE,
                 'label' => 'Student Add',
                 'description' => 'Create new student records.',
