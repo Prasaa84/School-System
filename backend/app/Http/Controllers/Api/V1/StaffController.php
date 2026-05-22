@@ -66,12 +66,7 @@ class StaffController extends Controller
                     $builder->where('is_deleted', 0);
                 })
                 ->when($q !== '', function ($builder) use ($q): void {
-                    $builder->where(function ($inner) use ($q): void {
-                        $inner
-                            ->where('name_with_ini', 'like', "%{$q}%")
-                            ->orWhere('nic_no', 'like', "%{$q}%")
-                            ->orWhere('phone_mobile1', 'like', "%{$q}%");
-                    });
+                    $this->applyStaffSearchFilter($builder, $q);
                 })
                 ->orderBy('census_id')
                 ->orderBy('stf_id');
@@ -596,12 +591,7 @@ class StaffController extends Controller
                     $builder->where('is_deleted', 0);
                 })
                 ->when($keyword !== '', function ($builder) use ($keyword): void {
-                    $builder->where(function ($inner) use ($keyword): void {
-                        $inner
-                            ->where('name_with_ini', 'like', "%{$keyword}%")
-                            ->orWhere('nic_no', 'like', "%{$keyword}%")
-                            ->orWhere('phone_mobile1', 'like', "%{$keyword}%");
-                    });
+                    $this->applyStaffSearchFilter($builder, $keyword);
                 });
 
             if ($this->isAdministrator($user)) {
@@ -677,11 +667,39 @@ class StaffController extends Controller
         $this->applyStaffGradeClassFilters($query, $request);
     }
 
+    private function applyStaffSearchFilter($query, string $keyword): void
+    {
+        $trimmedKeyword = trim($keyword);
+        if ($trimmedKeyword === '') {
+            return;
+        }
+
+        $normalizedKeyword = preg_replace('/[^A-Za-z0-9]/', '', $trimmedKeyword) ?? '';
+
+        $query->where(function ($inner) use ($trimmedKeyword, $normalizedKeyword): void {
+            $inner->where('name_with_ini', 'like', "%{$trimmedKeyword}%");
+
+            if (Schema::hasColumn('staff_tbl', 'full_name')) {
+                $inner->orWhere('full_name', 'like', "%{$trimmedKeyword}%");
+            }
+
+            $inner
+                ->orWhere('nic_no', 'like', "%{$trimmedKeyword}%")
+                ->orWhere('phone_mobile1', 'like', "%{$trimmedKeyword}%");
+
+            if ($normalizedKeyword !== '' && Schema::hasColumn('staff_tbl', 'nic_no')) {
+                $inner->orWhereRaw(
+                    "REPLACE(REPLACE(REPLACE(REPLACE(nic_no, ' ', ''), '-', ''), '/', ''), '.', '') LIKE ?",
+                    ["%{$normalizedKeyword}%"]
+                );
+            }
+        });
+    }
+
     private function applyStaffGradeClassFilters($query, Request $request): void
     {
         $gradeId = (int) $request->query('grade_id', 0);
         $classId = (int) $request->query('class_id', 0);
-        $currentYear = (int) now()->year;
 
         if ($gradeId <= 0 && $classId <= 0) {
             return;
@@ -692,22 +710,24 @@ class StaffController extends Controller
         $targetSchoolCensusId = $this->isAdministrator($user)
             ? ($schoolCensusId !== '' ? $this->resolveCanonicalSchoolCensusId($schoolCensusId) : null)
             : $this->resolveEffectiveSchoolCensusId($user);
+        $currentGradeYear = $this->resolveLatestScopedYear('school_grade_tbl', 'sgt', $user, $targetSchoolCensusId);
+        $currentClassYear = $this->resolveLatestScopedYear('school_grade_class_tbl', 'sgct', $user, $targetSchoolCensusId);
 
-        $query->where(function ($outer) use ($gradeId, $classId, $targetSchoolCensusId, $currentYear): void {
+        $query->where(function ($outer) use ($gradeId, $classId, $targetSchoolCensusId, $currentGradeYear, $currentClassYear): void {
             $hasCondition = false;
             $includeGradeLevelAssignments = false;
 
             if ($includeGradeLevelAssignments && Schema::hasTable('school_grade_tbl') && Schema::hasColumn('school_grade_tbl', 'stf_id')) {
                 $hasCondition = true;
-                $outer->whereExists(function ($subQuery) use ($gradeId, $targetSchoolCensusId, $currentYear): void {
+                $outer->whereExists(function ($subQuery) use ($gradeId, $targetSchoolCensusId, $currentGradeYear): void {
                     $subQuery
                         ->select(DB::raw('1'))
                         ->from('school_grade_tbl as sgt')
                         ->whereColumn('sgt.stf_id', 'staff_tbl.stf_id')
                         ->where('sgt.grade_id', $gradeId);
 
-                    if (Schema::hasColumn('school_grade_tbl', 'year')) {
-                        $subQuery->where('sgt.year', $currentYear);
+                    if ($currentGradeYear !== null && Schema::hasColumn('school_grade_tbl', 'year')) {
+                        $subQuery->where('sgt.year', $currentGradeYear);
                     }
 
                     if (Schema::hasColumn('school_grade_tbl', 'is_deleted')) {
@@ -723,7 +743,7 @@ class StaffController extends Controller
             if (Schema::hasTable('school_grade_class_tbl') && Schema::hasColumn('school_grade_class_tbl', 'stf_id')) {
                 $method = $hasCondition ? 'orWhereExists' : 'whereExists';
 
-                $outer->{$method}(function ($subQuery) use ($gradeId, $classId, $targetSchoolCensusId, $currentYear): void {
+                $outer->{$method}(function ($subQuery) use ($gradeId, $classId, $targetSchoolCensusId, $currentClassYear): void {
                     $subQuery
                         ->select(DB::raw('1'))
                         ->from('school_grade_class_tbl as sgct')
@@ -737,8 +757,8 @@ class StaffController extends Controller
                         $subQuery->where('sgct.class_id', $classId);
                     }
 
-                    if (Schema::hasColumn('school_grade_class_tbl', 'year')) {
-                        $subQuery->where('sgct.year', $currentYear);
+                    if ($currentClassYear !== null && Schema::hasColumn('school_grade_class_tbl', 'year')) {
+                        $subQuery->where('sgct.year', $currentClassYear);
                     }
 
                     if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
@@ -762,7 +782,7 @@ class StaffController extends Controller
             return [];
         }
 
-        $currentYear = (int) now()->year;
+        $currentYear = $this->resolveLatestScopedYear('school_grade_tbl', 'sgt', $user);
         $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', ['grade_en', 'grade_si', 'grade_ta']);
         if ($gradeLabelColumn === null) {
             return [];
@@ -779,7 +799,7 @@ class StaffController extends Controller
             $query->where('sgt.is_deleted', 0);
         }
 
-        if (Schema::hasColumn('school_grade_tbl', 'year')) {
+        if ($currentYear !== null && Schema::hasColumn('school_grade_tbl', 'year')) {
             $query->where('sgt.year', $currentYear);
         }
 
@@ -800,7 +820,7 @@ class StaffController extends Controller
             return [];
         }
 
-        $currentYear = (int) now()->year;
+        $currentYear = $this->resolveLatestScopedYear('school_grade_class_tbl', 'sgct', $user);
         $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', ['grade_en', 'grade_si', 'grade_ta']);
         $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', ['class_en', 'class_si', 'class_ta', 'class']);
         if ($gradeLabelColumn === null || $classLabelColumn === null) {
@@ -821,7 +841,7 @@ class StaffController extends Controller
             $query->where('sgct.is_deleted', 0);
         }
 
-        if (Schema::hasColumn('school_grade_class_tbl', 'year')) {
+        if ($currentYear !== null && Schema::hasColumn('school_grade_class_tbl', 'year')) {
             $query->where('sgct.year', $currentYear);
         }
 
@@ -834,6 +854,29 @@ class StaffController extends Controller
                 ? trim(sprintf('%s - %s', (string) ($row->grade ?? ''), (string) ($row->class ?? '')), ' -')
                 : (string) ($row->class_id ?? ''),
         ])->filter(fn (array $row): bool => $row['id'] > 0 && $row['grade_id'] > 0)->values()->all();
+    }
+
+    private function resolveLatestScopedYear(string $table, string $alias, ?User $user, ?string $targetSchoolCensusId = null): ?int
+    {
+        if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'year')) {
+            return null;
+        }
+
+        $query = DB::table("{$table} as {$alias}");
+
+        if (Schema::hasColumn($table, 'is_deleted')) {
+            $query->where("{$alias}.is_deleted", 0);
+        }
+
+        if ($targetSchoolCensusId !== null && Schema::hasColumn($table, 'census_id')) {
+            $query->whereIn("{$alias}.census_id", $this->censusCandidates($targetSchoolCensusId));
+        } else {
+            $this->applySchoolScope($query, $user, $alias, 'census_id');
+        }
+
+        $year = $query->max("{$alias}.year");
+
+        return is_numeric($year) ? (int) $year : null;
     }
 
     private function localizedDesignationLabel(Staff $staff): ?string

@@ -96,8 +96,8 @@
       </div>
     </div>
 
-    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <label v-if="isAdmin" class="text-sm text-slate-700">
+    <div class="grid gap-3" :class="isSdsUser ? 'md:grid-cols-3' : 'md:grid-cols-2 xl:grid-cols-4'">
+      <label v-if="isAdmin && !isSdsUser" class="text-sm text-slate-700">
         {{ text.school }}
         <select :value="reportFilters.school_census_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('school_census_id', $event)">
           <option :value="0">{{ text.allSchools }}</option>
@@ -111,6 +111,22 @@
       </label>
 
       <label class="text-sm text-slate-700">
+        {{ text.grade }}
+        <select :value="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('grade_id', $event)">
+          <option :value="0">{{ text.all }}</option>
+          <option v-for="row in reportGrades" :key="`report-grade-filter-${row.id}`" :value="row.id">{{ row.label }}</option>
+        </select>
+      </label>
+
+      <label class="text-sm text-slate-700">
+        {{ text.class }}
+        <select :value="reportFilters.class_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('class_id', $event)">
+          <option :value="0">{{ text.all }}</option>
+          <option v-for="row in filteredReportClasses" :key="`report-class-filter-${row.grade_id}-${row.id}`" :value="row.id">{{ row.label }}</option>
+        </select>
+      </label>
+
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.gender }}
         <select :value="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('gender_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -118,7 +134,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.religion }}
         <select :value="reportFilters.religion_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('religion_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -126,7 +142,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.civilStatus }}
         <select :value="reportFilters.civil_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('civil_status_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -134,7 +150,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.ethnicGroup }}
         <select :value="reportFilters.ethnic_group_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('ethnic_group_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -142,7 +158,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.educationLevel }}
         <select :value="reportFilters.edu_q_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('edu_q_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -150,7 +166,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.professionalLevel }}
         <select :value="reportFilters.prof_q_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('prof_q_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -158,7 +174,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.designation }}
         <select :value="reportFilters.desig_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('desig_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -166,7 +182,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.staffType }}
         <select :value="reportFilters.stf_type_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('stf_type_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -174,7 +190,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.staffStatus }}
         <select :value="reportFilters.stf_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('stf_status_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -182,7 +198,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.serviceGrade }}
         <select :value="reportFilters.serv_grd_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('serv_grd_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -190,7 +206,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.serviceStatus }}
         <select :value="reportFilters.service_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('service_status_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -198,7 +214,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.section }}
         <select :value="reportFilters.sec_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('sec_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -206,7 +222,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.sectionRole }}
         <select :value="reportFilters.sec_role_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('sec_role_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -214,7 +230,7 @@
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="text-sm text-slate-700">
         {{ text.subjectMedium }}
         <select :value="reportFilters.subj_med_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('subj_med_id', $event)">
           <option :value="0">{{ text.all }}</option>
@@ -234,25 +250,25 @@
           <tr>
             <th class="px-4 py-3">{{ text.id }}</th>
             <th class="px-4 py-3">{{ text.name }}</th>
-            <th class="px-4 py-3">{{ text.nic }}</th>
+            <th v-if="!isSdsUser" class="px-4 py-3">{{ text.nic }}</th>
             <th class="px-4 py-3">{{ text.gender }}</th>
             <th class="px-4 py-3">{{ text.phone }}</th>
             <th class="px-4 py-3">{{ text.designation }}</th>
-            <th v-if="isAdmin" class="px-4 py-3">{{ text.school }}</th>
+            <th v-if="isAdmin && !isSdsUser" class="px-4 py-3">{{ text.school }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-if="reportRows.length === 0">
-            <td class="px-4 py-4 text-slate-500" :colspan="isAdmin ? 7 : 6">{{ text.noStaffFound }}</td>
+            <td class="px-4 py-4 text-slate-500" :colspan="isAdmin && !isSdsUser ? 7 : isSdsUser ? 4 : 6">{{ text.noStaffFound }}</td>
           </tr>
           <tr v-for="row in reportRows" :key="`report-row-${row.stf_id}`">
             <td class="px-4 py-3 font-medium text-slate-700">{{ row.stf_id }}</td>
             <td class="px-4 py-3">{{ row.name_with_ini }}</td>
-            <td class="px-4 py-3">{{ row.nic_no || '-' }}</td>
+            <td v-if="!isSdsUser" class="px-4 py-3">{{ row.nic_no || '-' }}</td>
             <td class="px-4 py-3">{{ row.gender || '-' }}</td>
             <td class="px-4 py-3">{{ row.phone_mobile1 || '-' }}</td>
             <td class="px-4 py-3">{{ row.designation || '-' }}</td>
-            <td v-if="isAdmin" class="px-4 py-3">{{ row.school_name || '-' }}</td>
+            <td v-if="isAdmin && !isSdsUser" class="px-4 py-3">{{ row.school_name || '-' }}</td>
           </tr>
         </tbody>
       </table>
@@ -261,6 +277,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useLocalizedText } from '../../utils/uiText'
 
 interface StaffRow {
@@ -274,10 +291,12 @@ interface StaffRow {
   school_name: string | null
 }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
-interface OptionRow { id: number; label: string }
+interface OptionRow { id: number; label: string; grade_id?: number }
 interface StaffReportFilters {
   q: string
   school_census_id: number
+  grade_id: number
+  class_id: number
   gender_id: number
   civil_status_id: number
   ethnic_group_id: number
@@ -294,9 +313,10 @@ interface StaffReportFilters {
   subj_med_id: number
 }
 
-defineProps<{
+const props = defineProps<{
   activeTab: 'view' | 'reports'
   isAdmin: boolean
+  isSdsUser: boolean
   canManage: boolean
   staffSearch: string
   selectedSchoolCensusId: number
@@ -313,6 +333,8 @@ defineProps<{
   professionalLevels: OptionRow[]
   designations: OptionRow[]
   serviceGrades: OptionRow[]
+  reportGrades: OptionRow[]
+  reportClasses: OptionRow[]
   sections: OptionRow[]
   sectionRoles: OptionRow[]
   staffTypes: OptionRow[]
@@ -350,6 +372,8 @@ const text = useLocalizedText({
     designation: 'Designation',
     school: 'School',
     search: 'Search',
+    grade: 'Grade',
+    class: 'Class',
     all: 'All',
     total: 'Total',
     prev: 'Prev',
@@ -389,6 +413,8 @@ const text = useLocalizedText({
     designation: 'තනතුර',
     school: 'පාසල',
     search: 'සෙවීම',
+    grade: 'ශ්‍රේණිය',
+    class: 'පන්තිය',
     all: 'සියල්ල',
     total: 'එකතුව',
     prev: 'පෙර',
@@ -428,6 +454,8 @@ const text = useLocalizedText({
     designation: 'பதவி',
     school: 'பாடசாலை',
     search: 'தேடல்',
+    grade: 'தரம்',
+    class: 'வகுப்பு',
     all: 'அனைத்தும்',
     total: 'மொத்தம்',
     prev: 'முந்தைய',
@@ -451,6 +479,15 @@ const text = useLocalizedText({
     totalMatches: 'பொருந்திய பணியாளர்கள்',
     noStaffFound: 'தேர்ந்தெடுத்த வடிகட்டல்களுக்கு பொருந்தும் பணியாளர்கள் இல்லை.',
   },
+})
+
+const filteredReportClasses = computed(() => {
+  const selectedGradeId = Number(props.reportFilters.grade_id)
+  if (selectedGradeId <= 0) {
+    return props.reportClasses
+  }
+
+  return props.reportClasses.filter((row) => Number(row.grade_id ?? 0) === selectedGradeId)
 })
 
 const onSearchInput = (event: Event): void => {

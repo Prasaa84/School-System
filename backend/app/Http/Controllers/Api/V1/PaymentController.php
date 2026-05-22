@@ -152,7 +152,7 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 401);
         }
 
-        if (!$this->canManageFeeTypes($user)) {
+        if (!$this->canAccessPayments($user)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 

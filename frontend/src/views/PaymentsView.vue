@@ -337,6 +337,8 @@ const currentUser = getUser()
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
+const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
+const canViewFeeTypes = computed(() => isAdmin.value || isPrincipal.value || isSdsUser.value)
 const canManageFeeTypes = computed(() => isAdmin.value || isPrincipal.value)
 const isFeeTypesRoute = computed(() => route.name === 'payments-fee-types')
 
@@ -345,7 +347,9 @@ const text = computed(() => {
     return {
       title: 'SDS ගෙවීම්',
       subtitle: 'සිසුන්ගේ SDS ගෙවීම් සොයන්න, වාර්ෂික ගාස්තු පරීක්ෂා කරන්න, සහ නව ගෙවීම් සටහන් කරන්න.',
-      feeTypesSubtitle: 'වාර්ෂික SDS ගාස්තු වර්ග කළමනාකරණය කර වර්ෂ අනුව ගාස්තු අගයන් යාවත්කාලීන කරන්න.',
+      feeTypesSubtitle: canManageFeeTypes.value
+        ? 'වාර්ෂික SDS ගාස්තු වර්ග කළමනාකරණය කර වර්ෂ අනුව ගාස්තු අගයන් යාවත්කාලීන කරන්න.'
+        : 'වාර්ෂික SDS ගාස්තු වර්ග සහ වර්ෂ අනුව ගාස්තු අගයන් බලන්න.',
       school: 'පාසල',
       selectSchool: 'පාසල තෝරන්න',
       studentAdmissionNo: 'ඇතුළත් අංකය',
@@ -402,7 +406,9 @@ const text = computed(() => {
     return {
       title: 'SDS கட்டணங்கள்',
       subtitle: 'மாணவர் SDS கட்டணங்களைத் தேடவும், வருடாந்திர கட்டணங்களை பார்க்கவும், புதிய கட்டணங்களை பதிவு செய்யவும்.',
-      feeTypesSubtitle: 'வருடாந்திர SDS கட்டண வகைகளை நிர்வகித்து ஆண்டுவாரியான கட்டண தொகைகளை புதுப்பிக்கவும்.',
+      feeTypesSubtitle: canManageFeeTypes.value
+        ? 'வருடாந்திர SDS கட்டண வகைகளை நிர்வகித்து ஆண்டுவாரியான கட்டண தொகைகளை புதுப்பிக்கவும்.'
+        : 'வருடாந்திர SDS கட்டண வகைகள் மற்றும் ஆண்டுவாரியான கட்டண தொகைகளை பார்க்கவும்.',
       school: 'பாடசாலை',
       selectSchool: 'பாடசாலையைத் தேர்ந்தெடுக்கவும்',
       studentAdmissionNo: 'அனுமதி இலக்கம்',
@@ -458,7 +464,9 @@ const text = computed(() => {
   return {
     title: 'SDS Payments',
     subtitle: 'Search student SDS payments, review yearly fee amounts, and record new payments.',
-    feeTypesSubtitle: 'Manage annual SDS fee types and update yearly fee amounts.',
+    feeTypesSubtitle: canManageFeeTypes.value
+      ? 'Manage annual SDS fee types and update yearly fee amounts.'
+      : 'View annual SDS fee types and yearly fee amounts.',
     school: 'School',
     selectSchool: 'Select school',
     studentAdmissionNo: 'Admission No',

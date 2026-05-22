@@ -1,8 +1,8 @@
 <template>
   <div class="space-y-6">
     <header class="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-cyan-900 to-emerald-700 p-7 text-white shadow-xl">
-      <p class="font-brand text-xs uppercase tracking-[0.2em] text-cyan-200">{{ text.heroEyebrow }}</p>
-      <h1 class="mt-2 font-display text-3xl font-bold md:text-4xl">{{ text.heroTitle }}</h1>
+      <p class="font-brand text-xs uppercase tracking-[0.2em] text-cyan-200">{{ heroEyebrow }}</p>
+      <h1 class="mt-2 font-display text-3xl font-bold md:text-4xl">{{ heroTitle }}</h1>
       <p class="mt-2 max-w-3xl text-sm text-cyan-100 md:text-base"></p>
     </header>
 
@@ -41,9 +41,8 @@
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 class="font-display text-xl font-bold">{{ text.availableModules }}</h2>
         <ul class="mt-4 space-y-2 text-sm text-slate-700">
-          <li>{{ text.availableModulesRow1 }}</li>
-          <li>{{ text.availableModulesRow2 }}</li>
-          <li>{{ text.availableModulesRow3 }}</li>
+          <li v-for="(moduleLabel, index) in availableModuleLabels" :key="moduleLabel">{{ index + 1 }}. {{ moduleLabel }}</li>
+          <li v-if="availableModuleLabels.length === 0">{{ text.noModulesAvailable }}</li>
         </ul>
       </article>
     </section>
@@ -108,6 +107,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import api from '../services/api'
 import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
+import { loadModuleCatalog, type ModuleCatalogItem } from '../services/modules'
 import { useLocalizedText } from '../utils/uiText'
 
 interface Summary {
@@ -175,6 +175,9 @@ const summary = reactive<Summary>({
 const currentUser = getUser()
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
+const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
+const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
+const availableModules = ref<ModuleCatalogItem[]>([])
 
 const selectedPermissionSchoolCensusId = ref<number>(getSchoolContextCensusId() ?? 0)
 const permissionSchools = ref<OptionRow[]>([])
@@ -189,10 +192,18 @@ const text = useLocalizedText({
   en: {
     heroEyebrow: 'School Management Dashboard',
     heroTitle: 'Welcome to the Control Center',
+    heroEyebrowAdmin: 'Administration Dashboard',
+    heroTitleAdmin: 'System Overview and Controls',
+    heroEyebrowPrincipal: 'Principal Dashboard',
+    heroTitlePrincipal: 'School Overview and Daily Operations',
+    heroEyebrowSdsUser: 'SDS User Dashboard',
+    heroTitleSdsUser: 'Student Data and School Operations',
     students: 'Students',
     academicStaff: 'Academic Staff',
     grades: 'Grades',
     classes: 'Classes',
+    payments: 'Payments',
+    reports: 'Reports',
     yearLabel: 'Year',
     notAvailable: 'N/A',
     allActive: 'All active',
@@ -200,9 +211,7 @@ const text = useLocalizedText({
     studentsLastUpdated: 'Students last updated',
     staffLastUpdated: 'Staff last updated',
     availableModules: 'Available Modules',
-    availableModulesRow1: '1. Students management (connected)',
-    availableModulesRow2: '2. Grades and Classes lookup (connected)',
-    availableModulesRow3: '3. Staff, Payments, Reports (next API rollout)',
+    noModulesAvailable: 'No modules available.',
     roleFeatureAccess: 'Role Feature Access',
     roleFeatureAccessHelp: 'Select a school first, then set feature access for each role. Users inherit role permissions automatically.',
     school: 'School',
@@ -225,10 +234,18 @@ const text = useLocalizedText({
   si: {
     heroEyebrow: 'පාසල් කළමනාකරණ පුවරුව',
     heroTitle: 'පාලන මධ්‍යස්ථානයට සාදරයෙන් පිළිගනිමු',
+    heroEyebrowAdmin: 'පරිපාලන පුවරුව',
+    heroTitleAdmin: 'පද්ධති සාරාංශය සහ පාලන',
+    heroEyebrowPrincipal: 'විදුහල්පති පුවරුව',
+    heroTitlePrincipal: 'පාසල් සාරාංශය සහ දෛනික මෙහෙයුම්',
+    heroEyebrowSdsUser: 'SDS පරිශීලක පුවරුව',
+    heroTitleSdsUser: 'සිසු දත්ත සහ පාසල් මෙහෙයුම්',
     students: 'සිසුන්',
     academicStaff: 'ශාස්ත්‍රීය කාර්ය මණ්ඩලය',
     grades: 'ශ්‍රේණි',
     classes: 'පන්ති',
+    payments: 'ගෙවීම්',
+    reports: 'වාර්තා',
     yearLabel: 'වසර',
     notAvailable: 'නොමැත',
     allActive: 'සියල්ල සක්‍රියයි',
@@ -236,9 +253,7 @@ const text = useLocalizedText({
     studentsLastUpdated: 'සිසුන් අවසන් වරට යාවත්කාලීන කළේ',
     staffLastUpdated: 'කාර්ය මණ්ඩලය අවසන් වරට යාවත්කාලීන කළේ',
     availableModules: 'ලභ්‍ය මොඩියුල',
-    availableModulesRow1: '1. සිසු කළමනාකරණය (සම්බන්ධිතයි)',
-    availableModulesRow2: '2. ශ්‍රේණි සහ පන්ති සෙවීම (සම්බන්ධිතයි)',
-    availableModulesRow3: '3. කාර්ය මණ්ඩලය, ගෙවීම්, වාර්තා (ඊළඟ API අදියර)',
+    noModulesAvailable: 'ලභ්‍ය මොඩියුල නොමැත.',
     roleFeatureAccess: 'භූමිකා විශේෂාංග ප්‍රවේශය',
     roleFeatureAccessHelp: 'පළමුව පාසලක් තෝරන්න, ඉන්පසු එක් එක් භූමිකාව සඳහා විශේෂාංග ප්‍රවේශය සකසන්න. පරිශීලකයන්ට භූමිකා අවසර ස්වයංක්‍රීයව හිමිවේ.',
     school: 'පාසල',
@@ -261,10 +276,18 @@ const text = useLocalizedText({
   ta: {
     heroEyebrow: 'பள்ளி மேலாண்மை டாஷ்போர்ட்',
     heroTitle: 'கட்டுப்பாட்டு மையத்திற்கு வரவேற்கிறோம்',
+    heroEyebrowAdmin: 'நிர்வாக டாஷ்போர்ட்',
+    heroTitleAdmin: 'அமைப்பு சுருக்கம் மற்றும் கட்டுப்பாடுகள்',
+    heroEyebrowPrincipal: 'அதிபர் டாஷ்போர்ட்',
+    heroTitlePrincipal: 'பள்ளி சுருக்கம் மற்றும் தினசரி செயல்பாடுகள்',
+    heroEyebrowSdsUser: 'SDS பயனர் டாஷ்போர்ட்',
+    heroTitleSdsUser: 'மாணவர் தரவு மற்றும் பள்ளி செயல்பாடுகள்',
     students: 'மாணவர்கள்',
     academicStaff: 'கல்வி பணியாளர்கள்',
     grades: 'தரங்கள்',
     classes: 'வகுப்புகள்',
+    payments: 'கட்டணங்கள்',
+    reports: 'அறிக்கைகள்',
     yearLabel: 'ஆண்டு',
     notAvailable: 'இல்லை',
     allActive: 'அனைத்தும் செயலில் உள்ளது',
@@ -272,9 +295,7 @@ const text = useLocalizedText({
     studentsLastUpdated: 'மாணவர்கள் கடைசியாக புதுப்பிக்கப்பட்டது',
     staffLastUpdated: 'பணியாளர்கள் கடைசியாக புதுப்பிக்கப்பட்டது',
     availableModules: 'கிடைக்கும் தொகுதிகள்',
-    availableModulesRow1: '1. மாணவர் மேலாண்மை (இணைக்கப்பட்டுள்ளது)',
-    availableModulesRow2: '2. தரங்கள் மற்றும் வகுப்புகள் பார்வை (இணைக்கப்பட்டுள்ளது)',
-    availableModulesRow3: '3. பணியாளர்கள், கட்டணங்கள், அறிக்கைகள் (அடுத்த API வெளியீடு)',
+    noModulesAvailable: 'கிடைக்கும் தொகுதிகள் இல்லை.',
     roleFeatureAccess: 'பங்கு அம்ச அணுகல்',
     roleFeatureAccessHelp: 'முதலில் ஒரு பள்ளியைத் தேர்ந்தெடுத்து, பின்னர் ஒவ்வொரு பங்கிற்கும் அம்ச அணுகலை அமைக்கவும். பயனர்கள் பங்கு அனுமதிகளை தானாக பெறுவார்கள்.',
     school: 'பள்ளி',
@@ -294,6 +315,33 @@ const text = useLocalizedText({
     permissionsUpdatedFor: 'அனுமதிகள் புதுப்பிக்கப்பட்டது',
     permissionUpdateError: 'பங்கு அம்ச அனுமதிகளை புதுப்பிக்க முடியவில்லை.',
   },
+})
+
+const heroEyebrow = computed(() => {
+  if (isAdmin.value) return text.value.heroEyebrowAdmin
+  if (isPrincipal.value) return text.value.heroEyebrowPrincipal
+  if (isSdsUser.value) return text.value.heroEyebrowSdsUser
+  return text.value.heroEyebrow
+})
+
+const heroTitle = computed(() => {
+  if (isAdmin.value) return text.value.heroTitleAdmin
+  if (isPrincipal.value) return text.value.heroTitlePrincipal
+  if (isSdsUser.value) return text.value.heroTitleSdsUser
+  return text.value.heroTitle
+})
+
+const moduleLabelMap = computed<Record<string, string>>(() => ({
+  students: text.value.students,
+  grades: text.value.grades,
+  classes: text.value.classes,
+  staff: text.value.academicStaff,
+  payments: text.value.payments,
+  reports: text.value.reports,
+}))
+
+const availableModuleLabels = computed(() => {
+  return availableModules.value.map((module) => moduleLabelMap.value[module.key] ?? module.label)
 })
 
 const extractApiMessage = (reason: unknown): string => {
@@ -335,6 +383,10 @@ const loadSummary = async (): Promise<void> => {
   } catch {
     error.value = text.value.dashboardSummaryError ?? 'Unable to load dashboard summary right now.'
   }
+}
+
+const loadDashboardModules = async (): Promise<void> => {
+  availableModules.value = await loadModuleCatalog()
 }
 
 const loadPermissionMatrix = async (): Promise<void> => {
@@ -432,6 +484,7 @@ const formatDate = (value: string | null): string => {
 
 onMounted(async () => {
   await loadSummary()
+  await loadDashboardModules()
 
   if (isAdmin.value) {
     await loadPermissionMatrix()

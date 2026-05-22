@@ -70,6 +70,7 @@
       v-if="isStaff"
       :active-tab="activeTab"
       :is-admin="isAdmin"
+      :is-sds-user="isSdsUser"
       :can-manage="canManage"
       :staff-search="staffSearch"
       :selected-school-census-id="selectedStaffSchoolCensusId"
@@ -86,6 +87,8 @@
       :professional-levels="professionalLevels"
       :designations="staffDesignations"
       :service-grades="serviceGrades"
+      :report-grades="staffReportGrades"
+      :report-classes="staffReportClasses"
       :sections="sections"
       :section-roles="sectionRoles"
       :staff-types="staffTypes"
@@ -616,6 +619,8 @@ interface StaffMeta { current_page: number; per_page: number; total: number; las
 interface StaffReportFilters {
   q: string
   school_census_id: number
+  grade_id: number
+  class_id: number
   gender_id: number
   civil_status_id: number
   ethnic_group_id: number
@@ -647,6 +652,8 @@ interface StaffOptionsResponse {
   professional_levels?: OptionRow[]
   designations?: OptionRow[]
   service_grades?: OptionRow[]
+  report_grades?: OptionRow[]
+  report_classes?: OptionRow[]
   sections?: OptionRow[]
   section_roles?: OptionRow[]
   staff_types?: OptionRow[]
@@ -665,6 +672,8 @@ interface StaffOptionsResponse {
 const createDefaultStaffReportFilters = (): StaffReportFilters => ({
   q: '',
   school_census_id: 0,
+  grade_id: 0,
+  class_id: 0,
   gender_id: 0,
   civil_status_id: 0,
   ethnic_group_id: 0,
@@ -759,6 +768,7 @@ type ValidationErrors = Record<string, string>
 const currentUser = getUser()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1)
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2)
+const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4)
 const canManage = computed(() => isAdmin.value || isPrincipal.value)
 
 const activeTab = ref<TabKey>('view')
@@ -810,6 +820,8 @@ const educationLevels = ref<OptionRow[]>([])
 const professionalLevels = ref<OptionRow[]>([])
 const staffDesignations = ref<OptionRow[]>([])
 const serviceGrades = ref<OptionRow[]>([])
+const staffReportGrades = ref<OptionRow[]>([])
+const staffReportClasses = ref<OptionRow[]>([])
 const sections = ref<OptionRow[]>([])
 const sectionRoles = ref<OptionRow[]>([])
 const staffTypes = ref<OptionRow[]>([])
@@ -1372,6 +1384,8 @@ const loadStaffOptions = async (): Promise<void> => {
   professionalLevels.value = Array.isArray(data.professional_levels) ? data.professional_levels : []
   staffDesignations.value = Array.isArray(data.designations) ? data.designations : []
   serviceGrades.value = Array.isArray(data.service_grades) ? data.service_grades : []
+  staffReportGrades.value = Array.isArray(data.report_grades) ? data.report_grades : []
+  staffReportClasses.value = Array.isArray(data.report_classes) ? data.report_classes : []
   sections.value = Array.isArray(data.sections) ? data.sections : []
   sectionRoles.value = Array.isArray(data.section_roles) ? data.section_roles : []
   staffTypes.value = Array.isArray(data.staff_types) ? data.staff_types : []
@@ -1843,6 +1857,15 @@ const loadStaff = async (page = 1): Promise<void> => {
 
 const updateStaffReportFilters = (patch: Partial<StaffReportFilters>): void => {
   Object.assign(staffReportFilters, patch)
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'grade_id')) {
+    const nextGradeId = Number(patch.grade_id ?? 0)
+    const classBelongsToGrade = staffReportClasses.value.some((row) => row.id === Number(staffReportFilters.class_id) && Number(row.grade_id ?? 0) === nextGradeId)
+
+    if (nextGradeId <= 0 || !classBelongsToGrade) {
+      staffReportFilters.class_id = 0
+    }
+  }
 }
 
 const resetStaffReportFilters = async (): Promise<void> => {
@@ -2028,7 +2051,7 @@ const reloadCurrentModuleData = async (): Promise<void> => {
   error.value = ''
 
   try {
-    if (canManage.value && (isGrades.value || isClasses.value || isStaff.value)) {
+    if ((canManage.value && (isGrades.value || isClasses.value)) || isStaff.value) {
       await loadStaffOptions()
     }
 

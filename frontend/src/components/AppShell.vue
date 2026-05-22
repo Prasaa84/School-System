@@ -205,6 +205,7 @@ const currentUser = getUser()
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
+const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
 const schoolName = ref('')
 const schoolCrestUrl = ref('')
 type SchoolIdentityDetail = {
@@ -408,13 +409,14 @@ const loadMenu = async (): Promise<void> => {
               { key: 'students-in-classes', label: 'Students in Classes', to: '/students/in-classes' },
               { key: 'students-report', label: 'Student Reports', to: '/students/report' },
             ]
-          : module.key === 'payments' && (isAdmin.value || isPrincipal.value)
+          : module.key === 'payments' && (isAdmin.value || isPrincipal.value || isSdsUser.value)
             ? [
                 { key: 'payments-fee-types', label: 'Fee Types', to: '/module/payments/fee-types' },
               ]
             : undefined,
     }))
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
+    .filter((item) => !(isSdsUser.value && item.key === 'students'))
 
   const schoolMenu: MenuItem = {
     key: 'school',
