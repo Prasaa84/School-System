@@ -160,6 +160,8 @@ class StaffController extends Controller
             'staff_types' => $this->loadLookupRows('staff_type_tbl', 'stf_type_id', ['stf_type_en', 'stf_type_si', 'stf_type_ta'], true),
             'staff_statuses' => $this->loadLookupRows('staff_status_tbl', 'stf_status_id', ['stf_status_en', 'stf_status_si', 'stf_status_ta'], true),
             'service_statuses' => $this->loadLookupRows('service_status_tbl', 'service_status_id', ['service_status_en', 'service_status_si', 'service_status_ta']),
+            'report_grades' => $this->loadStaffReportGradeRows($user),
+            'report_classes' => $this->loadStaffReportClassRows($user),
             'provinces' => $this->loadLookupRows('province_tbl', 'pro_id', ['pro_name_en', 'pro_name_si', 'pro_name_ta']),
             'zones' => $this->loadLookupRows('edu_zone_tbl', 'zone_id', ['zone_name_en', 'zone_name_si', 'zone_name_ta']),
             'all_schools' => $this->loadSchoolOptions(),
@@ -671,6 +673,167 @@ class StaffController extends Controller
                 $query->where($column, $value);
             }
         }
+
+        $this->applyStaffGradeClassFilters($query, $request);
+    }
+
+    private function applyStaffGradeClassFilters($query, Request $request): void
+    {
+        $gradeId = (int) $request->query('grade_id', 0);
+        $classId = (int) $request->query('class_id', 0);
+        $currentYear = (int) now()->year;
+
+        if ($gradeId <= 0 && $classId <= 0) {
+            return;
+        }
+
+        $user = $this->authUser();
+        $schoolCensusId = trim((string) $request->query('school_census_id', ''));
+        $targetSchoolCensusId = $this->isAdministrator($user)
+            ? ($schoolCensusId !== '' ? $this->resolveCanonicalSchoolCensusId($schoolCensusId) : null)
+            : $this->resolveEffectiveSchoolCensusId($user);
+
+        $query->where(function ($outer) use ($gradeId, $classId, $targetSchoolCensusId, $currentYear): void {
+            $hasCondition = false;
+            $includeGradeLevelAssignments = false;
+
+            if ($includeGradeLevelAssignments && Schema::hasTable('school_grade_tbl') && Schema::hasColumn('school_grade_tbl', 'stf_id')) {
+                $hasCondition = true;
+                $outer->whereExists(function ($subQuery) use ($gradeId, $targetSchoolCensusId, $currentYear): void {
+                    $subQuery
+                        ->select(DB::raw('1'))
+                        ->from('school_grade_tbl as sgt')
+                        ->whereColumn('sgt.stf_id', 'staff_tbl.stf_id')
+                        ->where('sgt.grade_id', $gradeId);
+
+                    if (Schema::hasColumn('school_grade_tbl', 'year')) {
+                        $subQuery->where('sgt.year', $currentYear);
+                    }
+
+                    if (Schema::hasColumn('school_grade_tbl', 'is_deleted')) {
+                        $subQuery->where('sgt.is_deleted', 0);
+                    }
+
+                    if ($targetSchoolCensusId !== null) {
+                        $subQuery->whereIn('sgt.census_id', $this->censusCandidates($targetSchoolCensusId));
+                    }
+                });
+            }
+
+            if (Schema::hasTable('school_grade_class_tbl') && Schema::hasColumn('school_grade_class_tbl', 'stf_id')) {
+                $method = $hasCondition ? 'orWhereExists' : 'whereExists';
+
+                $outer->{$method}(function ($subQuery) use ($gradeId, $classId, $targetSchoolCensusId, $currentYear): void {
+                    $subQuery
+                        ->select(DB::raw('1'))
+                        ->from('school_grade_class_tbl as sgct')
+                        ->whereColumn('sgct.stf_id', 'staff_tbl.stf_id');
+
+                    if ($gradeId > 0) {
+                        $subQuery->where('sgct.grade_id', $gradeId);
+                    }
+
+                    if ($classId > 0) {
+                        $subQuery->where('sgct.class_id', $classId);
+                    }
+
+                    if (Schema::hasColumn('school_grade_class_tbl', 'year')) {
+                        $subQuery->where('sgct.year', $currentYear);
+                    }
+
+                    if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+                        $subQuery->where('sgct.is_deleted', 0);
+                    }
+
+                    if ($targetSchoolCensusId !== null) {
+                        $subQuery->whereIn('sgct.census_id', $this->censusCandidates($targetSchoolCensusId));
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * @return array<int, array{id: int, label: string}>
+     */
+    private function loadStaffReportGradeRows(?User $user): array
+    {
+        if (!Schema::hasTable('school_grade_tbl') || !Schema::hasTable('grade_tbl')) {
+            return [];
+        }
+
+        $currentYear = (int) now()->year;
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', ['grade_en', 'grade_si', 'grade_ta']);
+        if ($gradeLabelColumn === null) {
+            return [];
+        }
+
+        $query = DB::table('school_grade_tbl as sgt')
+            ->join('grade_tbl as gt', 'sgt.grade_id', '=', 'gt.grade_id')
+            ->select(['sgt.grade_id'])
+            ->selectRaw("gt.{$gradeLabelColumn} as grade")
+            ->distinct()
+            ->orderBy('sgt.grade_id');
+
+        if (Schema::hasColumn('school_grade_tbl', 'is_deleted')) {
+            $query->where('sgt.is_deleted', 0);
+        }
+
+        if (Schema::hasColumn('school_grade_tbl', 'year')) {
+            $query->where('sgt.year', $currentYear);
+        }
+
+        $this->applySchoolScope($query, $user, 'sgt', 'census_id');
+
+        return $query->get()->map(fn ($row): array => [
+            'id' => (int) ($row->grade_id ?? 0),
+            'label' => trim((string) ($row->grade ?? '')) !== '' ? (string) ($row->grade ?? '') : (string) ($row->grade_id ?? ''),
+        ])->filter(fn (array $row): bool => $row['id'] > 0)->values()->all();
+    }
+
+    /**
+     * @return array<int, array{id: int, label: string, grade_id: int}>
+     */
+    private function loadStaffReportClassRows(?User $user): array
+    {
+        if (!Schema::hasTable('school_grade_class_tbl') || !Schema::hasTable('grade_tbl') || !Schema::hasTable('class_tbl')) {
+            return [];
+        }
+
+        $currentYear = (int) now()->year;
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', ['grade_en', 'grade_si', 'grade_ta']);
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', ['class_en', 'class_si', 'class_ta', 'class']);
+        if ($gradeLabelColumn === null || $classLabelColumn === null) {
+            return [];
+        }
+
+        $query = DB::table('school_grade_class_tbl as sgct')
+            ->join('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+            ->join('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+            ->select(['sgct.class_id', 'sgct.grade_id'])
+            ->selectRaw("gt.{$gradeLabelColumn} as grade")
+            ->selectRaw("ct.{$classLabelColumn} as class")
+            ->distinct()
+            ->orderBy('sgct.grade_id')
+            ->orderBy('sgct.class_id');
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'year')) {
+            $query->where('sgct.year', $currentYear);
+        }
+
+        $this->applySchoolScope($query, $user, 'sgct', 'census_id');
+
+        return $query->get()->map(fn ($row): array => [
+            'id' => (int) ($row->class_id ?? 0),
+            'grade_id' => (int) ($row->grade_id ?? 0),
+            'label' => trim((string) ($row->grade ?? '')) !== '' || trim((string) ($row->class ?? '')) !== ''
+                ? trim(sprintf('%s - %s', (string) ($row->grade ?? ''), (string) ($row->class ?? '')), ' -')
+                : (string) ($row->class_id ?? ''),
+        ])->filter(fn (array $row): bool => $row['id'] > 0 && $row['grade_id'] > 0)->values()->all();
     }
 
     private function localizedDesignationLabel(Staff $staff): ?string

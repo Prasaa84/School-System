@@ -176,6 +176,7 @@ class FeaturePermissionController extends Controller
     private function editableStudentPermissions(array $permissionMap): array
     {
         return [
+            FeatureAccessService::STUDENT_VIEW => (bool) ($permissionMap[FeatureAccessService::STUDENT_VIEW] ?? false),
             FeatureAccessService::STUDENT_CREATE => (bool) ($permissionMap[FeatureAccessService::STUDENT_CREATE] ?? false),
             FeatureAccessService::STUDENT_UPDATE => (bool) ($permissionMap[FeatureAccessService::STUDENT_UPDATE] ?? false),
             FeatureAccessService::STUDENT_DELETE => (bool) ($permissionMap[FeatureAccessService::STUDENT_DELETE] ?? false),
