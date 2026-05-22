@@ -12,36 +12,62 @@ class FeatureAccessService
     public const STUDENT_CREATE = 'student.create';
     public const STUDENT_UPDATE = 'student.update';
     public const STUDENT_DELETE = 'student.delete';
+    public const GRADE_VIEW = 'grade.view';
+    public const GRADE_CREATE = 'grade.create';
+    public const GRADE_UPDATE = 'grade.update';
+    public const GRADE_DELETE = 'grade.delete';
+    public const CLASS_VIEW = 'class.view';
+    public const CLASS_CREATE = 'class.create';
+    public const CLASS_UPDATE = 'class.update';
+    public const CLASS_DELETE = 'class.delete';
+    public const STAFF_VIEW = 'staff.view';
+    public const STAFF_CREATE = 'staff.create';
+    public const STAFF_UPDATE = 'staff.update';
+    public const PAYMENT_VIEW = 'payment.view';
+    public const PAYMENT_CREATE = 'payment.create';
+    public const FEE_TYPE_VIEW = 'payment.fee_type.view';
+    public const FEE_TYPE_CREATE = 'payment.fee_type.create';
+    public const FEE_TYPE_UPDATE = 'payment.fee_type.update';
+    public const REPORT_VIEW = 'report.view';
 
     private const TABLE = 'role_feature_permission_tbl';
 
     /**
      * @return array<int, array{key: string, label: string, description: string}>
      */
-    public function featureCatalog(): array
+    private function featureDefinitions(): array
     {
         return [
-            [
-                'key' => self::STUDENT_VIEW,
-                'label' => 'Studentt View',
-                'description' => 'View student records.',
-            ],
-            [
-                'key' => self::STUDENT_CREATE,
-                'label' => 'Student Add',
-                'description' => 'Create new student records.',
-            ],
-            [
-                'key' => self::STUDENT_UPDATE,
-                'label' => 'Student Edit',
-                'description' => 'Edit existing student records.',
-            ],
-            [
-                'key' => self::STUDENT_DELETE,
-                'label' => 'Student Delete',
-                'description' => 'Delete student records.',
-            ],
+            ['key' => self::STUDENT_VIEW, 'label' => 'Student View', 'description' => 'View student records.'],
+            ['key' => self::STUDENT_CREATE, 'label' => 'Student Add', 'description' => 'Create new student records.'],
+            ['key' => self::STUDENT_UPDATE, 'label' => 'Student Edit', 'description' => 'Edit existing student records.'],
+            ['key' => self::STUDENT_DELETE, 'label' => 'Student Delete', 'description' => 'Delete student records.'],
+            ['key' => self::GRADE_VIEW, 'label' => 'Grades View', 'description' => 'View grade records.'],
+            ['key' => self::GRADE_CREATE, 'label' => 'Grades Add', 'description' => 'Create or initialize grade records.'],
+            ['key' => self::GRADE_UPDATE, 'label' => 'Grades Edit', 'description' => 'Edit grade assignments.'],
+            ['key' => self::GRADE_DELETE, 'label' => 'Grades Delete', 'description' => 'Delete grade rows.'],
+            ['key' => self::CLASS_VIEW, 'label' => 'Classes View', 'description' => 'View class records.'],
+            ['key' => self::CLASS_CREATE, 'label' => 'Classes Add', 'description' => 'Create class rows.'],
+            ['key' => self::CLASS_UPDATE, 'label' => 'Classes Edit', 'description' => 'Edit class assignments and counts.'],
+            ['key' => self::CLASS_DELETE, 'label' => 'Classes Delete', 'description' => 'Delete class rows.'],
+            ['key' => self::STAFF_VIEW, 'label' => 'Staff View', 'description' => 'View staff records and reports.'],
+            ['key' => self::STAFF_CREATE, 'label' => 'Staff Add', 'description' => 'Create new staff records.'],
+            ['key' => self::STAFF_UPDATE, 'label' => 'Staff Edit', 'description' => 'Edit existing staff records.'],
+            ['key' => self::PAYMENT_VIEW, 'label' => 'Payments View', 'description' => 'View SDS payment records.'],
+            ['key' => self::PAYMENT_CREATE, 'label' => 'Payments Add', 'description' => 'Record SDS payments.'],
+            ['key' => self::FEE_TYPE_VIEW, 'label' => 'Fee Types View', 'description' => 'View annual SDS fee types.'],
+            ['key' => self::FEE_TYPE_CREATE, 'label' => 'Fee Types Add', 'description' => 'Create annual SDS fee types.'],
+            ['key' => self::FEE_TYPE_UPDATE, 'label' => 'Fee Types Edit', 'description' => 'Edit annual SDS fee types.'],
+            ['key' => self::REPORT_VIEW, 'label' => 'Reports View', 'description' => 'View report tabs and report data.'],
         ];
+    }
+
+    /**
+     * @return array<int, array{key: string, label: string, description: string}>
+     */
+    public function featureCatalog(): array
+    {
+        return $this->featureDefinitions();
     }
 
     /**
@@ -49,12 +75,10 @@ class FeatureAccessService
      */
     public function featureKeys(): array
     {
-        return [
-            self::STUDENT_VIEW,
-            self::STUDENT_CREATE,
-            self::STUDENT_UPDATE,
-            self::STUDENT_DELETE,
-        ];
+        return array_map(
+            static fn (array $feature): string => $feature['key'],
+            $this->featureDefinitions(),
+        );
     }
 
     public function hasFeature(?User $user, ?string $schoolCensusId, string $featureKey): bool
@@ -187,12 +211,9 @@ class FeatureAccessService
      */
     private function emptyPermissionMap(): array
     {
-        return [
-            self::STUDENT_VIEW => false,
-            self::STUDENT_CREATE => false,
-            self::STUDENT_UPDATE => false,
-            self::STUDENT_DELETE => false,
-        ];
+        return collect($this->featureKeys())
+            ->mapWithKeys(fn (string $key): array => [$key => false])
+            ->all();
     }
 
     /**
@@ -200,12 +221,9 @@ class FeatureAccessService
      */
     private function adminPermissionMap(): array
     {
-        return [
-            self::STUDENT_VIEW => true,
-            self::STUDENT_CREATE => true,
-            self::STUDENT_UPDATE => true,
-            self::STUDENT_DELETE => true,
-        ];
+        return collect($this->featureKeys())
+            ->mapWithKeys(fn (string $key): array => [$key => true])
+            ->all();
     }
 
     /**
@@ -213,17 +231,39 @@ class FeatureAccessService
      */
     private function defaultPermissionMapForRole(?int $roleId): array
     {
-        $permissions = [
-            self::STUDENT_VIEW => true,
-            self::STUDENT_CREATE => false,
-            self::STUDENT_UPDATE => false,
-            self::STUDENT_DELETE => false,
-        ];
+        $permissions = $this->emptyPermissionMap();
 
-        if (in_array((int) $roleId, [1, 2, 4], true)) {
-            $permissions[self::STUDENT_CREATE] = true;
-            $permissions[self::STUDENT_UPDATE] = true;
-            $permissions[self::STUDENT_DELETE] = true;
+        foreach ([
+            self::STUDENT_VIEW,
+            self::GRADE_VIEW,
+            self::CLASS_VIEW,
+            self::STAFF_VIEW,
+            self::PAYMENT_VIEW,
+            self::FEE_TYPE_VIEW,
+            self::REPORT_VIEW,
+        ] as $featureKey) {
+            $permissions[$featureKey] = true;
+        }
+
+        if (in_array((int) $roleId, [2, 4], true)) {
+            foreach ([
+                self::STUDENT_CREATE,
+                self::STUDENT_UPDATE,
+                self::STUDENT_DELETE,
+                self::GRADE_CREATE,
+                self::GRADE_UPDATE,
+                self::GRADE_DELETE,
+                self::CLASS_CREATE,
+                self::CLASS_UPDATE,
+                self::CLASS_DELETE,
+                self::STAFF_CREATE,
+                self::STAFF_UPDATE,
+                self::PAYMENT_CREATE,
+                self::FEE_TYPE_CREATE,
+                self::FEE_TYPE_UPDATE,
+            ] as $featureKey) {
+                $permissions[$featureKey] = true;
+            }
         }
 
         return $permissions;

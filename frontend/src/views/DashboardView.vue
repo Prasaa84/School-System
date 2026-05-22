@@ -68,30 +68,35 @@
       <p v-else-if="permissionLoading" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ text.loadingRoles }}</p>
       <p v-else-if="permissionRoles.length === 0" class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{{ text.noEditableRoles }}</p>
 
-      <div v-if="permissionStorageReady && selectedPermissionSchoolCensusId > 0 && !permissionLoading && permissionRoles.length > 0" class="mt-4 overflow-auto rounded-xl border border-slate-200">
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
+      <div v-if="permissionStorageReady && selectedPermissionSchoolCensusId > 0 && !permissionLoading && permissionRoles.length > 0" class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+        <table class="w-full table-fixed divide-y divide-slate-200 text-sm">
           <thead class="bg-slate-50">
             <tr>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.role }}</th>
-              <th v-for="feature in permissionFeatures" :key="feature.key" class="px-3 py-2 text-left font-semibold text-slate-600" :title="feature.description">{{ feature.label }}</th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.save }}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 bg-white">
-            <tr v-for="role in permissionRoles" :key="role.role_id" class="hover:bg-slate-50">
-              <td class="px-3 py-2">
-                <p class="font-semibold text-slate-900">{{ role.role_name || text.roleNotSet }}</p>
+              <th class="w-[180px] px-3 py-3 text-left font-semibold text-slate-600">{{ text.feature }}</th>
+              <th v-for="role in permissionRoles" :key="role.role_id" class="w-[112px] px-2 py-3 text-left align-top">
+                <p class="text-xs font-semibold leading-tight text-slate-900">{{ role.role_name || text.roleNotSet }}</p>
                 <p class="text-xs text-slate-500">{{ text.roleId }}: {{ role.role_id }}</p>
-              </td>
-              <td v-for="feature in permissionFeatures" :key="`${role.role_id}-${feature.key}`" class="px-3 py-2">
-                <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-                  <input v-model="role.permissions[feature.key]" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500" />
-                </label>
-              </td>
-              <td class="px-3 py-2">
-                <button class="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="permissionSavingRoleId === role.role_id" @click="saveRolePermissions(role)">
+                <button class="mt-2 w-full rounded-lg bg-cyan-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="permissionSavingRoleId === role.role_id" @click="saveRolePermissions(role)">
                   {{ permissionSavingRoleId === role.role_id ? text.saving : text.save }}
                 </button>
+              </th>
+            </tr>
+          </thead>
+          <tbody v-for="group in permissionFeatureGroups" :key="group.key" class="divide-y divide-slate-100 bg-white">
+            <tr class="bg-slate-100/80">
+              <th :colspan="permissionRoles.length + 1" class="px-3 py-2 text-left text-xs font-extrabold uppercase tracking-[0.16em] text-slate-600">
+                {{ group.label }}
+              </th>
+            </tr>
+            <tr v-for="feature in group.features" :key="feature.key" class="hover:bg-slate-50">
+              <td class="px-3 py-2.5">
+                <p class="text-xs font-semibold leading-tight text-slate-900">{{ feature.label }}</p>
+                <p class="text-xs text-slate-500">{{ feature.description }}</p>
+              </td>
+              <td v-for="role in permissionRoles" :key="`${feature.key}-${role.role_id}`" class="px-2 py-2.5 text-center">
+                <label class="inline-flex items-center justify-center text-sm text-slate-700">
+                  <input v-model="role.permissions[feature.key]" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500" />
+                </label>
               </td>
             </tr>
           </tbody>
@@ -135,6 +140,12 @@ interface FeatureDefinition {
   key: string
   label: string
   description: string
+}
+
+interface PermissionFeatureGroup {
+  key: string
+  label: string
+  features: FeatureDefinition[]
 }
 
 interface PermissionRoleRow {
@@ -221,6 +232,7 @@ const text = useLocalizedText({
     loadingRoles: 'Loading roles and permissions...',
     noEditableRoles: 'No editable roles found.',
     role: 'Role',
+    feature: 'Feature',
     save: 'Save',
     saving: 'Saving...',
     roleNotSet: 'Role not set',
@@ -263,6 +275,7 @@ const text = useLocalizedText({
     loadingRoles: 'භූමිකා සහ අවසර පූරණය වෙමින් පවතී...',
     noEditableRoles: 'සංස්කරණය කළ හැකි භූමිකා හමු නොවීය.',
     role: 'භූමිකාව',
+    feature: 'විශේෂාංගය',
     save: 'සුරකින්න',
     saving: 'සුරකිමින්...',
     roleNotSet: 'භූමිකාව සකසා නැත',
@@ -305,6 +318,7 @@ const text = useLocalizedText({
     loadingRoles: 'பங்குகள் மற்றும் அனுமதிகள் ஏற்றப்படுகின்றன...',
     noEditableRoles: 'திருத்தக்கூடிய பங்குகள் எதுவும் இல்லை.',
     role: 'பங்கு',
+    feature: 'அம்சம்',
     save: 'சேமி',
     saving: 'சேமிக்கப்படுகிறது...',
     roleNotSet: 'பங்கு அமைக்கப்படவில்லை',
@@ -342,6 +356,34 @@ const moduleLabelMap = computed<Record<string, string>>(() => ({
 
 const availableModuleLabels = computed(() => {
   return availableModules.value.map((module) => moduleLabelMap.value[module.key] ?? module.label)
+})
+
+const permissionFeatureGroups = computed<PermissionFeatureGroup[]>(() => {
+  const labels: Record<string, string> = {
+    student: text.value.students,
+    grade: text.value.grades,
+    class: text.value.classes,
+    staff: text.value.academicStaff,
+    payment: text.value.payments,
+    report: text.value.reports,
+  }
+
+  const groups = new Map<string, PermissionFeatureGroup>()
+
+  for (const feature of permissionFeatures.value) {
+    const groupKey = feature.key.split('.')[0] ?? 'other'
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        key: groupKey,
+        label: labels[groupKey] ?? groupKey,
+        features: [],
+      })
+    }
+
+    groups.get(groupKey)!.features.push(feature)
+  }
+
+  return Array.from(groups.values())
 })
 
 const extractApiMessage = (reason: unknown): string => {

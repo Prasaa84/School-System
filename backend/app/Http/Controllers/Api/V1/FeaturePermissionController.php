@@ -113,7 +113,7 @@ class FeaturePermissionController extends Controller
                 'role_id' => $roleId,
                 'role_name' => (string) ($role->role_name ?? ''),
                 'school_census_id' => $schoolCensusId,
-                'permissions' => $this->editableStudentPermissions($effectivePermissions),
+                'permissions' => $this->editablePermissions($effectivePermissions),
             ],
         ]);
     }
@@ -162,7 +162,7 @@ class FeaturePermissionController extends Controller
                 return [
                     'role_id' => $roleId,
                     'role_name' => $row->role_name !== null ? (string) $row->role_name : null,
-                    'permissions' => $this->editableStudentPermissions($permissionMap),
+                    'permissions' => $this->editablePermissions($permissionMap),
                 ];
             })
             ->values()
@@ -173,13 +173,14 @@ class FeaturePermissionController extends Controller
      * @param  array<string, bool>  $permissionMap
      * @return array<string, bool>
      */
-    private function editableStudentPermissions(array $permissionMap): array
+    private function editablePermissions(array $permissionMap): array
     {
-        return [
-            FeatureAccessService::STUDENT_VIEW => (bool) ($permissionMap[FeatureAccessService::STUDENT_VIEW] ?? false),
-            FeatureAccessService::STUDENT_CREATE => (bool) ($permissionMap[FeatureAccessService::STUDENT_CREATE] ?? false),
-            FeatureAccessService::STUDENT_UPDATE => (bool) ($permissionMap[FeatureAccessService::STUDENT_UPDATE] ?? false),
-            FeatureAccessService::STUDENT_DELETE => (bool) ($permissionMap[FeatureAccessService::STUDENT_DELETE] ?? false),
-        ];
+        $editable = [];
+
+        foreach ($this->featureAccess->featureKeys() as $featureKey) {
+            $editable[$featureKey] = (bool) ($permissionMap[$featureKey] ?? false);
+        }
+
+        return $editable;
     }
 }
