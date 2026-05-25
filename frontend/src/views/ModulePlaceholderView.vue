@@ -770,13 +770,14 @@ const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1)
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2)
 const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4)
 const canManage = computed(() => isAdmin.value || isPrincipal.value)
+const currentCalendarYear = new Date().getFullYear()
 
 const activeTab = ref<TabKey>('view')
 const loading = ref(false)
 const error = ref('')
 const message = ref('')
 
-const targetYear = ref(new Date().getFullYear())
+const targetYear = ref(currentCalendarYear)
 const staffOptions = ref<StaffOption[]>([])
 const gradeEdits = reactive<Record<number, number>>({})
 const classTeacherEdits = reactive<Record<number, number>>({})
@@ -787,14 +788,14 @@ const gradeReport = ref<GradeReportRow[]>([])
 const classes = ref<ClassItem[]>([])
 const latestClassYear = ref<number | null>(null)
 const classReport = ref<ClassReportRow[]>([])
-const classYear = ref(new Date().getFullYear())
+const classYear = ref(currentCalendarYear)
 const selectedGradeId = ref(0)
 const classCreateGradeOptions = ref<ClassGradeOption[]>([])
 const createClassGradeId = ref(0)
 const createClassId = ref(0)
 const createApprovedCount = ref(35)
 const createClassOptions = ref<ClassOption[]>([])
-const reportYear = ref(0)
+const reportYear = ref(props.moduleKey === 'grades' && isSdsUser.value ? currentCalendarYear : 0)
 const staffSearch = ref('')
 const selectedStaffSchoolCensusId = ref(getSchoolContextCensusId() ?? 0)
 const staffRows = ref<StaffRow[]>([])
@@ -1826,7 +1827,15 @@ const deleteClass = async (classRowId: number): Promise<void> => {
 const loadGradeReport = async (): Promise<void> => {
   message.value = ''
   error.value = ''
-  const params = reportYear.value ? { year: reportYear.value } : {}
+  const effectiveYear = reportYear.value > 0
+    ? reportYear.value
+    : (isGrades.value && isSdsUser.value ? currentCalendarYear : 0)
+  const params = effectiveYear > 0 ? { year: effectiveYear } : {}
+
+  if (isGrades.value && reportYear.value !== effectiveYear) {
+    reportYear.value = effectiveYear
+  }
+
   const { data } = await api.get<{ data: GradeReportRow[] }>('/grades/report', { params })
   gradeReport.value = data.data
 }
@@ -2135,11 +2144,11 @@ watch(
 
 watch(() => props.moduleKey, () => {
   activeTab.value = 'view'
-  reportYear.value = 0
+  reportYear.value = props.moduleKey === 'grades' && isSdsUser.value ? currentCalendarYear : 0
   Object.assign(staffReportFilters, createDefaultStaffReportFilters())
   staffReportRows.value = []
   selectedGradeId.value = 0
-  classYear.value = new Date().getFullYear()
+  classYear.value = currentCalendarYear
   createClassGradeId.value = 0
   createClassId.value = 0
   createApprovedCount.value = 35

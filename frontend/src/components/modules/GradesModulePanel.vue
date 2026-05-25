@@ -55,7 +55,7 @@
       <h2 class="font-display text-xl font-bold">{{ text.gradeReports }}</h2>
       <div class="flex gap-2">
         <select :value="reportYear" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportYearChange">
-          <option :value="0">{{ text.allYears }}</option>
+          <option :value="0">{{ text.selectYear }}</option>
           <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option>
         </select>
         <button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white" @click="$emit('load-report')">{{ text.view }}</button>
@@ -122,7 +122,7 @@ const text = useLocalizedText({
     none: '-- None --',
     save: 'Save',
     gradeReports: 'Grade Reports',
-    allYears: 'All Years',
+    selectYear: 'Select Year',
     view: 'View',
     studentCount: 'Student Count',
     noReportData: 'No data found for the selected year.',
@@ -141,7 +141,7 @@ const text = useLocalizedText({
     none: '-- නැත --',
     save: 'සුරකින්න',
     gradeReports: 'ශ්‍රේණි වාර්තා',
-    allYears: 'සියලු වසර',
+    selectYear: 'වසර තෝරන්න',
     view: 'දර්ශනය',
     studentCount: 'සිසුන් ගණන',
     noReportData: 'තෝරාගත් වසර සඳහා දත්ත හමු නොවීය.',
@@ -160,7 +160,7 @@ const text = useLocalizedText({
     none: '-- இல்லை --',
     save: 'சேமி',
     gradeReports: 'தர அறிக்கைகள்',
-    allYears: 'அனைத்து ஆண்டுகள்',
+    selectYear: 'ஆண்டை தேர்ந்தெடுக்கவும்',
     view: 'பார்வை',
     studentCount: 'மாணவர் எண்ணிக்கை',
     noReportData: 'தேர்ந்தெடுக்கப்பட்ட ஆண்டிற்கான தரவு இல்லை.',
