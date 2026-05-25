@@ -879,9 +879,17 @@ const initializeView = async (): Promise<void> => {
   closeFeeTypeDialog()
   await loadOptions()
 
-  if (isStudent.value && currentUser?.username) {
-    studentIndexNo.value = currentUser.username
-    await lookupStudent()
+  if (isStudent.value) {
+    try {
+      const { data } = await api.get<{ data?: { index_no?: string } }>('/students/me')
+      studentIndexNo.value = String(data.data?.index_no ?? '').trim()
+    } catch {
+      studentIndexNo.value = ''
+    }
+
+    if (studentIndexNo.value !== '') {
+      await lookupStudent()
+    }
   }
 }
 

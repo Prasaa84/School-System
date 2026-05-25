@@ -90,6 +90,10 @@ interface LoginResponse {
 
 const router = useRouter()
 const route = useRoute()
+const isStudentUser = (user: AuthUser | null): boolean => {
+  const roleName = String(user?.role_name ?? '').trim().toLowerCase()
+  return (user?.role_id ?? 0) === 7 || roleName === 'student'
+}
 
 const year = new Date().getFullYear()
 const loading = ref(false)
@@ -121,7 +125,9 @@ const submitLogin = async (): Promise<void> => {
 
     setAuthSession(data.access_token, data.user)
 
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    const redirect = typeof route.query.redirect === 'string'
+      ? route.query.redirect
+      : (isStudentUser(data.user) ? '/students/me' : '/')
     await router.push(redirect)
   } catch (error: unknown) {
     errorMessage.value = extractApiMessage(error) || 'Invalid username or password.'

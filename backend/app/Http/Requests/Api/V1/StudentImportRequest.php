@@ -19,6 +19,7 @@ class StudentImportRequest extends FormRequest
         return [
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv'],
             'census_id' => ['nullable', 'string', 'regex:/^[0-9]{4,7}$/'],
+            'create_user_login' => ['nullable', 'boolean'],
         ];
     }
 

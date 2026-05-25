@@ -1963,6 +1963,9 @@ class StaffController extends Controller
 
         if ($linkedUser !== null) {
             $linkedUser->role_id = $loginRoleId;
+            if (Schema::hasColumn('user_tbl', 'census_id')) {
+                $linkedUser->census_id = $staff->census_id;
+            }
             $linkedUser->status_id = 1;
             if (Schema::hasColumn('user_tbl', 'is_deleted')) {
                 $linkedUser->is_deleted = 0;
@@ -1984,6 +1987,9 @@ class StaffController extends Controller
         $user->role_id = $loginRoleId;
         $user->username = $username;
         $user->password = Hash::make($temporaryPassword);
+        if (Schema::hasColumn('user_tbl', 'census_id')) {
+            $user->census_id = $staff->census_id;
+        }
         $user->grade_id = 0;
         $user->class_id = 0;
         $user->status_id = 1;

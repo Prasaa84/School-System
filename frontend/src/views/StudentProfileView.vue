@@ -1,20 +1,7 @@
 <template>
   <div class="space-y-6 bg-slate-100 print:bg-white">
     <header class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
-      <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ text.studentDetails }}</h1>
-        </div>
-
-        <div class="flex gap-3">
-          <button class="rounded-xl border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="exportPdf">
-            {{ text.loginDetails }}
-          </button>
-          <button class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700" @click="exportPdf">
-            {{ text.exportPdf }}
-          </button>
-        </div>
-      </div>
+      <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ text.studentDetails }}</h1>
     </header>
 
     <p v-if="errorMessage" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -208,7 +195,6 @@ const text = useLocalizedText({
     dashboard: 'Dashboard',
     student: 'Student',
     studentDetails: 'Student Details',
-    loginDetails: 'Login Details',
     back: 'Back',
     exportPdf: 'Export PDF',
     loading: 'Loading student details...',
@@ -246,7 +232,6 @@ const text = useLocalizedText({
     dashboard: 'පුවරුව',
     student: 'සිසුවා',
     studentDetails: 'සිසු විස්තර',
-    loginDetails: 'Login Details',
     back: 'ආපසු',
     exportPdf: 'PDF Export',
     loading: 'සිසු විස්තර පූරණය වෙමින්...',
@@ -284,7 +269,6 @@ const text = useLocalizedText({
     dashboard: 'கட்டுப்பாட்டு பலகை',
     student: 'மாணவர்',
     studentDetails: 'மாணவர் விபரங்கள்',
-    loginDetails: 'Login Details',
     back: 'திரும்ப',
     exportPdf: 'PDF Export',
     loading: 'மாணவர் விபரங்கள் ஏற்றப்படுகிறது...',

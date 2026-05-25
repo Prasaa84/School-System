@@ -66,6 +66,11 @@
                   <rect x="4.5" y="7" width="11" height="1.8" rx="0.8" fill="white" />
                   <circle cx="14" cy="12.5" r="1.5" fill="white" />
                 </svg>
+                <svg v-else-if="item.key === 'account'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <circle cx="10" cy="6" r="3" />
+                  <path d="M4 17c0-2.8 2.7-4.5 6-4.5s6 1.7 6 4.5" />
+                  <path d="M14.8 12.5l.6.3.6-.3.5.5-.2.7.5.5-.5.5.2.7-.5.5-.6-.3-.6.3-.5-.5.2-.7-.5-.5.5-.5-.2-.7.5-.5Z" />
+                </svg>
                 <svg v-else-if="item.key === 'reports'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
                   <rect x="3" y="2" width="14" height="16" rx="2" />
                   <rect x="6" y="11" width="2" height="4" fill="white" />
@@ -172,6 +177,56 @@
         </section>
       </main>
     </div>
+
+    <div v-if="showLogoutDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 print:hidden" @click="closeLogoutDialog">
+      <div class="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" @click.stop>
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-700">
+              <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                <path d="M12.5 3.5h-5A1.5 1.5 0 0 0 6 5v10a1.5 1.5 0 0 0 1.5 1.5h5a1.5 1.5 0 0 0 1.5-1.5v-2a.75.75 0 0 0-1.5 0v2h-5V5h5v2a.75.75 0 0 0 1.5 0V5a1.5 1.5 0 0 0-1.5-1.5Z" />
+                <path d="M10.72 10.75H3.75a.75.75 0 0 1 0-1.5h6.97L9.24 7.78a.75.75 0 1 1 1.06-1.06l2.75 2.75a.75.75 0 0 1 0 1.06l-2.75 2.75a.75.75 0 1 1-1.06-1.06l1.48-1.47Z" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="font-display text-lg font-bold text-slate-900">{{ shellText.logoutConfirmTitle }}</h3>
+            </div>
+          </div>
+          <button
+            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+            :title="shellText.close"
+            :aria-label="shellText.close"
+            :disabled="logoutBusy"
+            @click="closeLogoutDialog"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+              <path d="M5 5l10 10M15 5 5 15" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="px-5 py-4">
+          <p class="text-sm leading-6 text-slate-600">{{ shellText.logoutConfirmMessage }}</p>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <button
+            class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="logoutBusy"
+            @click="closeLogoutDialog"
+          >
+            {{ shellText.cancel }}
+          </button>
+          <button
+            class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+            :disabled="logoutBusy"
+            @click="confirmLogout"
+          >
+            {{ logoutBusy ? shellText.loggingOut : shellText.logout }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -226,9 +281,14 @@ const shellText = computed(() => {
       headerTitle: 'වාර්තා',
       adminHeaderTitle: 'පාසල් වාර්තා',
       logout: 'ඉවත්වන්න',
+      loggingOut: 'ඉවත් වෙමින්...',
       language: 'භාෂාව',
       authenticatedUser: 'සත්‍යාපිත පරිශීලකයා',
       dashboard: 'පුවරුව',
+      cancel: 'අවලංගු කරන්න',
+      close: 'වසන්න',
+      logoutConfirmTitle: 'ඉවත් වීම තහවුරු කරන්න',
+      logoutConfirmMessage: 'ඔබට පද්ධතියෙන් ඉවත් වීමට අවශ්‍යද?',
     }
   }
 
@@ -243,9 +303,14 @@ const shellText = computed(() => {
       headerTitle: 'பதிவுகள்',
       adminHeaderTitle: 'பள்ளி பதிவுகள்',
       logout: 'வெளியேறு',
+      loggingOut: 'வெளியேறுகிறது...',
       language: 'மொழி',
       authenticatedUser: 'உறுதிப்படுத்தப்பட்ட பயனர்',
       dashboard: 'கட்டுப்பாட்டு பலகை',
+      cancel: 'ரத்து செய்',
+      close: 'மூடு',
+      logoutConfirmTitle: 'வெளியேறலை உறுதிப்படுத்தவும்',
+      logoutConfirmMessage: 'நீங்கள் கணினியிலிருந்து வெளியேற விரும்புகிறீர்களா?',
     }
   }
 
@@ -259,9 +324,14 @@ const shellText = computed(() => {
     headerTitle: 'Records',
     adminHeaderTitle: 'School Records',
     logout: 'Logout',
+    loggingOut: 'Logging out...',
     language: 'Language',
     authenticatedUser: 'Authenticated User',
     dashboard: 'Dashboard',
+    cancel: 'Cancel',
+    close: 'Close',
+    logoutConfirmTitle: 'Confirm Logout',
+    logoutConfirmMessage: 'Are you sure you want to log out?',
   }
 })
 
@@ -304,6 +374,7 @@ const localizedMenu = computed(() => {
           staff: 'Staff',
           payments: 'Payments',
           'payments-history': 'Payments History',
+          account: 'Account',
           reports: 'Reports',
         }[item.key] ?? item.label,
         si: {
@@ -316,6 +387,7 @@ const localizedMenu = computed(() => {
           staff: 'කාර්ය මණ්ඩලය',
           payments: 'ගෙවීම්',
           'payments-history': 'ගෙවීම් ඉතිහාසය',
+          account: 'ගිණුම',
           reports: 'වාර්තා',
         }[item.key] ?? item.label,
         ta: {
@@ -328,6 +400,7 @@ const localizedMenu = computed(() => {
           staff: 'பணியாளர்கள்',
           payments: 'கட்டணங்கள்',
           'payments-history': 'கட்டண வரலாறு',
+          account: 'கணக்கு',
           reports: 'அறிக்கைகள்',
         }[item.key] ?? item.label,
       }),
@@ -356,6 +429,8 @@ const localizedMenu = computed(() => {
 })
 
 const isMobile = ref(false)
+const showLogoutDialog = ref(false)
+const logoutBusy = ref(false)
 let mediaQuery: MediaQueryList | null = null
 
 const syncViewport = (): void => {
@@ -430,12 +505,22 @@ const loadMenu = async (): Promise<void> => {
     }))
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
     .filter((item) => !(isSdsUser.value && item.key === 'students'))
-    .filter((item) => !isStudent.value || ['student-details', 'payments-history'].includes(item.key))
+    .filter((item) => !isStudent.value || ['payments-history'].includes(item.key))
 
   const schoolMenu: MenuItem = {
     key: 'school',
     label: 'School',
     to: '/school',
+  }
+
+  if (isStudent.value) {
+    menu.value = [
+      { key: 'dashboard', label: 'Dashboard', to: '/students/me' },
+      schoolMenu,
+      ...mappedModules,
+      { key: 'account', label: 'Account', to: '/account' },
+    ]
+    return
   }
 
   const gradesIndex = mappedModules.findIndex((item) => item.key === 'grades')
@@ -479,13 +564,30 @@ const onMenuClick = (): void => {
   }
 }
 
-const logout = async (): Promise<void> => {
+const logout = (): void => {
+  showLogoutDialog.value = true
+}
+
+const closeLogoutDialog = (): void => {
+  if (logoutBusy.value) {
+    return
+  }
+
+  showLogoutDialog.value = false
+}
+
+const confirmLogout = async (): Promise<void> => {
+  logoutBusy.value = true
+
   try {
     await api.post('/auth/logout')
   } catch {
     // Ignore logout API errors and clear local state anyway.
+  } finally {
+    logoutBusy.value = false
   }
 
+  showLogoutDialog.value = false
   clearAuthSession()
   await router.push('/login')
 }

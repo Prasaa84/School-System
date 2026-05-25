@@ -18,9 +18,11 @@ use App\Services\StudentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -1250,12 +1252,29 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
+        if ($this->wantsStudentLogin($validated) && !$this->isPrincipal($user)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        if ($this->wantsStudentLogin($validated) && !$this->isPrincipal($user)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
         try {
-            $saved = $this->studentService->createStudent($validated, $censusId);
+            $loginResult = $this->emptyStudentLoginResult();
+            $saved = DB::transaction(function () use ($validated, $censusId, &$loginResult): array {
+                $saved = $this->studentService->createStudent($validated, $censusId);
+
+                if ($this->wantsStudentLogin($validated)) {
+                    $loginResult = $this->syncStudentLogin($saved['index_no'], $saved['census_id']);
+                }
+
+                return $saved;
+            });
             $this->storeStudentPhoto($request->file('profile_photo'), (int) $saved['std_id']);
 
             return response()->json([
-                'message' => __('messages.students.create_success'),
+                'message' => $this->buildStudentSaveMessage(__('messages.students.create_success'), $loginResult),
                 'data' => [
                     'std_id' => $saved['std_id'],
                     'index_no' => $saved['index_no'],
@@ -1341,6 +1360,7 @@ class StudentController extends Controller
         $imported = [];
         $failed = [];
         $skipped = 0;
+        $loginCreatedCount = 0;
 
         foreach ($sheet as $rowIndex => $row) {
             if ($rowIndex === 0) {
@@ -1357,7 +1377,19 @@ class StudentController extends Controller
 
             try {
                 $studentData = $this->validateImportRow($rowData);
-                $imported[] = $this->studentService->createStudent($studentData, $censusId);
+                $saved = DB::transaction(function () use ($studentData, $censusId, $validated, &$loginCreatedCount): array {
+                    $saved = $this->studentService->createStudent($studentData, $censusId);
+
+                    if ($this->wantsStudentLogin($validated)) {
+                        $loginResult = $this->syncStudentLogin($saved['index_no'], $saved['census_id']);
+                        if ($loginResult['created']) {
+                            $loginCreatedCount++;
+                        }
+                    }
+
+                    return $saved;
+                });
+                $imported[] = $saved;
             } catch (ValidationException $e) {
                 Log::warning('Student import row validation failed.', [
                     'row' => $rowNumber,
@@ -1404,6 +1436,7 @@ class StudentController extends Controller
                 'imported_count' => count($imported),
                 'failed_count' => count($failed),
                 'skipped_count' => $skipped,
+                'login_created_count' => $loginCreatedCount,
                 'failed_rows' => $failed,
             ],
         ]);
@@ -1799,12 +1832,40 @@ class StudentController extends Controller
             }
         }
 
+        if ($this->wantsStudentLogin($validated) && !$this->isPrincipal($user)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
         try {
-            $saved = $this->studentService->updateStudent($student, $validated, $censusId);
+            $loginResult = $this->emptyStudentLoginResult();
+            $saved = DB::transaction(function () use ($student, $validated, $censusId, &$loginResult): array {
+                $previousIndexNo = trim((string) ($student->index_no ?? ''));
+                $previousCensusId = $this->normalizeCensusId($student->census_id ?? null);
+
+                $saved = $this->studentService->updateStudent($student, $validated, $censusId);
+
+                $existingLogin = $this->findExistingStudentLoginUser(
+                    $saved['index_no'],
+                    $saved['census_id'],
+                    $previousIndexNo,
+                    $previousCensusId
+                );
+
+                if ($this->wantsStudentLogin($validated) || $existingLogin !== null) {
+                    $loginResult = $this->syncStudentLogin(
+                        $saved['index_no'],
+                        $saved['census_id'],
+                        $previousIndexNo,
+                        $previousCensusId
+                    );
+                }
+
+                return $saved;
+            });
             $this->storeStudentPhoto($request->file('profile_photo'), $studentId);
 
             return response()->json([
-                'message' => __('messages.students.update_success'),
+                'message' => $this->buildStudentSaveMessage(__('messages.students.update_success'), $loginResult),
                 'data' => [
                     'std_id' => $saved['std_id'],
                     'index_no' => $saved['index_no'],
@@ -2343,21 +2404,21 @@ class StudentController extends Controller
 
     private function loadCurrentStudentForUser(User $user): ?Student
     {
-        $indexNo = trim((string) ($user->username ?? ''));
+        ['index_no' => $indexNo, 'census_id' => $encodedCensusId] = $this->resolveStudentLoginIdentityFromUsername($user->username ?? null);
         if ($indexNo === '' || !Schema::hasTable('student_tbl')) {
             return null;
         }
 
-        return Student::query()
+        $query = Student::query()
             ->where('index_no', $indexNo)
-            ->where('is_deleted', 0)
-            ->when($this->resolveRequestedSchoolCensusId($user) !== null || $this->resolveStudentWriteCensusId($user) !== null, function ($query) use ($user): void {
-                $schoolCensusId = $this->resolveRequestedSchoolCensusId($user) ?? $this->resolveStudentWriteCensusId($user);
-                if ($schoolCensusId !== null) {
-                    $query->whereIn('census_id', $this->censusCandidates($schoolCensusId));
-                }
-            })
-            ->first();
+            ->where('is_deleted', 0);
+
+        $schoolCensusId = $encodedCensusId ?? $this->resolveRequestedSchoolCensusId($user) ?? $this->resolveStudentWriteCensusId($user);
+        if ($schoolCensusId !== null) {
+            $query->whereIn('census_id', $this->schoolCensusCandidates($schoolCensusId));
+        }
+
+        return $query->first();
     }
 
     private function canViewStudentDetails(User $user, string $censusId): bool
@@ -2701,6 +2762,231 @@ class StudentController extends Controller
         }
 
         return $this->resolveUserCensusId($user);
+    }
+
+    private function wantsStudentLogin(array $validated): bool
+    {
+        return filter_var($validated['create_user_login'] ?? false, FILTER_VALIDATE_BOOL);
+    }
+
+    /**
+     * @return array{created: bool, updated: bool, username: string|null, default_password: string|null}
+     */
+    private function emptyStudentLoginResult(): array
+    {
+        return [
+            'created' => false,
+            'updated' => false,
+            'username' => null,
+            'default_password' => null,
+        ];
+    }
+
+    /**
+     * @return array{created: bool, updated: bool, username: string|null, default_password: string|null}
+     */
+    private function syncStudentLogin(string $indexNo, string $censusId, ?string $previousIndexNo = null, ?string $previousCensusId = null): array
+    {
+        $result = $this->emptyStudentLoginResult();
+
+        if (!Schema::hasTable('user_tbl')) {
+            Log::warning('Student login sync skipped: user table missing.', [
+                'index_no' => $indexNo,
+                'census_id' => $censusId,
+            ]);
+            return $result;
+        }
+
+        $existingUser = $this->findExistingStudentLoginUser($indexNo, $censusId, $previousIndexNo, $previousCensusId);
+        $desiredUsername = $this->resolveDesiredStudentUsername(
+            $indexNo,
+            $censusId,
+            is_numeric($existingUser?->user_id ?? null) ? (int) $existingUser->user_id : null
+        );
+
+        if ($desiredUsername === null) {
+            Log::warning('Student login sync failed: unable to generate unique username.', [
+                'index_no' => $indexNo,
+                'census_id' => $censusId,
+                'previous_index_no' => $previousIndexNo,
+                'previous_census_id' => $previousCensusId,
+            ]);
+            throw ValidationException::withMessages([
+                'create_user_login' => ['Unable to generate a unique username for this student.'],
+            ]);
+        }
+
+        if ($desiredUsername !== $indexNo) {
+            Log::info('Student login username fallback applied.', [
+                'index_no' => $indexNo,
+                'census_id' => $censusId,
+                'selected_username' => $desiredUsername,
+            ]);
+        }
+
+        if ($existingUser !== null) {
+            $existingUser->username = $desiredUsername;
+            $existingUser->role_id = 7;
+            if (Schema::hasColumn('user_tbl', 'census_id')) {
+                $existingUser->census_id = $censusId;
+            }
+            $existingUser->status_id = 1;
+            if (Schema::hasColumn('user_tbl', 'is_deleted')) {
+                $existingUser->is_deleted = 0;
+            }
+            if (Schema::hasColumn('user_tbl', 'date_updated')) {
+                $existingUser->date_updated = now();
+            }
+            $existingUser->save();
+
+            Log::info('Student login updated.', [
+                'user_id' => (int) ($existingUser->user_id ?? 0),
+                'index_no' => $indexNo,
+                'census_id' => $censusId,
+                'username' => $desiredUsername,
+            ]);
+
+            $result['updated'] = true;
+            $result['username'] = $desiredUsername;
+
+            return $result;
+        }
+
+        $user = new User();
+        $user->role_id = 7;
+        $user->username = $desiredUsername;
+        $user->password = Hash::make($indexNo);
+        if (Schema::hasColumn('user_tbl', 'census_id')) {
+            $user->census_id = $censusId;
+        }
+        $user->grade_id = 0;
+        $user->class_id = 0;
+        $user->status_id = 1;
+        if (Schema::hasColumn('user_tbl', 'date_added')) {
+            $user->date_added = now();
+        }
+        if (Schema::hasColumn('user_tbl', 'date_updated')) {
+            $user->date_updated = now();
+        }
+        if (Schema::hasColumn('user_tbl', 'is_deleted')) {
+            $user->is_deleted = 0;
+        }
+        $user->save();
+
+        Log::info('Student login created.', [
+            'user_id' => (int) ($user->user_id ?? 0),
+            'index_no' => $indexNo,
+            'census_id' => $censusId,
+            'username' => $desiredUsername,
+            'default_password' => $indexNo,
+        ]);
+
+        $result['created'] = true;
+        $result['username'] = $desiredUsername;
+        $result['default_password'] = $indexNo;
+
+        return $result;
+    }
+
+    private function findExistingStudentLoginUser(string $indexNo, string $censusId, ?string $previousIndexNo = null, ?string $previousCensusId = null): ?User
+    {
+        $candidateUsernames = array_values(array_unique(array_filter([
+            ...$this->studentLoginUsernameCandidates($indexNo, $censusId),
+            ...($previousIndexNo !== null && $previousIndexNo !== '' ? $this->studentLoginUsernameCandidates($previousIndexNo, $previousCensusId ?? $censusId) : []),
+        ])));
+
+        if ($candidateUsernames === []) {
+            return null;
+        }
+
+        return User::query()
+            ->where('role_id', 7)
+            ->whereIn('username', $candidateUsernames)
+            ->orderBy('user_id')
+            ->first();
+    }
+
+    private function resolveDesiredStudentUsername(string $indexNo, string $censusId, ?int $ignoreUserId = null): ?string
+    {
+        foreach ($this->studentLoginUsernameCandidates($indexNo, $censusId) as $candidate) {
+            $query = User::query()->where('username', $candidate);
+            if ($ignoreUserId !== null) {
+                $query->where('user_id', '<>', $ignoreUserId);
+            }
+
+            if (!$query->exists()) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function studentLoginUsernameCandidates(string $indexNo, ?string $censusId): array
+    {
+        $baseIndexNo = trim($indexNo);
+        $normalizedCensusId = $censusId !== null ? $this->normalizeCensusId($censusId) : null;
+        if ($baseIndexNo === '') {
+            return [];
+        }
+
+        $candidates = [$baseIndexNo];
+        if ($normalizedCensusId !== null) {
+            $baseUsername = $baseIndexNo . '_' . $normalizedCensusId;
+            $candidates[] = $baseUsername;
+
+            for ($suffix = 2; $suffix <= 50; $suffix++) {
+                $candidates[] = $baseUsername . '_' . $suffix;
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function schoolCensusCandidates(string $censusId): array
+    {
+        $normalized = $this->normalizeCensusId($censusId);
+        if ($normalized === null) {
+            return [];
+        }
+
+        $candidates = collect([$normalized]);
+        if (is_numeric($normalized)) {
+            $asNumber = (string) ((int) $normalized);
+            $candidates
+                ->push($asNumber)
+                ->push(str_pad($asNumber, 5, '0', STR_PAD_LEFT))
+                ->push(str_pad($asNumber, 7, '0', STR_PAD_LEFT));
+        }
+
+        return $candidates
+            ->map(fn ($value): ?string => $this->normalizeCensusId($value))
+            ->filter(fn ($value): bool => $value !== null)
+            ->uniqueStrict()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array{created: bool, updated: bool, username: string|null, default_password: string|null}  $loginResult
+     */
+    private function buildStudentSaveMessage(string $baseMessage, array $loginResult): string
+    {
+        if ($loginResult['created'] && $loginResult['username'] !== null && $loginResult['default_password'] !== null) {
+            return $baseMessage . ' Login created. Username: ' . $loginResult['username'] . '. Default password: ' . $loginResult['default_password'] . '.';
+        }
+
+        if ($loginResult['updated'] && $loginResult['username'] !== null) {
+            return $baseMessage . ' Login updated for username: ' . $loginResult['username'] . '.';
+        }
+
+        return $baseMessage;
     }
 
     private function isPrincipal(User $user): bool

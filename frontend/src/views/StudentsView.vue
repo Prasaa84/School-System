@@ -364,6 +364,14 @@
                 </select>
                 <p v-if="fieldErrors.class_id" class="mt-1 text-xs text-red-600">{{ fieldErrors.class_id }}</p>
               </label>
+
+              <label v-if="isPrincipal" class="text-sm text-slate-700 md:col-span-3">
+                <span class="flex items-center gap-2">
+                  <input v-model="createForm.create_user_login" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                  <span>{{ text.createStudentLogin }}</span>
+                </span>
+                <p class="mt-1 text-xs text-slate-500">{{ text.studentLoginHelp }}</p>
+              </label>
             </div>
           </fieldset>
 
@@ -546,6 +554,14 @@
           />
         </label>
 
+        <label v-if="isPrincipal" class="mt-4 block text-sm text-slate-700">
+          <span class="flex items-center gap-2">
+            <input v-model="importCreateUserLogin" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+            <span>{{ text.createStudentLoginsOnImport }}</span>
+          </span>
+          <span class="mt-1 block text-xs text-slate-500">{{ text.studentImportLoginHelp }}</span>
+        </label>
+
         <p v-if="importFileName" class="mt-2 text-sm text-slate-600">{{ importFileName }}</p>
 
         <p v-if="importErrorMessage" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -555,6 +571,7 @@
         <div v-if="importResult" class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <p class="font-semibold text-slate-900">{{ text.importSummary }}</p>
           <p class="mt-2">{{ text.importedCount }}: {{ importResult.imported_count }}</p>
+          <p v-if="importResult.login_created_count > 0">{{ text.studentLoginCreatedCount }}: {{ importResult.login_created_count }}</p>
           <p>{{ text.skippedCount }}: {{ importResult.skipped_count }}</p>
           <p>{{ text.failedCount }}: {{ importResult.failed_count }}</p>
           <div v-if="importResult.failed_rows.length > 0" class="mt-3 space-y-1">
@@ -898,6 +915,7 @@ interface CreateStudentPayload {
   full_name: string
   name_with_initials: string
   gender_id: number
+  create_user_login?: boolean
   phone_no?: string
   whatsapp_no?: string
   phone_home?: string
@@ -934,6 +952,7 @@ interface ImportRow {
 
 interface ImportResult {
   imported_count: number
+  login_created_count: number
   failed_count: number
   skipped_count: number
   failed_rows: ImportRow[]
@@ -1050,6 +1069,8 @@ const text = computed(() => {
       saving: 'සුරකිමින්...',
       updateStudent: 'සිසුවා යාවත්කාලීන කරන්න',
       saveStudent: 'සිසුවා සුරකින්න',
+      createStudentLogin: 'සිසුවාට login account එකක් සාදන්න',
+      studentLoginHelp: 'Default username එක ඇතුළත් අංකය වේ. එය දැනටමත් භාවිතා වෙයි නම් පාසල් සංගණන අංකය එක් කරයි. උදා: 12345_54321. අවශ්‍ය නම් අගට අංකයක් එක් කර username එක අද්විතීය කරයි. Default password එක ඇතුළත් අංකය වේ.',
       unableToLoadStudentDetails: 'සිසුවාගේ විස්තර පූරණය කළ නොහැකි විය.',
       unableToOpenStudentProfile: 'සිසුවාගේ පැතිකඩ විවෘත කළ නොහැකි විය.',
       studentDeletedSuccessfully: 'සිසුවා සාර්ථකව මකා දමන ලදී.',
@@ -1065,12 +1086,15 @@ const text = computed(() => {
       noEditPermission: 'ඔබට සිසුන් සංස්කරණය කිරීමට අවසර නැත.',
       noDeletePermission: 'ඔබට සිසුන් මකා දැමීමට අවසර නැත.',
       importHelp: 'සිසුන් එක් කිරීමට ලබා දුන් Excel සැකිල්ල භාවිතා කරන්න.',
+      createStudentLoginsOnImport: 'Import කරන සිසුන්ට login accounts සාදන්න',
+      studentImportLoginHelp: 'Principal සඳහා පමණි. Default password ලෙස සිසුවාගේ ඇතුළත් අංකය භාවිතා කරයි.',
       chooseFile: 'ගොනුව තෝරන්න',
       upload: 'උඩුගත කරන්න',
       uploading: 'උඩුගත කරමින්...',
       selectSchoolBeforeImport: 'Bulk upload කිරීමට පෙර පාසල තෝරන්න.',
       importSummary: 'ආයාත සාරාංශය',
       importedCount: 'සාර්ථකව එක් කළ ගණන',
+      studentLoginCreatedCount: 'සාදන ලද student login ගණන',
       skippedCount: 'හිස් පේළි',
       failedCount: 'අසාර්ථක පේළි',
       failedRows: 'අසාර්ථක පේළි විස්තර',
@@ -1186,6 +1210,8 @@ const text = computed(() => {
       saving: 'சேமிக்கப்படுகிறது...',
       updateStudent: 'மாணவரை புதுப்பிக்கவும்',
       saveStudent: 'மாணவரை சேமிக்கவும்',
+      createStudentLogin: 'மாணவருக்கான login account உருவாக்கவும்',
+      studentLoginHelp: 'Default username அனுமதி இலக்கமே. அது ஏற்கனவே பயன்படுத்தப்பட்டால் பாடசாலை கணக்கெடுப்பு இலக்கம் சேர்க்கப்படும். உதா: 12345_54321. தேவைப்பட்டால் இறுதியில் எண் சேர்த்து username தனித்துவமாக்கப்படும். Default password அனுமதி இலக்கமே.',
       unableToLoadStudentDetails: 'மாணவர் விவரங்களை ஏற்ற முடியவில்லை.',
       unableToOpenStudentProfile: 'மாணவர் சுயவிவரத்தை திறக்க முடியவில்லை.',
       studentDeletedSuccessfully: 'மாணவர் வெற்றிகரமாக நீக்கப்பட்டார்.',
@@ -1201,12 +1227,15 @@ const text = computed(() => {
       noEditPermission: 'மாணவர்களைத் திருத்த உங்களுக்கான அனுமதி இல்லை.',
       noDeletePermission: 'மாணவர்களை நீக்க உங்களுக்கான அனுமதி இல்லை.',
       importHelp: 'மாணவர்களை தொகுதியாகச் சேர்க்க வழங்கப்பட்ட Excel template ஐ பயன்படுத்தவும்.',
+      createStudentLoginsOnImport: 'Import செய்யும் மாணவர்களுக்கு login accounts உருவாக்கவும்',
+      studentImportLoginHelp: 'Principal மட்டும். Default password ஆக மாணவரின் அனுமதி இலக்கம் பயன்படுத்தப்படும்.',
       chooseFile: 'கோப்பைத் தேர்ந்தெடுக்கவும்',
       upload: 'பதிவேற்று',
       uploading: 'பதிவேற்றப்படுகிறது...',
       selectSchoolBeforeImport: 'Bulk upload செய்வதற்கு முன் பாடசாலையைத் தேர்ந்தெடுக்கவும்.',
       importSummary: 'இறக்குமதி சுருக்கம்',
       importedCount: 'வெற்றிகரமாக சேர்க்கப்பட்டது',
+      studentLoginCreatedCount: 'உருவாக்கப்பட்ட student login கணக்கு எண்ணிக்கை',
       skippedCount: 'தவிர்க்கப்பட்ட காலி வரிகள்',
       failedCount: 'தோல்வியுற்ற வரிகள்',
       failedRows: 'தோல்வியுற்ற வரி விவரங்கள்',
@@ -1321,6 +1350,8 @@ const text = computed(() => {
     saving: 'Saving...',
     updateStudent: 'Update Student',
     saveStudent: 'Save Student',
+    createStudentLogin: 'Create login account for this student',
+    studentLoginHelp: 'The default username is the admission number. If that is already taken, the school census ID is added, for example `12345_54321`. If needed, a numeric suffix is added after that. The default password is the admission number.',
     unableToLoadStudentDetails: 'Unable to load student details.',
     unableToOpenStudentProfile: 'Unable to open student profile.',
     studentDeletedSuccessfully: 'Student deleted successfully.',
@@ -1336,12 +1367,15 @@ const text = computed(() => {
     noEditPermission: 'You do not have permission to edit students.',
     noDeletePermission: 'You do not have permission to delete students.',
     importHelp: 'Use the provided Excel template to add students in bulk.',
+    createStudentLoginsOnImport: 'Create login accounts for imported students',
+    studentImportLoginHelp: 'Principal only. The default password will be the student admission number.',
     chooseFile: 'Choose File',
     upload: 'Upload',
     uploading: 'Uploading...',
     selectSchoolBeforeImport: 'Please select a school before bulk upload.',
     importSummary: 'Import Summary',
     importedCount: 'Imported',
+    studentLoginCreatedCount: 'Student logins created',
     skippedCount: 'Skipped Empty Rows',
     failedCount: 'Failed Rows',
     failedRows: 'Failed Row Details',
@@ -1412,6 +1446,7 @@ const ethnicGroups = ref<OptionRow[]>([])
 const religions = ref<OptionRow[]>([])
 const schools = ref<OptionRow[]>([])
 const importSchoolCensusId = ref(0)
+const importCreateUserLogin = ref(false)
 const academicYears = ref<number[]>([])
 const fieldErrors = ref<ValidationErrors>({})
 const importFile = ref<File | null>(null)
@@ -1426,6 +1461,7 @@ const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0
 const reportFilters = ref<StudentReportFilters>(createDefaultReportFilters())
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
+const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
 const isReportView = computed(() => route.name === 'students-report')
 const fallbackStudentPermissions = computed<Record<string, boolean>>(() => {
   const roleId = currentUser?.role_id ?? 0
@@ -1540,6 +1576,7 @@ const createForm = ref({
   full_name: '',
   name_with_initials: '',
   gender_id: 0,
+  create_user_login: false,
   phone_no: '',
   whatsapp_no: '',
   phone_home: '',
@@ -1579,6 +1616,7 @@ const resetCreateForm = (): void => {
   createForm.value.full_name = ''
   createForm.value.name_with_initials = ''
   createForm.value.gender_id = 0
+  createForm.value.create_user_login = false
   createForm.value.phone_no = ''
   createForm.value.whatsapp_no = ''
   createForm.value.phone_home = ''
@@ -1697,6 +1735,7 @@ const openImportDialog = (): void => {
   importFile.value = null
   importFileName.value = ''
   importResult.value = null
+  importCreateUserLogin.value = false
   importSchoolCensusId.value = isAdmin.value && adminSchoolContextCensusId.value > 0 ? Number(adminSchoolContextCensusId.value) : 0
   showImportDialog.value = true
 }
@@ -1714,6 +1753,7 @@ const closeImportDialog = (): void => {
   importFile.value = null
   importFileName.value = ''
   importResult.value = null
+  importCreateUserLogin.value = false
   importSchoolCensusId.value = 0
 }
 
@@ -2356,6 +2396,10 @@ const submitAddStudent = async (): Promise<void> => {
     gender_id: Number(createForm.value.gender_id),
   }
 
+  if (isPrincipal.value && createForm.value.create_user_login) {
+    payload.create_user_login = true
+  }
+
   if (createForm.value.phone_no.trim() !== '') payload.phone_no = createForm.value.phone_no.trim()
   if (createForm.value.whatsapp_no.trim() !== '') payload.whatsapp_no = createForm.value.whatsapp_no.trim()
   if (createForm.value.phone_home.trim() !== '') payload.phone_home = createForm.value.phone_home.trim()
@@ -2385,7 +2429,7 @@ const submitAddStudent = async (): Promise<void> => {
       ? (() => {
           const formData = new FormData()
           Object.entries(payload).forEach(([key, value]) => {
-            formData.append(key, String(value))
+            formData.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value))
           })
           formData.append('profile_photo', studentPhotoFile.value as File)
           return formData
@@ -2453,6 +2497,9 @@ const submitImport = async (): Promise<void> => {
   try {
     const formData = new FormData()
     formData.append('file', importFile.value)
+    if (isPrincipal.value && importCreateUserLogin.value) {
+      formData.append('create_user_login', '1')
+    }
 
     if (isAdmin.value && importSchoolCensusId.value > 0) {
       const selectedSchoolCensusId = Number(importSchoolCensusId.value)
@@ -2469,6 +2516,7 @@ const submitImport = async (): Promise<void> => {
 
     importResult.value = data.data ?? {
       imported_count: 0,
+      login_created_count: 0,
       failed_count: 0,
       skipped_count: 0,
       failed_rows: [],

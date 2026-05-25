@@ -182,7 +182,7 @@ trait AppliesSchoolScope
             return null;
         }
 
-        $indexNo = trim((string) ($user->username ?? ''));
+        ['index_no' => $indexNo, 'census_id' => $encodedCensusId] = $this->resolveStudentLoginIdentityFromUsername($user->username ?? null);
         if ($indexNo === '') {
             return null;
         }
@@ -190,6 +190,18 @@ trait AppliesSchoolScope
         $baseQuery = DB::table('student_tbl')->where('index_no', $indexNo);
         if (Schema::hasColumn('student_tbl', 'is_deleted')) {
             $baseQuery->where('is_deleted', 0);
+        }
+
+        if ($encodedCensusId !== null) {
+            $encodedCandidates = $this->censusCandidates($encodedCensusId);
+            $matchedCensus = (clone $baseQuery)
+                ->whereIn('census_id', $encodedCandidates)
+                ->value('census_id');
+
+            $normalizedMatch = $this->normalizeCensusId($matchedCensus);
+            if ($normalizedMatch !== null) {
+                return $normalizedMatch;
+            }
         }
 
         $requestedCensusId = $this->resolveRequestedSchoolCensusIdFromRequest();
@@ -228,6 +240,29 @@ trait AppliesSchoolScope
         }
 
         return null;
+    }
+
+    /**
+     * @return array{index_no:string, census_id:string|null}
+     */
+    protected function resolveStudentLoginIdentityFromUsername(mixed $username): array
+    {
+        $value = trim((string) $username);
+        if ($value === '') {
+            return ['index_no' => '', 'census_id' => null];
+        }
+
+        if (preg_match('/^(?P<index>[0-9]{4,5})(?:_(?P<census>[0-9]{4,7}))?(?:_[0-9]+)?$/', $value, $matches) === 1) {
+            return [
+                'index_no' => (string) ($matches['index'] ?? ''),
+                'census_id' => $this->normalizeCensusId($matches['census'] ?? null),
+            ];
+        }
+
+        return [
+            'index_no' => $value,
+            'census_id' => null,
+        ];
     }
 
     private function resolveCanonicalSchoolCensusId(string $requestedCensusId): ?string
@@ -294,5 +329,4 @@ trait AppliesSchoolScope
         return is_numeric($left) && is_numeric($right) && ((int) $left === (int) $right);
     }
 }
-
 

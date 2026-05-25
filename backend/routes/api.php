@@ -22,6 +22,8 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware('sds.api')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me']);
+        Route::get('/auth/account', [AuthController::class, 'account']);
+        Route::put('/auth/password', [AuthController::class, 'changePassword']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 
         Route::get('/modules', ModuleCatalogController::class);

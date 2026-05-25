@@ -4,10 +4,11 @@ import SchoolView from '../views/SchoolView.vue'
 import LoginView from '../views/LoginView.vue'
 import ModulePlaceholderView from '../views/ModulePlaceholderView.vue'
 import PaymentsView from '../views/PaymentsView.vue'
+import AccountView from '../views/AccountView.vue'
 import StudentProfileView from '../views/StudentProfileView.vue'
 import StudentsInClassesView from '../views/StudentsInClassesView.vue'
 import StudentsView from '../views/StudentsView.vue'
-import { isAuthenticated } from '../services/auth'
+import { getUser, isAuthenticated } from '../services/auth'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -86,6 +87,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/account',
+      name: 'account',
+      component: AccountView,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/module/:moduleKey',
       name: 'module',
       component: ModulePlaceholderView,
@@ -101,6 +108,9 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const authed = isAuthenticated()
+  const currentUser = getUser()
+  const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
+  const isStudent = (currentUser?.role_id ?? 0) === 7 || roleName === 'student'
 
   if (to.meta.requiresAuth && !authed) {
     return {
@@ -109,8 +119,12 @@ router.beforeEach((to) => {
     }
   }
 
+  if (authed && isStudent && to.name === 'dashboard') {
+    return { name: 'student-profile-me' }
+  }
+
   if (to.meta.guestOnly && authed) {
-    return { name: 'dashboard' }
+    return { name: isStudent ? 'student-profile-me' : 'dashboard' }
   }
 
   return true
