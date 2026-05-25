@@ -201,6 +201,7 @@ const route = useRoute()
 const router = useRouter()
 const currentUser = getUser()
 const isAdmin = computed(() => Number((currentUser as { role_id?: number } | null)?.role_id ?? 0) === 1)
+const isStudent = computed(() => Number((currentUser as { role_id?: number } | null)?.role_id ?? 0) === 7)
 
 const text = useLocalizedText({
   en: {
@@ -423,16 +424,23 @@ const guardianGroups = computed(() => [
 const loadProfile = async (): Promise<void> => {
   errorMessage.value = ''
   loading.value = true
-  const studentId = Number(route.params.studentId)
-
-  if (!Number.isFinite(studentId) || studentId <= 0) {
-    errorMessage.value = text.value.unableToLoad
-    loading.value = false
-    return
-  }
 
   try {
-    const { data } = await api.get<{ data: StudentProfileDetail }>(`/students/${studentId}`)
+    let response
+    if (route.name === 'student-profile-me') {
+      response = await api.get<{ data: StudentProfileDetail }>('/students/me')
+    } else {
+      const studentId = Number(route.params.studentId)
+      if (!Number.isFinite(studentId) || studentId <= 0) {
+        errorMessage.value = text.value.unableToLoad
+        loading.value = false
+        return
+      }
+
+      response = await api.get<{ data: StudentProfileDetail }>(`/students/${studentId}`)
+    }
+
+    const { data } = response
     detail.value = data.data
   } catch {
     errorMessage.value = text.value.unableToLoad
@@ -446,7 +454,7 @@ const exportPdf = (): void => {
 }
 
 const goBackToReports = async (): Promise<void> => {
-  await router.push('/students/report')
+  await router.push(isStudent.value ? '/' : '/students/report')
 }
 
 onMounted(async () => {

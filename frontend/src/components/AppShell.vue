@@ -40,7 +40,7 @@
                   <rect x="13" y="7" width="2" height="2" fill="white" />
                   <rect x="9" y="12" width="2" height="5" fill="white" />
                 </svg>
-                <svg v-else-if="item.key === 'students'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                <svg v-else-if="item.key === 'students' || item.key === 'student-details'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
                   <circle cx="10" cy="6" r="3" />
                   <path d="M3 17c0-3.1 3.1-5 7-5s7 1.9 7 5" />
                 </svg>
@@ -61,7 +61,7 @@
                   <path d="M2.5 16c0-2.5 2.2-4 4.5-4s4.5 1.5 4.5 4" />
                   <path d="M8.5 16c.2-2.2 2.1-3.5 4.2-3.5 2.3 0 4.3 1.4 4.8 3.5" />
                 </svg>
-                <svg v-else-if="item.key === 'payments'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                <svg v-else-if="item.key === 'payments' || item.key === 'payments-history'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
                   <rect x="2" y="4" width="16" height="12" rx="2" />
                   <rect x="4.5" y="7" width="11" height="1.8" rx="0.8" fill="white" />
                   <circle cx="14" cy="12.5" r="1.5" fill="white" />
@@ -206,6 +206,7 @@ const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
 const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
+const isStudent = computed(() => (currentUser?.role_id ?? 0) === 7 || roleName === 'student')
 const schoolName = ref('')
 const schoolCrestUrl = ref('')
 type SchoolIdentityDetail = {
@@ -297,30 +298,36 @@ const localizedMenu = computed(() => {
           dashboard: 'Dashboard',
           school: 'School',
           students: 'Students',
+          'student-details': 'Student Details',
           grades: 'Grades',
           classes: 'Classes',
           staff: 'Staff',
           payments: 'Payments',
+          'payments-history': 'Payments History',
           reports: 'Reports',
         }[item.key] ?? item.label,
         si: {
           dashboard: 'පුවරුව',
           school: 'පාසල',
           students: 'සිසුන්',
+          'student-details': 'සිසු විස්තර',
           grades: 'ශ්‍රේණි',
           classes: 'පන්ති',
           staff: 'කාර්ය මණ්ඩලය',
           payments: 'ගෙවීම්',
+          'payments-history': 'ගෙවීම් ඉතිහාසය',
           reports: 'වාර්තා',
         }[item.key] ?? item.label,
         ta: {
           dashboard: 'கட்டுப்பாட்டு பலகை',
           school: 'பள்ளி',
           students: 'மாணவர்கள்',
+          'student-details': 'மாணவர் விவரங்கள்',
           grades: 'தரங்கள்',
           classes: 'வகுப்புகள்',
           staff: 'பணியாளர்கள்',
           payments: 'கட்டணங்கள்',
+          'payments-history': 'கட்டண வரலாறு',
           reports: 'அறிக்கைகள்',
         }[item.key] ?? item.label,
       }),
@@ -400,11 +407,17 @@ const loadMenu = async (): Promise<void> => {
 
   const mappedModules: MenuItem[] = modules
     .map((module) => ({
-      key: module.key,
-      label: module.label,
-      to: resolveModulePath(module),
+      key: isStudent.value && module.key === 'students'
+        ? 'student-details'
+        : (isStudent.value && module.key === 'payments' ? 'payments-history' : module.key),
+      label: isStudent.value && module.key === 'students'
+        ? 'Student Details'
+        : (isStudent.value && module.key === 'payments' ? 'Payments History' : module.label),
+      to: isStudent.value && module.key === 'students'
+        ? '/students/me'
+        : resolveModulePath(module),
       children:
-        module.key === 'students'
+        module.key === 'students' && !isStudent.value
           ? [
               { key: 'students-in-classes', label: 'Students in Classes', to: '/students/in-classes' },
               { key: 'students-report', label: 'Student Reports', to: '/students/report' },
@@ -417,6 +430,7 @@ const loadMenu = async (): Promise<void> => {
     }))
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
     .filter((item) => !(isSdsUser.value && item.key === 'students'))
+    .filter((item) => !isStudent.value || ['student-details', 'payments-history'].includes(item.key))
 
   const schoolMenu: MenuItem = {
     key: 'school',

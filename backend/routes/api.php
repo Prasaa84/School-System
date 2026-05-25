@@ -83,6 +83,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/students/template', [StudentController::class, 'downloadTemplate']);
         Route::post('/students/import', [StudentController::class, 'import']);
         Route::post('/students', [StudentController::class, 'store']);
+        Route::get('/students/me', [StudentController::class, 'current']);
         Route::get('/students/{studentId}/profile-export', [StudentController::class, 'downloadProfileExport'])->whereNumber('studentId');
         Route::get('/students/{studentId}', [StudentController::class, 'show'])->whereNumber('studentId');
         Route::put('/students/{studentId}', [StudentController::class, 'update'])->whereNumber('studentId');

@@ -152,7 +152,7 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 401);
         }
 
-        if (!$this->canAccessPayments($user)) {
+        if (!$this->canViewFeeTypes($user)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
@@ -331,7 +331,7 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 401);
         }
 
-        if (!$this->canAccessPayments($user)) {
+        if (!$this->canManagePayments($user)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
@@ -465,6 +465,22 @@ class PaymentController extends Controller
         }
 
         $roleId = (int) ($user->role_id ?? 0);
+        if (in_array($roleId, [1, 2, 4, 7], true)) {
+            return true;
+        }
+
+        $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
+
+        return in_array($roleName, ['admin', 'administrator', 'principal', 'student'], true);
+    }
+
+    private function canManagePayments(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        $roleId = (int) ($user->role_id ?? 0);
         if (in_array($roleId, [1, 2, 4], true)) {
             return true;
         }
@@ -472,6 +488,11 @@ class PaymentController extends Controller
         $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
 
         return in_array($roleName, ['admin', 'administrator', 'principal'], true);
+    }
+
+    private function canViewFeeTypes(?User $user): bool
+    {
+        return $this->canManageFeeTypes($user) || ((int) ($user?->role_id ?? 0) === 4) || strtolower(trim((string) ($user?->role?->role_name ?? ''))) === 'sds user';
     }
 
     private function canManageFeeTypes(?User $user): bool

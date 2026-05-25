@@ -1476,7 +1476,33 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.students.census_required')], 422);
         }
 
-        if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_UPDATE)) {
+        if (!$this->canViewStudentDetails($user, $censusId)) {
+            return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        return response()->json([
+            'data' => $this->buildStudentDetailPayload($student, $censusId),
+        ]);
+    }
+
+    public function current(): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => __('messages.auth.unauthorized')], 401);
+        }
+
+        $student = $this->loadCurrentStudentForUser($user);
+        if ($student === null) {
+            return response()->json(['message' => __('messages.students.not_found')], 404);
+        }
+
+        $censusId = $this->normalizeCensusId($student->census_id ?? null);
+        if ($censusId === null) {
+            return response()->json(['message' => __('messages.students.census_required')], 422);
+        }
+
+        if (!$this->canViewStudentDetails($user, $censusId)) {
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
@@ -1502,7 +1528,7 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.students.census_required')], 422);
         }
 
-        if (!$this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_UPDATE)) {
+        if (!$this->canViewStudentDetails($user, $censusId)) {
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
         }
 
@@ -2313,6 +2339,31 @@ class StudentController extends Controller
             ->where('std_id', (int) $resolvedStudentId)
             ->where('is_deleted', 0)
             ->first();
+    }
+
+    private function loadCurrentStudentForUser(User $user): ?Student
+    {
+        $indexNo = trim((string) ($user->username ?? ''));
+        if ($indexNo === '' || !Schema::hasTable('student_tbl')) {
+            return null;
+        }
+
+        return Student::query()
+            ->where('index_no', $indexNo)
+            ->where('is_deleted', 0)
+            ->when($this->resolveRequestedSchoolCensusId($user) !== null || $this->resolveStudentWriteCensusId($user) !== null, function ($query) use ($user): void {
+                $schoolCensusId = $this->resolveRequestedSchoolCensusId($user) ?? $this->resolveStudentWriteCensusId($user);
+                if ($schoolCensusId !== null) {
+                    $query->whereIn('census_id', $this->censusCandidates($schoolCensusId));
+                }
+            })
+            ->first();
+    }
+
+    private function canViewStudentDetails(User $user, string $censusId): bool
+    {
+        return $this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_VIEW)
+            || $this->featureAccess->hasFeature($user, $censusId, FeatureAccessService::STUDENT_UPDATE);
     }
 
     /**

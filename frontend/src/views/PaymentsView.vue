@@ -5,7 +5,7 @@
       <p class="mt-2 text-sm text-slate-600">{{ pageSubtitle }}</p>
     </header>
 
-    <section v-if="!isFeeTypesRoute" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section v-if="!isFeeTypesRoute && !isStudent" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div class="grid gap-4 md:grid-cols-3">
         <label v-if="isAdmin" class="text-sm text-slate-700 md:col-span-3">
           {{ text.school }}
@@ -55,7 +55,7 @@
           </div>
           <div class="flex items-center gap-3">
             <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{{ paymentRows.length }}</span>
-            <button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddPaymentDialog">
+            <button v-if="canManagePayments" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700" @click="openAddPaymentDialog">
               {{ text.addPayment }}
             </button>
           </div>
@@ -338,8 +338,10 @@ const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
 const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
+const isStudent = computed(() => (currentUser?.role_id ?? 0) === 7 || roleName === 'student')
 const canViewFeeTypes = computed(() => isAdmin.value || isPrincipal.value || isSdsUser.value)
 const canManageFeeTypes = computed(() => isAdmin.value || isPrincipal.value)
+const canManagePayments = computed(() => isAdmin.value || isPrincipal.value || isSdsUser.value)
 const isFeeTypesRoute = computed(() => route.name === 'payments-fee-types')
 
 const text = computed(() => {
@@ -876,6 +878,11 @@ const initializeView = async (): Promise<void> => {
 
   closeFeeTypeDialog()
   await loadOptions()
+
+  if (isStudent.value && currentUser?.username) {
+    studentIndexNo.value = currentUser.username
+    await lookupStudent()
+  }
 }
 
 watch(() => paymentForm.value.year, async (year) => {

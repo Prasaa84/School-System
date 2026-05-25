@@ -58,6 +58,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/students/me',
+      name: 'student-profile-me',
+      component: StudentProfileView,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/students/in-classes',
       name: 'students-in-classes',
       component: StudentsInClassesView,

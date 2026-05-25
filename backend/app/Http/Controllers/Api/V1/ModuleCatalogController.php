@@ -193,7 +193,7 @@ class ModuleCatalogController extends Controller
             4 => ['payments', 'students', 'grades', 'classes'],
             5 => ['students', 'grades', 'classes'],
             6 => ['students', 'grades', 'classes'],
-            7 => ['students', 'grades', 'classes']
+            7 => ['students', 'payments']
         ];
 
         $keys = $roleMap[$roleId ?? -1] ?? ['grades', 'grades', 'classes', 'staff', 'payments', 'reports'];

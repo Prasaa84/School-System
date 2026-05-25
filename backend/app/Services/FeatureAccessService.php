@@ -233,6 +233,17 @@ class FeatureAccessService
     {
         $permissions = $this->emptyPermissionMap();
 
+        if ((int) $roleId === 7) {
+            foreach ([
+                self::STUDENT_VIEW,
+                self::PAYMENT_VIEW,
+            ] as $featureKey) {
+                $permissions[$featureKey] = true;
+            }
+
+            return $permissions;
+        }
+
         foreach ([
             self::STUDENT_VIEW,
             self::GRADE_VIEW,
