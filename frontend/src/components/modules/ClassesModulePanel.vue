@@ -4,9 +4,12 @@
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 class="font-display text-xl font-bold">{{ text.classes }} ({{ text.year }} {{ selectedYear }})</h2>
         <div class="flex gap-2">
-          <input :value="selectedYear" type="number" min="2000" :max="currentYear" class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm" @input="onYearInput" />
+          <select :value="selectedYear" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onYearChange">
+            <option :value="0">{{ text.selectYear }}</option>
+            <option v-for="year in yearOptions" :key="`class-view-year-${year}`" :value="year">{{ year }}</option>
+          </select>
           <select :value="selectedGradeId" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onGradeFilterChange">
-            <option :value="0">{{ text.allGrades }}</option>
+            <option :value="0">{{ text.selectGrade }}</option>
             <option v-for="option in classGradeOptions" :key="option.grade_id" :value="option.grade_id">{{ option.grade }}</option>
           </select>
         </div>
@@ -94,7 +97,7 @@
     <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <h2 class="font-display text-xl font-bold">{{ text.classReports }}</h2>
       <div class="flex gap-2">
-        <select :value="reportYear" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportYearChange"><option :value="0">{{ text.allYears }}</option><option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option></select>
+        <select :value="reportYear" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportYearChange"><option :value="0">{{ text.selectYear }}</option><option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option></select>
         <button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white" @click="$emit('load-report')">{{ text.view }}</button>
       </div>
     </div>
@@ -161,11 +164,11 @@ const text = useLocalizedText({
   en: {
     classes: 'Classes',
     latestYear: 'Latest Year',
-    allGrades: 'All Grades',
     year: 'Year',
     school: 'School',
     grade: 'Grade',
     class: 'Class',
+    selectYear: 'Select Year',
     selectGrade: 'Select Grade',
     selectClass: 'Select Class',
     approved: 'Approved',
@@ -178,7 +181,6 @@ const text = useLocalizedText({
     save: 'Save',
     delete: 'Delete',
     classReports: 'Class Reports',
-    allYears: 'All Years',
     view: 'View',
     studentCount: 'Student Count',
     noData: 'No data found for the selected year.',
@@ -186,11 +188,11 @@ const text = useLocalizedText({
   si: {
     classes: 'පන්ති',
     latestYear: 'නවතම වසර',
-    allGrades: 'සියලු ශ්‍රේණි',
     year: 'වසර',
     school: 'පාසල',
     grade: 'ශ්‍රේණිය',
     class: 'පන්තිය',
+    selectYear: 'වසර තෝරන්න',
     selectGrade: 'ශ්‍රේණිය තෝරන්න',
     selectClass: 'පන්තිය තෝරන්න',
     approved: 'අනුමත',
@@ -203,7 +205,6 @@ const text = useLocalizedText({
     save: 'සුරකින්න',
     delete: 'මකන්න',
     classReports: 'පන්ති වාර්තා',
-    allYears: 'සියලු වසර',
     view: 'දර්ශනය',
     studentCount: 'සිසුන් ගණන',
     noData: 'තෝරාගත් වසර සඳහා දත්ත හමු නොවීය.',
@@ -211,11 +212,11 @@ const text = useLocalizedText({
   ta: {
     classes: 'வகுப்புகள்',
     latestYear: 'சமீபத்திய ஆண்டு',
-    allGrades: 'அனைத்து தரங்கள்',
     year: 'ஆண்டு',
     school: 'பள்ளி',
     grade: 'தரம்',
     class: 'வகுப்பு',
+    selectYear: 'ஆண்டை தேர்ந்தெடுக்கவும்',
     selectGrade: 'தரத்தை தேர்ந்தெடுக்கவும்',
     selectClass: 'வகுப்பை தேர்ந்தெடுக்கவும்',
     approved: 'அங்கீகரிக்கப்பட்டது',
@@ -228,14 +229,12 @@ const text = useLocalizedText({
     save: 'சேமி',
     delete: 'நீக்கு',
     classReports: 'வகுப்பு அறிக்கைகள்',
-    allYears: 'அனைத்து ஆண்டுகள்',
     view: 'பார்வை',
     studentCount: 'மாணவர் எண்ணிக்கை',
     noData: 'தேர்ந்தெடுக்கப்பட்ட ஆண்டிற்கான தரவு இல்லை.',
   },
 })
 
-const currentYear = new Date().getFullYear()
 const assignedTeacherMap = computed(() => {
   const map = new Map<number, number>()
 
@@ -271,14 +270,9 @@ const teacherOptionsForRow = (classRowId: number): StaffOption[] => {
   })
 }
 
-const onYearInput = (event: Event): void => {
-  const value = Number((event.target as HTMLInputElement).value)
-  if (!Number.isFinite(value)) {
-    emit('update:selected-year', props.selectedYear)
-    return
-  }
-
-  emit('update:selected-year', Math.min(Math.trunc(value), currentYear))
+const onYearChange = (event: Event): void => {
+  const value = Number((event.target as HTMLSelectElement).value)
+  emit('update:selected-year', Number.isFinite(value) ? value : props.selectedYear)
 }
 
 const onGradeFilterChange = (event: Event): void => {
