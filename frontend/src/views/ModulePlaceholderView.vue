@@ -795,7 +795,7 @@ const createClassGradeId = ref(0)
 const createClassId = ref(0)
 const createApprovedCount = ref(35)
 const createClassOptions = ref<ClassOption[]>([])
-const reportYear = ref(props.moduleKey === 'grades' && isSdsUser.value ? currentCalendarYear : 0)
+const reportYear = ref(props.moduleKey === 'grades' ? currentCalendarYear : 0)
 const staffSearch = ref('')
 const selectedStaffSchoolCensusId = ref(getSchoolContextCensusId() ?? 0)
 const staffRows = ref<StaffRow[]>([])
@@ -1829,7 +1829,7 @@ const loadGradeReport = async (): Promise<void> => {
   error.value = ''
   const effectiveYear = reportYear.value > 0
     ? reportYear.value
-    : (isGrades.value && isSdsUser.value ? currentCalendarYear : 0)
+    : (isGrades.value ? currentCalendarYear : 0)
   const params = effectiveYear > 0 ? { year: effectiveYear } : {}
 
   if (isGrades.value && reportYear.value !== effectiveYear) {
@@ -2144,7 +2144,7 @@ watch(
 
 watch(() => props.moduleKey, () => {
   activeTab.value = 'view'
-  reportYear.value = props.moduleKey === 'grades' && isSdsUser.value ? currentCalendarYear : 0
+  reportYear.value = props.moduleKey === 'grades' ? currentCalendarYear : 0
   Object.assign(staffReportFilters, createDefaultStaffReportFilters())
   staffReportRows.value = []
   selectedGradeId.value = 0
