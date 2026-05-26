@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { clearAuthSession, getSchoolContextCensusId, getToken } from './auth'
+import { clearAuthSession, getSchoolContextCensusValue, getToken } from './auth'
 
 const LANGUAGE_STORAGE_KEY = 'sds.ui.language'
 
@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
   }
 
   const explicitSchoolHeader = (config.headers as Record<string, unknown> | undefined)?.['X-School-Census-Id']
-  const schoolContextCensusId = getSchoolContextCensusId()
+  const schoolContextCensusId = getSchoolContextCensusValue()
   if (explicitSchoolHeader === undefined && schoolContextCensusId !== null) {
     config.headers['X-School-Census-Id'] = String(schoolContextCensusId)
   }

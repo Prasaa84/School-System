@@ -3,14 +3,16 @@
 namespace App\Http\Controllers\Api\V1\Concerns;
 
 use App\Models\SchoolDetail;
-use App\Models\User;
 use App\Models\Staff;
+use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 trait AppliesSchoolScope
 {
+    protected const CLASS_TEACHER_ROLE_NAMES = ['class teacher', 'class_teacher', 'classteacher'];
+
     protected function authUser(): ?User
     {
         $user = request()->attributes->get('auth_user');
@@ -50,6 +52,19 @@ trait AppliesSchoolScope
         }
 
         if (Schema::hasTable('staff_tbl')) {
+            $staffId = $this->resolveUserStaffId($user);
+            if ($staffId !== null) {
+                $staffCensusId = $this->normalizeCensusId(
+                    Staff::query()
+                        ->when(Schema::hasColumn('staff_tbl', 'is_deleted'), fn ($query) => $query->where('is_deleted', 0))
+                        ->where('stf_id', $staffId)
+                        ->value('census_id')
+                );
+                if ($staffCensusId !== null) {
+                    return $staffCensusId;
+                }
+            }
+
             $query = Staff::query()->where('user_id', $userId);
             if (Schema::hasColumn('staff_tbl', 'is_deleted')) {
                 $query->where('is_deleted', 0);
@@ -143,6 +158,163 @@ trait AppliesSchoolScope
         }
 
         $query->whereIn($qualified, $candidates);
+    }
+
+    protected function isClassTeacher(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        if ((int) ($user->role_id ?? 0) === 5) {
+            return true;
+        }
+
+        $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
+
+        return in_array($roleName, self::CLASS_TEACHER_ROLE_NAMES, true);
+    }
+
+    protected function resolveUserStaffId(?User $user): ?int
+    {
+        if ($user === null || !Schema::hasTable('staff_tbl')) {
+            return null;
+        }
+
+        $userId = is_numeric($user->user_id ?? null) ? (int) $user->user_id : null;
+        if ($userId === null) {
+            return null;
+        }
+
+        if (Schema::hasTable('staff_user_tbl')) {
+            $query = DB::table('staff_user_tbl')->where('user_id', $userId);
+            if (Schema::hasColumn('staff_user_tbl', 'is_deleted')) {
+                $query->where('is_deleted', 0);
+            }
+
+            $staffId = $query->orderByDesc('stf_user_id')->value('stf_id');
+            if (is_numeric($staffId) && (int) $staffId > 0) {
+                return (int) $staffId;
+            }
+        }
+
+        $query = DB::table('staff_tbl')->where('user_id', $userId);
+        if (Schema::hasColumn('staff_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        $staffId = $query->orderByDesc('stf_id')->value('stf_id');
+
+        return is_numeric($staffId) ? (int) $staffId : null;
+    }
+
+    /**
+     * @return array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}|null
+     */
+    protected function resolveClassTeacherAssignment(?User $user): ?array
+    {
+        if (!$this->isClassTeacher($user) || !Schema::hasTable('school_grade_class_tbl')) {
+            return null;
+        }
+
+        $staffId = $this->resolveUserStaffId($user);
+        if ($staffId === null) {
+            return null;
+        }
+
+        $query = DB::table('school_grade_class_tbl as sgct')
+            ->select([
+                'sgct.sch_grd_cls_id',
+                'sgct.grade_id',
+                'sgct.class_id',
+                'sgct.year',
+                'sgct.census_id',
+                'sgct.stf_id',
+            ])
+            ->where('sgct.stf_id', $staffId);
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        $schoolCensusId = $this->resolveUserCensusId($user);
+        if ($schoolCensusId !== null) {
+            $query->whereIn('sgct.census_id', $this->censusCandidates($schoolCensusId));
+        }
+
+        $query->where('sgct.year', $this->resolveClassTeacherAcademicYear());
+
+        $row = $query
+            ->orderByDesc('sgct.sch_grd_cls_id')
+            ->first();
+
+        $censusId = $this->normalizeCensusId($row->census_id ?? null);
+        if (
+            $row === null
+            || !is_numeric($row->sch_grd_cls_id ?? null)
+            || !is_numeric($row->grade_id ?? null)
+            || !is_numeric($row->class_id ?? null)
+            || !is_numeric($row->year ?? null)
+            || !is_numeric($row->stf_id ?? null)
+            || $censusId === null
+        ) {
+            return null;
+        }
+
+        return [
+            'sch_grd_cls_id' => (int) $row->sch_grd_cls_id,
+            'grade_id' => (int) $row->grade_id,
+            'class_id' => (int) $row->class_id,
+            'year' => (int) $row->year,
+            'census_id' => $censusId,
+            'stf_id' => (int) $row->stf_id,
+        ];
+    }
+
+    protected function resolveClassTeacherAcademicYear(): int
+    {
+        $requestedYear = request()->header('X-Academic-Year');
+        if (!is_numeric($requestedYear)) {
+            $requestedYear = request()->query('year');
+        }
+        if (!is_numeric($requestedYear)) {
+            $requestedYear = request()->input('year');
+        }
+
+        $year = is_numeric($requestedYear) ? (int) $requestedYear : (int) now()->year;
+
+        return ($year >= 2000 && $year <= 2100) ? $year : (int) now()->year;
+    }
+
+    protected function isUnassignedClassTeacher(?User $user): bool
+    {
+        return $this->isClassTeacher($user) && $this->resolveClassTeacherAssignment($user) === null;
+    }
+
+    /**
+     * @return array{is_assigned:bool, year:int, message:string}|null
+     */
+    protected function resolveClassTeacherAssignmentStatus(?User $user): ?array
+    {
+        if (!$this->isClassTeacher($user)) {
+            return null;
+        }
+
+        $year = $this->resolveClassTeacherAcademicYear();
+        $assignment = $this->resolveClassTeacherAssignment($user);
+        if ($assignment !== null) {
+            return [
+                'is_assigned' => true,
+                'year' => $year,
+                'message' => '',
+            ];
+        }
+
+        return [
+            'is_assigned' => false,
+            'year' => $year,
+            'message' => sprintf('No class assigned for academic year %d.', $year),
+        ];
     }
 
     private function resolveRequestedSchoolCensusIdFromRequest(): ?string
@@ -329,4 +501,3 @@ trait AppliesSchoolScope
         return is_numeric($left) && is_numeric($right) && ((int) $left === (int) $right);
     }
 }
-

@@ -6,25 +6,29 @@
       <p class="mt-2 max-w-3xl text-sm text-cyan-100 md:text-base"></p>
     </header>
 
+    <p v-if="classTeacherAssignmentWarning" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      {{ classTeacherAssignmentWarning }}
+    </p>
+
     <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">{{ text.students }}</p>
-        <p class="mt-1 text-xs text-slate-400">{{ text.yearLabel }}: {{ summary.students_latest_year ?? text.notAvailable }}</p>
+        <p class="text-sm font-semibold text-slate-500">{{ cardStudentsLabel }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ cardStudentsSubtext }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.students_total }}</p>
       </article>
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">{{ text.academicStaff }}</p>
-        <p class="mt-1 text-xs text-slate-400">{{ text.allActive }}</p>
+        <p class="text-sm font-semibold text-slate-500">{{ cardStaffLabel }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ cardStaffSubtext }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.staff_total }}</p>
       </article>
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">{{ text.grades }}</p>
-        <p class="mt-1 text-xs text-slate-400">{{ text.yearLabel }}: {{ summary.grades_latest_year ?? text.notAvailable }}</p>
+        <p class="text-sm font-semibold text-slate-500">{{ cardGradesLabel }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ cardGradesSubtext }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.grades_total }}</p>
       </article>
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold text-slate-500">{{ text.classes }}</p>
-        <p class="mt-1 text-xs text-slate-400">{{ text.yearLabel }}: {{ summary.classes_latest_year ?? text.notAvailable }}</p>
+        <p class="text-sm font-semibold text-slate-500">{{ cardClassesLabel }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ cardClassesSubtext }}</p>
         <p class="mt-2 font-display text-3xl font-bold text-slate-900">{{ summary.classes_total }}</p>
       </article>
     </section>
@@ -111,7 +115,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import api from '../services/api'
-import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
+import { getSchoolContextCensusId, getToken, getUser, setAuthSession, setSchoolContextCensusId, type AuthUser } from '../services/auth'
 import { loadModuleCatalog, type ModuleCatalogItem } from '../services/modules'
 import { useLocalizedText } from '../utils/uiText'
 
@@ -183,11 +187,23 @@ const summary = reactive<Summary>({
   classes_latest_year: null,
 })
 
-const currentUser = getUser()
-const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
-const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
-const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
-const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
+const currentUser = ref<AuthUser | null>(getUser())
+const roleName = computed(() => String(currentUser.value?.role_name ?? '').trim().toLowerCase())
+const isAdmin = computed(() => (currentUser.value?.role_id ?? 0) === 1 || roleName.value === 'admin' || roleName.value === 'administrator')
+const isPrincipal = computed(() => (currentUser.value?.role_id ?? 0) === 2 || roleName.value === 'principal')
+const isSdsUser = computed(() => (currentUser.value?.role_id ?? 0) === 4 || roleName.value === 'sds user')
+const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName.value))
+const classTeacherAssignmentWarning = computed(() => {
+  if (!isClassTeacher.value) return ''
+
+  const status = currentUser.value?.class_teacher_assignment_status ?? null
+  if (status && status.is_assigned === false && typeof status.message === 'string') {
+    return status.message
+  }
+
+  const message = currentUser.value?.class_teacher_assignment_message
+  return typeof message === 'string' ? message : ''
+})
 const availableModules = ref<ModuleCatalogItem[]>([])
 
 const selectedPermissionSchoolCensusId = ref<number>(getSchoolContextCensusId() ?? 0)
@@ -199,6 +215,23 @@ const permissionSavingRoleId = ref<number | null>(null)
 const permissionStorageReady = ref(true)
 const permissionError = ref('')
 const permissionNotice = ref('')
+const refreshCurrentUser = async (): Promise<void> => {
+  const token = getToken()
+  if (!token) {
+    return
+  }
+
+  try {
+    const { data } = await api.get<{ user: AuthUser }>('/auth/me')
+    if (data.user) {
+      setAuthSession(token, data.user)
+      currentUser.value = data.user
+    }
+  } catch {
+    currentUser.value = getUser()
+  }
+}
+
 const text = useLocalizedText({
   en: {
     heroEyebrow: 'School Management Dashboard',
@@ -209,10 +242,19 @@ const text = useLocalizedText({
     heroTitlePrincipal: 'School Overview and Daily Operations',
     heroEyebrowSdsUser: 'SDS User Dashboard',
     heroTitleSdsUser: 'Student Data and School Operations',
+    heroEyebrowClassTeacher: 'Class Teacher Dashboard',
+    heroTitleClassTeacher: 'Your Class and Parallel Grade Overview',
     students: 'Students',
     academicStaff: 'Academic Staff',
     grades: 'Grades',
     classes: 'Classes',
+    myClassStudents: 'My Class Students',
+    parallelClassStaff: 'Parallel Class Staff',
+    sameGrade: 'Same Grade',
+    parallelClasses: 'Parallel Classes',
+    assignedYearLabel: 'Assigned year',
+    gradeSummaryLabel: 'Assigned grade only',
+    parallelScopeLabel: 'Current parallel classes',
     payments: 'Payments',
     reports: 'Reports',
     yearLabel: 'Year',
@@ -252,10 +294,19 @@ const text = useLocalizedText({
     heroTitlePrincipal: 'පාසල් සාරාංශය සහ දෛනික මෙහෙයුම්',
     heroEyebrowSdsUser: 'SDS පරිශීලක පුවරුව',
     heroTitleSdsUser: 'සිසු දත්ත සහ පාසල් මෙහෙයුම්',
+    heroEyebrowClassTeacher: 'පන්ති භාර ගුරු පුවරුව',
+    heroTitleClassTeacher: 'ඔබගේ පන්තිය සහ සමාන්තර ශ්‍රේණි සාරාංශය',
     students: 'සිසුන්',
     academicStaff: 'ශාස්ත්‍රීය කාර්ය මණ්ඩලය',
     grades: 'ශ්‍රේණි',
     classes: 'පන්ති',
+    myClassStudents: 'මගේ පන්තියේ සිසුන්',
+    parallelClassStaff: 'සමාන්තර පන්ති කාර්ය මණ්ඩලය',
+    sameGrade: 'එකම ශ්‍රේණිය',
+    parallelClasses: 'සමාන්තර පන්ති',
+    assignedYearLabel: 'පැවරූ වසර',
+    gradeSummaryLabel: 'පැවරූ ශ්‍රේණිය පමණි',
+    parallelScopeLabel: 'වර්තමාන සමාන්තර පන්ති',
     payments: 'ගෙවීම්',
     reports: 'වාර්තා',
     yearLabel: 'වසර',
@@ -295,10 +346,19 @@ const text = useLocalizedText({
     heroTitlePrincipal: 'பள்ளி சுருக்கம் மற்றும் தினசரி செயல்பாடுகள்',
     heroEyebrowSdsUser: 'SDS பயனர் டாஷ்போர்ட்',
     heroTitleSdsUser: 'மாணவர் தரவு மற்றும் பள்ளி செயல்பாடுகள்',
+    heroEyebrowClassTeacher: 'வகுப்பு ஆசிரியர் டாஷ்போர்ட்',
+    heroTitleClassTeacher: 'உங்கள் வகுப்பு மற்றும் இணை தர சுருக்கம்',
     students: 'மாணவர்கள்',
     academicStaff: 'கல்வி பணியாளர்கள்',
     grades: 'தரங்கள்',
     classes: 'வகுப்புகள்',
+    myClassStudents: 'என் வகுப்பு மாணவர்கள்',
+    parallelClassStaff: 'இணை வகுப்பு பணியாளர்கள்',
+    sameGrade: 'அதே தரம்',
+    parallelClasses: 'இணை வகுப்புகள்',
+    assignedYearLabel: 'ஒதுக்கப்பட்ட ஆண்டு',
+    gradeSummaryLabel: 'ஒதுக்கப்பட்ட தரம் மட்டும்',
+    parallelScopeLabel: 'தற்போதைய இணை வகுப்புகள்',
     payments: 'கட்டணங்கள்',
     reports: 'அறிக்கைகள்',
     yearLabel: 'ஆண்டு',
@@ -335,6 +395,7 @@ const heroEyebrow = computed(() => {
   if (isAdmin.value) return text.value.heroEyebrowAdmin
   if (isPrincipal.value) return text.value.heroEyebrowPrincipal
   if (isSdsUser.value) return text.value.heroEyebrowSdsUser
+  if (isClassTeacher.value) return text.value.heroEyebrowClassTeacher
   return text.value.heroEyebrow
 })
 
@@ -342,7 +403,36 @@ const heroTitle = computed(() => {
   if (isAdmin.value) return text.value.heroTitleAdmin
   if (isPrincipal.value) return text.value.heroTitlePrincipal
   if (isSdsUser.value) return text.value.heroTitleSdsUser
+  if (isClassTeacher.value) return text.value.heroTitleClassTeacher
   return text.value.heroTitle
+})
+
+const cardStudentsLabel = computed(() => (isClassTeacher.value ? text.value.myClassStudents : text.value.students))
+const cardStudentsSubtext = computed(() => {
+  if (isClassTeacher.value) {
+    return `${text.value.assignedYearLabel}: ${summary.students_latest_year ?? text.value.notAvailable}`
+  }
+
+  return `${text.value.yearLabel}: ${summary.students_latest_year ?? text.value.notAvailable}`
+})
+
+const cardStaffLabel = computed(() => (isClassTeacher.value ? text.value.parallelClassStaff : text.value.academicStaff))
+const cardStaffSubtext = computed(() => (isClassTeacher.value ? text.value.parallelScopeLabel : text.value.allActive))
+
+const cardGradesLabel = computed(() => (isClassTeacher.value ? text.value.sameGrade : text.value.grades))
+const cardGradesSubtext = computed(() => (
+  isClassTeacher.value
+    ? text.value.gradeSummaryLabel
+    : `${text.value.yearLabel}: ${summary.grades_latest_year ?? text.value.notAvailable}`
+))
+
+const cardClassesLabel = computed(() => (isClassTeacher.value ? text.value.parallelClasses : text.value.classes))
+const cardClassesSubtext = computed(() => {
+  if (isClassTeacher.value) {
+    return `${text.value.yearLabel}: ${summary.classes_latest_year ?? text.value.notAvailable}`
+  }
+
+  return `${text.value.yearLabel}: ${summary.classes_latest_year ?? text.value.notAvailable}`
 })
 
 const moduleLabelMap = computed<Record<string, string>>(() => ({
@@ -525,6 +615,7 @@ const formatDate = (value: string | null): string => {
 }
 
 onMounted(async () => {
+  await refreshCurrentUser()
   await loadSummary()
   await loadDashboardModules()
 

@@ -29,6 +29,14 @@ class ClassController extends Controller
         }
 
         $user = $this->authUser();
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'year' => null,
+                'years' => [],
+                'data' => [],
+            ]);
+        }
         $gradeClassColumns = Schema::getColumnListing($gradeClassTable);
         $hasIsDeleted = in_array('is_deleted', $gradeClassColumns, true);
         $schoolColumn = $this->resolveSchoolColumn($gradeClassColumns);
@@ -62,6 +70,9 @@ class ClassController extends Controller
 
         $gradeId = $request->query('grade_id');
         $gradeId = is_numeric($gradeId) ? (int) $gradeId : null;
+        if ($classTeacherAssignment !== null) {
+            $gradeId = $classTeacherAssignment['grade_id'];
+        }
         $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
             'grade_en',
             'grade_si',
@@ -134,6 +145,10 @@ class ClassController extends Controller
             $query->where('sgct.grade_id', $gradeId);
         }
 
+        if ($classTeacherAssignment !== null) {
+            $query->where('sgct.year', $classTeacherAssignment['year']);
+        }
+
         $this->applySchoolScope($query, $user, 'sgct', $schoolColumn);
 
         if (in_array('approved_std_count', $gradeClassColumns, true)) {
@@ -182,10 +197,22 @@ class ClassController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 401);
         }
 
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'grades' => [],
+                'classes' => [],
+            ]);
+        }
+
         $year = $request->query('year');
         $year = is_numeric($year) ? (int) $year : null;
         $gradeId = $request->query('grade_id');
         $gradeId = is_numeric($gradeId) ? (int) $gradeId : null;
+        if ($classTeacherAssignment !== null) {
+            $year = $classTeacherAssignment['year'];
+            $gradeId = $classTeacherAssignment['grade_id'];
+        }
 
         $censusId = $this->isAdministrator($user)
             ? $this->resolveRequestedSchoolCensusId($user)
@@ -219,6 +246,13 @@ class ClassController extends Controller
                 'grade_id' => (int) $row->grade_id,
                 'grade' => (string) ($row->grade ?? ''),
             ])->all();
+
+            if ($classTeacherAssignment !== null) {
+                $grades = array_values(array_filter(
+                    $grades,
+                    fn (array $row): bool => (int) ($row['grade_id'] ?? 0) === $classTeacherAssignment['grade_id']
+                ));
+            }
         }
 
         $classes = [];
@@ -296,7 +330,8 @@ class ClassController extends Controller
         $approved = $request->input('approved_std_count');
         $approved = is_numeric($approved) ? (int) $approved : 0;
 
-        if ($year === null || $year < 2000 || $year > 2100) {
+        $currentAcademicYear = (int) now()->year;
+        if ($year === null || $year < 2000 || $year > $currentAcademicYear) {
             return response()->json(['message' => 'Invalid year.'], 422);
         }
 
@@ -505,6 +540,18 @@ class ClassController extends Controller
             ]);
 
             return response()->json(['message' => 'Class row not found.'], 404);
+        }
+
+        $currentAcademicYear = (int) now()->year;
+        if (is_numeric($row->year ?? null) && (int) $row->year > $currentAcademicYear) {
+            Log::warning('Class update blocked: future year row.', [
+                'user_id' => $user->user_id ?? null,
+                'role_id' => $user->role_id ?? null,
+                'sch_grd_cls_id' => $classRowId,
+                'year' => $row->year ?? null,
+            ]);
+
+            return response()->json(['message' => 'Future academic year class assignments are not allowed.'], 422);
         }
 
         $updates = [];

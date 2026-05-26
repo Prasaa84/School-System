@@ -27,6 +27,22 @@ class ClassLookupController extends Controller
         $columns = Schema::getColumnListing($gradeClassTable);
         $schoolColumn = $this->resolveSchoolColumn($columns);
         $hasIsDeleted = in_array('is_deleted', $columns, true);
+        $user = $this->authUser();
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'year' => $this->resolveClassTeacherAcademicYear(),
+                'data' => [],
+            ]);
+        }
+
+        if ($classTeacherAssignment !== null && $gradeId !== $classTeacherAssignment['grade_id']) {
+            return response()->json([
+                'year' => $classTeacherAssignment['year'],
+                'data' => [],
+            ]);
+        }
 
         $requestedYear = $request->query('year');
         if ($requestedYear !== null && (!is_numeric($requestedYear) || (int) $requestedYear < 2000 || (int) $requestedYear > 2100)) {
@@ -36,6 +52,9 @@ class ClassLookupController extends Controller
         }
 
         $selectedYear = is_numeric($requestedYear) ? (int) $requestedYear : null;
+        if ($classTeacherAssignment !== null) {
+            $selectedYear = $classTeacherAssignment['year'];
+        }
         if ($selectedYear === null) {
             $yearQuery = DB::table("{$gradeClassTable} as sgct")
                 ->where('sgct.grade_id', $gradeId);
@@ -44,7 +63,7 @@ class ClassLookupController extends Controller
                 $yearQuery->where('sgct.is_deleted', 0);
             }
 
-            $this->applySchoolScope($yearQuery, $this->authUser(), 'sgct', $schoolColumn);
+            $this->applySchoolScope($yearQuery, $user, 'sgct', $schoolColumn);
             $selectedYear = $yearQuery->max('sgct.year');
         }
 
@@ -69,7 +88,7 @@ class ClassLookupController extends Controller
             $query->where('sgct.is_deleted', 0);
         }
 
-        $this->applySchoolScope($query, $this->authUser(), 'sgct', $schoolColumn);
+        $this->applySchoolScope($query, $user, 'sgct', $schoolColumn);
 
         $classes = $query
             ->distinct()

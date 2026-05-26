@@ -20,7 +20,7 @@ class ModuleCatalogController extends Controller
         $modules = $this->loadModulesFromDatabase($user);
 
         if ($modules === null || $modules->isEmpty()) {
-            $modules = $this->defaultModulesForRole($user?->role_id);
+            $modules = $this->defaultModulesForUser($user);
         }
 
         return response()->json([
@@ -89,6 +89,13 @@ class ModuleCatalogController extends Controller
             if ($allowedKeys !== null) {
                 $normalizedModules = $normalizedModules
                     ->filter(fn (array $module): bool => in_array($module['key'], $allowedKeys, true))
+                    ->values();
+            }
+
+            $roleName = strtolower(trim((string) ($user?->role?->role_name ?? '')));
+            if (in_array($roleName, ['class teacher', 'class_teacher', 'classteacher'], true)) {
+                $normalizedModules = $normalizedModules
+                    ->filter(fn (array $module): bool => in_array($module['key'], ['students', 'classes', 'staff', 'payments'], true))
                     ->values();
             }
 
@@ -175,7 +182,7 @@ class ModuleCatalogController extends Controller
         return null;
     }
 
-    private function defaultModulesForRole(?int $roleId): Collection
+    private function defaultModulesForUser(?User $user): Collection
     {
         $catalog = collect([
             'grades' => ['key' => 'grades', 'label' => 'Grades'],
@@ -185,6 +192,18 @@ class ModuleCatalogController extends Controller
             'payments' => ['key' => 'payments', 'label' => 'SDS Payments'],
             'reports' => ['key' => 'reports', 'label' => 'Reports'],
         ]);
+
+        $roleId = $user?->role_id;
+        $roleName = strtolower(trim((string) ($user?->role?->role_name ?? '')));
+
+        if (in_array($roleName, ['class teacher', 'class_teacher', 'classteacher'], true)) {
+            $keys = ['students', 'classes', 'staff', 'payments'];
+
+            return collect($keys)
+                ->map(fn (string $key): ?array => $catalog->get($key))
+                ->filter()
+                ->values();
+        }
 
         $roleMap = [
             1 => ['grades', 'classes', 'students', 'staff', 'payments', 'reports'],

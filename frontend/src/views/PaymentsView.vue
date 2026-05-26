@@ -5,6 +5,10 @@
       <p class="mt-2 text-sm text-slate-600">{{ pageSubtitle }}</p>
     </header>
 
+    <p v-if="classTeacherAssignmentWarning" class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      {{ classTeacherAssignmentWarning }}
+    </p>
+
     <section v-if="!isFeeTypesRoute && !isStudent" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div class="grid gap-4 md:grid-cols-3">
         <label v-if="isAdmin" class="text-sm text-slate-700 md:col-span-3">
@@ -275,7 +279,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../services/api'
-import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
+import { getSchoolContextCensusId, getToken, getUser, setAuthSession, setSchoolContextCensusId, type AuthUser } from '../services/auth'
 import { useUiStore } from '../stores/ui'
 
 interface OptionRow {
@@ -333,16 +337,44 @@ interface FeeTypeListResponse {
 
 const ui = useUiStore()
 const route = useRoute()
-const currentUser = getUser()
-const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
-const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
-const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
-const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
-const isStudent = computed(() => (currentUser?.role_id ?? 0) === 7 || roleName === 'student')
+const currentUser = ref<AuthUser | null>(getUser())
+const roleName = computed(() => String(currentUser.value?.role_name ?? '').trim().toLowerCase())
+const isAdmin = computed(() => (currentUser.value?.role_id ?? 0) === 1 || roleName.value === 'admin' || roleName.value === 'administrator')
+const isPrincipal = computed(() => (currentUser.value?.role_id ?? 0) === 2 || roleName.value === 'principal')
+const isSdsUser = computed(() => (currentUser.value?.role_id ?? 0) === 4 || roleName.value === 'sds user')
+const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName.value))
+const classTeacherAssignmentWarning = computed(() => {
+  if (!isClassTeacher.value) return ''
+
+  const status = currentUser.value?.class_teacher_assignment_status ?? null
+  if (status && status.is_assigned === false && typeof status.message === 'string') {
+    return status.message
+  }
+
+  const message = currentUser.value?.class_teacher_assignment_message
+  return typeof message === 'string' ? message : ''
+})
+const isStudent = computed(() => (currentUser.value?.role_id ?? 0) === 7 || roleName.value === 'student')
 const canViewFeeTypes = computed(() => isAdmin.value || isPrincipal.value || isSdsUser.value)
 const canManageFeeTypes = computed(() => isAdmin.value || isPrincipal.value)
 const canManagePayments = computed(() => isAdmin.value || isPrincipal.value || isSdsUser.value)
 const isFeeTypesRoute = computed(() => route.name === 'payments-fee-types')
+const refreshCurrentUser = async (): Promise<void> => {
+  const token = getToken()
+  if (!token) {
+    return
+  }
+
+  try {
+    const { data } = await api.get<{ user: AuthUser }>('/auth/me')
+    if (data.user) {
+      setAuthSession(token, data.user)
+      currentUser.value = data.user
+    }
+  } catch {
+    currentUser.value = getUser()
+  }
+}
 
 const text = computed(() => {
   if (ui.language === 'si') {
@@ -902,6 +934,7 @@ watch(() => route.name, async () => {
 })
 
 onMounted(async () => {
+  await refreshCurrentUser()
   await initializeView()
 })
 </script>

@@ -540,9 +540,24 @@
         <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
           <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.userLogin }}</legend>
           <div class="grid gap-3 md:grid-cols-3">
+            <div v-if="staffLinkedLogins.length > 0" class="md:col-span-3 rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-sm font-semibold text-slate-800">{{ text.existingLogins }}</p>
+              <div class="mt-3 grid gap-2">
+                <div v-for="login in staffLinkedLogins" :key="`staff-login-${login.user_id}`" class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                  <div>
+                    <p class="font-medium text-slate-900">{{ login.username }}</p>
+                    <p class="text-slate-500">{{ login.role_name || text.unknownRole }}</p>
+                  </div>
+                  <span :class="login.is_enabled ? 'rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700' : 'rounded-full bg-slate-200 px-2 py-1 text-xs font-semibold text-slate-600'">
+                    {{ login.is_enabled ? text.enabled : text.disabled }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <label class="flex items-center gap-2 pt-7 text-sm text-slate-700">
               <input v-model="staffForm.create_user_login" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-              {{ text.enableUserLogin }}
+              {{ text.createAnotherUserLogin }}
             </label>
 
             <label class="text-sm text-slate-700">
@@ -554,12 +569,8 @@
               <p v-if="staffFieldErrors.login_role_id" class="mt-1 text-xs text-red-600">{{ staffFieldErrors.login_role_id }}</p>
             </label>
 
-            <label v-if="staffForm.login_username" class="text-sm text-slate-700">
-              {{ text.loginUsername }}
-              <input :value="staffForm.login_username" type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm" readonly />
-            </label>
-            <p v-else-if="staffForm.create_user_login" class="pt-7 text-sm text-slate-500">
-              {{ staffForm.nic_no.trim() || '-' }}
+            <p v-if="staffForm.create_user_login" class="pt-7 text-sm text-slate-500">
+              {{ text.loginUsernameHint }} {{ staffForm.nic_no.trim() || '-' }}
             </p>
           </div>
         </fieldset>
@@ -744,8 +755,17 @@ interface StaffCreatePayload {
   create_user_login?: boolean
   login_role_id?: number
 }
+interface StaffLinkedLogin {
+  user_id: number
+  username: string
+  role_id: number | null
+  role_name: string | null
+  is_enabled: boolean
+}
 interface StaffDetailResponse {
-  data: Record<string, string | number | boolean | null>
+  data: Record<string, string | number | boolean | null> & {
+    linked_logins?: StaffLinkedLogin[] | null
+  }
 }
 interface StaffLoginAccountResult {
   created?: boolean
@@ -766,9 +786,11 @@ interface StaffSaveResponse {
 type ValidationErrors = Record<string, string>
 
 const currentUser = getUser()
-const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1)
-const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2)
-const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4)
+const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
+const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
+const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
+const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
+const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName))
 const canManage = computed(() => isAdmin.value || isPrincipal.value)
 const currentCalendarYear = new Date().getFullYear()
 
@@ -842,6 +864,7 @@ const staffCredentials = reactive({
   username: '',
   temporaryPassword: '',
 })
+const staffLinkedLogins = ref<StaffLinkedLogin[]>([])
 const staffForm = reactive({
   title: '',
   census_id: getSchoolContextCensusId() ?? 0,
@@ -896,14 +919,13 @@ const staffForm = reactive({
   service_status_is_current: true,
   create_user_login: false,
   login_role_id: 0,
-  login_username: '',
 })
 
 const yearOptions = computed(() => { const now = new Date().getFullYear(); return Array.from({ length: 8 }, (_, i) => now - i) })
 const isGrades = computed(() => props.moduleKey === 'grades')
 const isClasses = computed(() => props.moduleKey === 'classes')
 const isStaff = computed(() => props.moduleKey === 'staff')
-const supportsReports = computed(() => isGrades.value || isClasses.value || isStaff.value)
+const supportsReports = computed(() => !isClassTeacher.value && (isGrades.value || isClasses.value || isStaff.value))
 const titleOptions = computed(() => [
   { value: 'Mr', label: 'Mr' },
   { value: 'Mrs', label: 'Mrs' },
@@ -1053,9 +1075,13 @@ const text = useLocalizedText({
     customInstitute: 'Other Institute',
     userLogin: 'User Login',
     enableUserLogin: 'Enable user login',
+    createAnotherUserLogin: 'Create another user login',
     userRole: 'User Role',
     selectUserRole: 'Select user role',
     loginUsername: 'Login Username',
+    loginUsernameHint: 'Username will be auto-generated from NIC:',
+    existingLogins: 'Existing Logins',
+    unknownRole: 'Unknown role',
     temporaryPassword: 'Temporary Password',
     staffLoginCreatedTitle: 'Login Created',
     staffLoginCreatedHelp: 'Please share these credentials with the user now. The temporary password will not be shown again.',
@@ -1188,9 +1214,13 @@ const text = useLocalizedText({
     customInstitute: 'වෙනත් ආයතනය',
     userLogin: 'පරිශීලක පිවිසුම',
     enableUserLogin: 'පරිශීලක පිවිසුම සක්‍රිය කරන්න',
+    createAnotherUserLogin: 'තවත් පරිශීලක පිවිසුමක් සාදන්න',
     userRole: 'පරිශීලක භූමිකාව',
     selectUserRole: 'පරිශීලක භූමිකාව තෝරන්න',
     loginUsername: 'පිවිසුම් නාමය',
+    loginUsernameHint: 'පිවිසුම් නාමය NIC අනුව ස්වයංක්‍රීයව සාදයි:',
+    existingLogins: 'දැනට පවතින පිවිසුම්',
+    unknownRole: 'නොදන්නා භූමිකාව',
     temporaryPassword: 'තාවකාලික මුරපදය',
     staffLoginCreatedTitle: 'පිවිසුම සාදන ලදී',
     staffLoginCreatedHelp: 'මෙම පිවිසුම් තොරතුරු දැන්ම පරිශීලකයාට ලබා දෙන්න. තාවකාලික මුරපදය නැවත නොපෙන්වයි.',
@@ -1323,9 +1353,13 @@ const text = useLocalizedText({
     customInstitute: 'வேறு நிறுவனம்',
     userLogin: 'பயனர் உள்நுழைவு',
     enableUserLogin: 'பயனர் உள்நுழைவை செயல்படுத்தவும்',
+    createAnotherUserLogin: 'மேலும் ஒரு பயனர் உள்நுழைவை உருவாக்கவும்',
     userRole: 'பயனர் பங்கு',
     selectUserRole: 'பயனர் பங்கைத் தேர்ந்தெடுக்கவும்',
     loginUsername: 'உள்நுழைவு பெயர்',
+    loginUsernameHint: 'உள்நுழைவு பெயர் NIC அடிப்படையில் தானாக உருவாகும்:',
+    existingLogins: 'ஏற்கனவே உள்ள உள்நுழைவுகள்',
+    unknownRole: 'தெரியாத பங்கு',
     temporaryPassword: 'தற்காலிக கடவுச்சொல்',
     staffLoginCreatedTitle: 'உள்நுழைவு உருவாக்கப்பட்டது',
     staffLoginCreatedHelp: 'இந்த உள்நுழைவு தகவல்களை உடனே பயனருடன் பகிருங்கள். தற்காலிக கடவுச்சொல் மீண்டும் காட்டப்படாது.',
@@ -1457,7 +1491,7 @@ const resetStaffForm = (): void => {
   staffForm.service_status_is_current = true
   staffForm.create_user_login = false
   staffForm.login_role_id = 0
-  staffForm.login_username = ''
+  staffLinkedLogins.value = []
   staffPhotoFile.value = null
   staffPhotoPreview.value = ''
 }
@@ -1581,9 +1615,9 @@ const applyStaffDetailToForm = (detail: StaffDetailResponse['data']): void => {
   staffForm.service_status_effective_date = String(detail.service_status_effective_date ?? '')
   staffForm.service_status_period = String(detail.service_status_period ?? '')
   staffForm.service_status_is_current = Boolean(detail.service_status_is_current ?? true)
-  staffForm.create_user_login = Boolean(detail.create_user_login ?? false)
-  staffForm.login_role_id = Number(detail.login_role_id ?? 0)
-  staffForm.login_username = String(detail.login_username ?? '')
+  staffForm.create_user_login = false
+  staffForm.login_role_id = 0
+  staffLinkedLogins.value = Array.isArray(detail.linked_logins) ? detail.linked_logins : []
   staffPhotoFile.value = null
   staffPhotoPreview.value = String(detail.photo_url ?? '')
 }

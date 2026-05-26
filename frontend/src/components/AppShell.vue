@@ -234,7 +234,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api'
-import { clearAuthSession, getUser } from '../services/auth'
+import { clearAuthSession, getToken, getUser, setAuthSession, type AuthUser } from '../services/auth'
 import { loadModuleCatalog, resolveModulePath } from '../services/modules'
 import { useUiStore, type UiLanguage } from '../stores/ui'
 import { pickLocalizedText } from '../utils/uiText'
@@ -256,12 +256,13 @@ interface SchoolDetailsResponse {
 const ui = useUiStore()
 const route = useRoute()
 const router = useRouter()
-const currentUser = getUser()
-const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
-const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
-const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
-const isSdsUser = computed(() => (currentUser?.role_id ?? 0) === 4 || roleName === 'sds user')
-const isStudent = computed(() => (currentUser?.role_id ?? 0) === 7 || roleName === 'student')
+const currentUser = ref<AuthUser | null>(getUser())
+const roleName = computed(() => String(currentUser.value?.role_name ?? '').trim().toLowerCase())
+const isAdmin = computed(() => (currentUser.value?.role_id ?? 0) === 1 || roleName.value === 'admin' || roleName.value === 'administrator')
+const isPrincipal = computed(() => (currentUser.value?.role_id ?? 0) === 2 || roleName.value === 'principal')
+const isSdsUser = computed(() => (currentUser.value?.role_id ?? 0) === 4 || roleName.value === 'sds user')
+const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName.value))
+const isStudent = computed(() => (currentUser.value?.role_id ?? 0) === 7 || roleName.value === 'student')
 const schoolName = ref('')
 const schoolCrestUrl = ref('')
 type SchoolIdentityDetail = {
@@ -454,12 +455,29 @@ const sidebarClasses = computed(() => {
 const showSidebarText = computed(() => (isMobile.value ? ui.mobileSidebarOpen : ui.sidebarOpen))
 
 const userLabel = computed(() => {
-  if (!currentUser) {
+  if (!currentUser.value) {
     return shellText.value.authenticatedUser
   }
 
-  return currentUser.role_name ? `${currentUser.username} (${currentUser.role_name})` : currentUser.username
+  return currentUser.value.role_name ? `${currentUser.value.username} (${currentUser.value.role_name})` : currentUser.value.username
 })
+
+const refreshCurrentUser = async (): Promise<void> => {
+  const token = getToken()
+  if (!token) {
+    return
+  }
+
+  try {
+    const { data } = await api.get<{ user: AuthUser }>('/auth/me')
+    if (data.user) {
+      setAuthSession(token, data.user)
+      currentUser.value = data.user
+    }
+  } catch {
+    currentUser.value = getUser()
+  }
+}
 
 const isActive = (to: string): boolean => {
   if (to === '/') {
@@ -492,7 +510,7 @@ const loadMenu = async (): Promise<void> => {
         ? '/students/me'
         : resolveModulePath(module),
       children:
-        module.key === 'students' && !isStudent.value
+        module.key === 'students' && !isStudent.value && !isClassTeacher.value
           ? [
               { key: 'students-in-classes', label: 'Students in Classes', to: '/students/in-classes' },
               { key: 'students-report', label: 'Student Reports', to: '/students/report' },
@@ -504,6 +522,7 @@ const loadMenu = async (): Promise<void> => {
             : undefined,
     }))
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
+    .filter((item) => !(isClassTeacher.value && ['grades', 'reports'].includes(item.key)))
     .filter((item) => !(isSdsUser.value && item.key === 'students'))
     .filter((item) => !isStudent.value || ['payments-history'].includes(item.key))
 
@@ -602,6 +621,7 @@ onMounted(async () => {
     mediaQuery.addListener(syncViewport)
   }
 
+  await refreshCurrentUser()
   await loadMenu()
   await loadHeaderSchoolName()
   window.addEventListener('sds:school-identity-updated', handleSchoolIdentityUpdated as EventListener)

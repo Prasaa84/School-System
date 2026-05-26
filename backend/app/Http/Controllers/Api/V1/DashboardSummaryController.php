@@ -15,6 +15,25 @@ class DashboardSummaryController extends Controller
     public function __invoke(): JsonResponse
     {
         $user = $this->authUser();
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+
+        if ($this->isUnassignedClassTeacher($user)) {
+            $year = $this->resolveClassTeacherAcademicYear();
+
+            return response()->json([
+                'summary' => [
+                    'students_total' => 0,
+                    'staff_total' => 0,
+                    'grades_total' => 0,
+                    'classes_total' => 0,
+                    'students_last_updated' => null,
+                    'staff_last_updated' => null,
+                    'students_latest_year' => $year,
+                    'grades_latest_year' => $year,
+                    'classes_latest_year' => $year,
+                ],
+            ]);
+        }
 
         $studentsLatestYear = null;
         $gradesLatestYear = null;
@@ -150,6 +169,16 @@ class DashboardSummaryController extends Controller
             $staffLastUpdated = $staffUpdatedQuery->max('st.date_updated');
         }
 
+        if ($classTeacherAssignment !== null) {
+            $studentsTotal = $this->countStudentsForClassTeacherAssignment($classTeacherAssignment);
+            $staffTotal = $this->countParallelClassTeachersForAssignment($classTeacherAssignment);
+            $classesTotal = $this->countParallelClassesForAssignment($classTeacherAssignment);
+            $studentsLatestYear = $classTeacherAssignment['year'];
+            $gradesLatestYear = $classTeacherAssignment['year'];
+            $classesLatestYear = $classTeacherAssignment['year'];
+            $gradesTotal = 1;
+        }
+
         return response()->json([
             'summary' => [
                 'students_total' => $studentsTotal,
@@ -163,5 +192,67 @@ class DashboardSummaryController extends Controller
                 'classes_latest_year' => $classesLatestYear !== null ? (int) $classesLatestYear : null,
             ],
         ]);
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     */
+    private function countStudentsForClassTeacherAssignment(array $assignment): int
+    {
+        if (!Schema::hasTable('student_grade_class_tbl')) {
+            return 0;
+        }
+
+        $query = DB::table('student_grade_class_tbl as sgc')
+            ->where('sgc.sch_grd_cls_id', $assignment['sch_grd_cls_id']);
+
+        if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgc.is_deleted', 0);
+        }
+
+        return (int) $query->distinct('sgc.std_id')->count('sgc.std_id');
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     */
+    private function countParallelClassesForAssignment(array $assignment): int
+    {
+        if (!Schema::hasTable('school_grade_class_tbl')) {
+            return 0;
+        }
+
+        $query = DB::table('school_grade_class_tbl as sgct')
+            ->where('sgct.grade_id', $assignment['grade_id'])
+            ->where('sgct.year', $assignment['year'])
+            ->whereIn('sgct.census_id', $this->censusCandidates($assignment['census_id']));
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        return (int) $query->count();
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     */
+    private function countParallelClassTeachersForAssignment(array $assignment): int
+    {
+        if (!Schema::hasTable('school_grade_class_tbl')) {
+            return 0;
+        }
+
+        $query = DB::table('school_grade_class_tbl as sgct')
+            ->where('sgct.grade_id', $assignment['grade_id'])
+            ->where('sgct.year', $assignment['year'])
+            ->whereIn('sgct.census_id', $this->censusCandidates($assignment['census_id']))
+            ->where('sgct.stf_id', '>', 0);
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        return (int) $query->distinct('sgct.stf_id')->count('sgct.stf_id');
     }
 }

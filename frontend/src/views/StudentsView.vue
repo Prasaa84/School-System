@@ -4,6 +4,10 @@
       <h1 class="mt-2 font-display text-2xl font-bold text-slate-900">{{ isReportView ? text.studentReports : text.studentsTitle }}</h1>
     </header>
 
+    <p v-if="classTeacherAssignmentWarning" class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 print:hidden">
+      {{ classTeacherAssignmentWarning }}
+    </p>
+
     <section v-if="isReportView" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
       <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
@@ -792,7 +796,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api'
-import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
+import { getSchoolContextCensusId, getToken, getUser, setAuthSession, setSchoolContextCensusId, type AuthUser } from '../services/auth'
 import { useUiStore } from '../stores/ui'
 
 interface Student {
@@ -1455,17 +1459,29 @@ const importResult = ref<ImportResult | null>(null)
 const createErrorMessageRef = ref<HTMLElement | null>(null)
 const studentPhotoFile = ref<File | null>(null)
 const studentPhotoPreview = ref('')
-const currentUser = getUser()
+const currentUser = ref<AuthUser | null>(getUser())
 const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
 const reportFilters = ref<StudentReportFilters>(createDefaultReportFilters())
-const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
-const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
-const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
+const roleName = computed(() => String(currentUser.value?.role_name ?? '').trim().toLowerCase())
+const isAdmin = computed(() => (currentUser.value?.role_id ?? 0) === 1 || roleName.value === 'admin' || roleName.value === 'administrator')
+const isPrincipal = computed(() => (currentUser.value?.role_id ?? 0) === 2 || roleName.value === 'principal')
+const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName.value))
+const classTeacherAssignmentWarning = computed(() => {
+  if (!isClassTeacher.value) return ''
+
+  const status = currentUser.value?.class_teacher_assignment_status ?? null
+  if (status && status.is_assigned === false && typeof status.message === 'string') {
+    return status.message
+  }
+
+  const message = currentUser.value?.class_teacher_assignment_message
+  return typeof message === 'string' ? message : ''
+})
 const isReportView = computed(() => route.name === 'students-report')
 const fallbackStudentPermissions = computed<Record<string, boolean>>(() => {
-  const roleId = currentUser?.role_id ?? 0
-  const canManageByRole = roleId === 1 || roleId === 2 || roleId === 4 || roleName === 'admin' || roleName === 'administrator' || roleName === 'principal' || roleName === 'class teacher' || roleName === 'class_teacher'
+  const roleId = currentUser.value?.role_id ?? 0
+  const canManageByRole = roleId === 1 || roleId === 2 || roleId === 4 || roleName.value === 'admin' || roleName.value === 'administrator' || roleName.value === 'principal'
 
   return {
     'student.create': canManageByRole,
@@ -1475,7 +1491,7 @@ const fallbackStudentPermissions = computed<Record<string, boolean>>(() => {
 })
 
 const sessionStudentPermissions = computed<Record<string, boolean>>(() => {
-  const raw = currentUser?.feature_permissions
+  const raw = currentUser.value?.feature_permissions
   if (!raw || typeof raw !== 'object') {
     return fallbackStudentPermissions.value
   }
@@ -1491,6 +1507,23 @@ const canCreateStudents = computed(() => sessionStudentPermissions.value['studen
 const canEditStudents = computed(() => sessionStudentPermissions.value['student.update'] ?? false)
 const canDeleteStudents = computed(() => sessionStudentPermissions.value['student.delete'] ?? false)
 const showReportExportColumn = computed(() => reportRows.value.length > 0)
+const refreshCurrentUser = async (): Promise<void> => {
+  const token = getToken()
+  if (!token) {
+    return
+  }
+
+  try {
+    const { data } = await api.get<{ user: AuthUser }>('/auth/me')
+    if (data.user) {
+      setAuthSession(token, data.user)
+      currentUser.value = data.user
+    }
+  } catch {
+    currentUser.value = getUser()
+  }
+}
+
 const genderOptions = computed<OptionRow[]>(() => [
   { id: 1, label: text.value.male },
   { id: 2, label: text.value.female },
@@ -2564,6 +2597,7 @@ const downloadTemplate = async (): Promise<void> => {
 }
 
 onMounted(async () => {
+  await refreshCurrentUser()
   await loadStudentOptions()
 
   if (isReportView.value) {

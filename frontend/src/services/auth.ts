@@ -3,7 +3,13 @@ export interface AuthUser {
   username: string
   role_id: number | null
   role_name: string | null
-  school_census_id?: number | null
+  school_census_id?: string | null
+  class_teacher_assignment_status?: {
+    is_assigned: boolean
+    year: number
+    message: string
+  } | null
+  class_teacher_assignment_message?: string | null
   feature_permissions?: Record<string, boolean> | null
 }
 
@@ -26,8 +32,13 @@ export const getUser = (): AuthUser | null => {
   }
 }
 
-export const getSchoolContextCensusId = (): number | null => {
+export const getSchoolContextCensusValue = (): string | null => {
   const raw = window.localStorage.getItem(SCHOOL_CONTEXT_KEY)
+  return raw && raw.trim().length > 0 ? raw : null
+}
+
+export const getSchoolContextCensusId = (): number | null => {
+  const raw = getSchoolContextCensusValue()
   if (!raw) return null
 
   const value = Number(raw)
@@ -38,18 +49,20 @@ export const getSchoolContextCensusId = (): number | null => {
   return value
 }
 
-export const setSchoolContextCensusId = (censusId: number | null): void => {
-  if (censusId === null || !Number.isFinite(censusId) || censusId <= 0) {
+export const setSchoolContextCensusId = (censusId: string | number | null): void => {
+  const normalized = censusId === null ? '' : String(censusId).trim()
+  if (normalized === '') {
     window.localStorage.removeItem(SCHOOL_CONTEXT_KEY)
     return
   }
 
-  window.localStorage.setItem(SCHOOL_CONTEXT_KEY, String(Math.trunc(censusId)))
+  window.localStorage.setItem(SCHOOL_CONTEXT_KEY, normalized)
 }
 
 export const setAuthSession = (token: string, user: AuthUser): void => {
   window.localStorage.setItem(TOKEN_KEY, token)
   window.localStorage.setItem(USER_KEY, JSON.stringify(user))
+  setSchoolContextCensusId(user.school_census_id ?? null)
 }
 
 export const clearAuthSession = (): void => {

@@ -28,6 +28,13 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'schools' => $this->loadSchoolOptions($user),
+                'years' => [],
+            ]);
+        }
+
         Log::info('Payments options requested.', [
             'user_id' => $user->user_id ?? null,
             'role_id' => $user->role_id ?? null,
@@ -56,7 +63,14 @@ class PaymentController extends Controller
         ])->validate();
 
         $censusId = $this->resolveTargetSchoolCensusId($user);
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
         $indexNo = trim((string) ($validated['index_no'] ?? ''));
+
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'message' => 'Student not found for your assigned class.',
+            ], 404);
+        }
 
         Log::info('Payments student lookup requested.', [
             'user_id' => $user->user_id ?? null,
@@ -89,6 +103,12 @@ class PaymentController extends Controller
 
             return response()->json([
                 'message' => 'Student not found for the selected school.',
+            ], 404);
+        }
+
+        if ($classTeacherAssignment !== null && !$this->studentBelongsToTeacherClass($student['std_id'], $classTeacherAssignment)) {
+            return response()->json([
+                'message' => 'Student not found for your assigned class.',
             ], 404);
         }
 
@@ -343,6 +363,7 @@ class PaymentController extends Controller
         ])->validate();
 
         $censusId = $this->resolveTargetSchoolCensusId($user);
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
         $indexNo = trim((string) ($validated['index_no'] ?? ''));
         $invoiceNo = trim((string) ($validated['invoice_no'] ?? ''));
         $year = (int) ($validated['year'] ?? 0);
@@ -383,6 +404,12 @@ class PaymentController extends Controller
 
             return response()->json([
                 'message' => 'Student not found for the selected school.',
+            ], 404);
+        }
+
+        if ($classTeacherAssignment !== null && !$this->studentBelongsToTeacherClass($student['std_id'], $classTeacherAssignment)) {
+            return response()->json([
+                'message' => 'Student not found for your assigned class.',
             ], 404);
         }
 
@@ -464,8 +491,12 @@ class PaymentController extends Controller
             return false;
         }
 
+        if ($this->isUnassignedClassTeacher($user)) {
+            return true;
+        }
+
         $roleId = (int) ($user->role_id ?? 0);
-        if (in_array($roleId, [1, 2, 4, 7], true)) {
+        if (in_array($roleId, [1, 2, 4, 7], true) || $this->isClassTeacher($user)) {
             return true;
         }
 
@@ -488,6 +519,26 @@ class PaymentController extends Controller
         $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
 
         return in_array($roleName, ['admin', 'administrator', 'principal'], true);
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     */
+    private function studentBelongsToTeacherClass(int $studentId, array $assignment): bool
+    {
+        if ($studentId <= 0 || !Schema::hasTable('student_grade_class_tbl')) {
+            return false;
+        }
+
+        $query = DB::table('student_grade_class_tbl as sgc')
+            ->where('sgc.std_id', $studentId)
+            ->where('sgc.sch_grd_cls_id', $assignment['sch_grd_cls_id']);
+
+        if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgc.is_deleted', 0);
+        }
+
+        return $query->exists();
     }
 
     private function canViewFeeTypes(?User $user): bool

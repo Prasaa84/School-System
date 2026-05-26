@@ -115,6 +115,7 @@ class AuthController extends Controller
                 'role_name' => $user->role?->role_name,
                 'created_at' => $this->extractCreatedAt($user),
                 'is_enabled' => $this->isAccountEnabled($user),
+                'class_teacher_assignment_status' => $this->resolveClassTeacherAssignmentStatus($user),
             ],
         ]);
     }
@@ -186,12 +187,16 @@ class AuthController extends Controller
      */
     private function formatUser(User $user, ?string $resolvedCensusId): array
     {
+        $classTeacherAssignmentStatus = $this->resolveClassTeacherAssignmentStatus($user);
+
         return [
             'user_id' => (int) $user->user_id,
             'username' => (string) $user->username,
             'role_id' => isset($user->role_id) ? (int) $user->role_id : null,
             'role_name' => $user->role?->role_name,
             'school_census_id' => $resolvedCensusId,
+            'class_teacher_assignment_status' => $classTeacherAssignmentStatus,
+            'class_teacher_assignment_message' => $classTeacherAssignmentStatus['message'] ?? null,
             'feature_permissions' => $this->featureAccess->permissionMapForUser($user, $resolvedCensusId),
         ];
     }

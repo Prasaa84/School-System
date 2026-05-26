@@ -158,8 +158,9 @@ class GradeController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        $targetYear = (int) $request->input('year', now()->year);
-        if ($targetYear < 2000 || $targetYear > 2100) {
+        $currentAcademicYear = (int) now()->year;
+        $targetYear = (int) $request->input('year', $currentAcademicYear);
+        if ($targetYear < 2000 || $targetYear > $currentAcademicYear) {
             return response()->json(['message' => 'Invalid target year.'], 422);
         }
 

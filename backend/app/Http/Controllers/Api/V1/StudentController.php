@@ -73,6 +73,20 @@ class StudentController extends Controller
         $validated = $request->validated();
         $perPage = (int) ($validated['per_page'] ?? 20);
         $search = isset($validated['q']) ? trim((string) $validated['q']) : '';
+        $user = $this->authUser();
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                ],
+            ]);
+        }
 
         $hasSchoolTable = Schema::hasTable('school_details_tbl');
 
@@ -118,7 +132,10 @@ class StudentController extends Controller
                 ->addSelect(DB::raw('sc.sch_name as school_name'));
         }
 
-        $this->applySchoolScope($studentsQuery, $this->authUser(), 'st', 'census_id');
+        $this->applySchoolScope($studentsQuery, $user, 'st', 'census_id');
+        if ($classTeacherAssignment !== null) {
+            $this->applyClassTeacherStudentGradeScope($studentsQuery, 'st', $classTeacherAssignment);
+        }
 
         $students = $studentsQuery->paginate($perPage);
         $items = collect($students->items());
@@ -221,6 +238,12 @@ class StudentController extends Controller
 
     public function report(Request $request): JsonResponse
     {
+        if ($this->isUnassignedClassTeacher($this->authUser())) {
+            return response()->json([
+                'data' => [],
+            ]);
+        }
+
         $data = $this->buildStudentReportRows($this->validateStudentReportFilters($request));
 
         return response()->json([
@@ -1499,6 +1522,10 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.unauthorized')], 401);
         }
 
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json(['message' => __('messages.students.not_found')], 404);
+        }
+
         $student = $this->loadStudentForWrite($studentId, $user);
         if ($student === null) {
             return response()->json(['message' => __('messages.students.not_found')], 404);
@@ -1511,6 +1538,11 @@ class StudentController extends Controller
 
         if (!$this->canViewStudentDetails($user, $censusId)) {
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+        if ($classTeacherAssignment !== null && !$this->studentMatchesClassTeacherGrade((int) $student->std_id, $classTeacherAssignment)) {
+            return response()->json(['message' => __('messages.students.not_found')], 404);
         }
 
         return response()->json([
@@ -1551,6 +1583,10 @@ class StudentController extends Controller
             return response()->json(['message' => __('messages.auth.unauthorized')], 401);
         }
 
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json(['message' => __('messages.students.not_found')], 404);
+        }
+
         $student = $this->loadStudentForWrite($studentId, $user);
         if ($student === null) {
             return response()->json(['message' => __('messages.students.not_found')], 404);
@@ -1563,6 +1599,11 @@ class StudentController extends Controller
 
         if (!$this->canViewStudentDetails($user, $censusId)) {
             return response()->json(['message' => __('messages.auth.forbidden')], 403);
+        }
+
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+        if ($classTeacherAssignment !== null && !$this->studentMatchesClassTeacherGrade((int) $student->std_id, $classTeacherAssignment)) {
+            return response()->json(['message' => __('messages.students.not_found')], 404);
         }
 
         $detail = $this->buildStudentDetailPayload($student, $censusId);
@@ -2450,6 +2491,12 @@ class StudentController extends Controller
      */
     private function buildStudentReportRows(array $validated): array
     {
+        $user = $this->authUser();
+        if ($this->isUnassignedClassTeacher($user)) {
+            return [];
+        }
+
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
         $search = isset($validated['q']) ? trim((string) $validated['q']) : '';
         $schoolCensusId = isset($validated['school_census_id']) ? trim((string) $validated['school_census_id']) : '';
         $genderId = isset($validated['gender_id']) ? (int) $validated['gender_id'] : 0;
@@ -2458,6 +2505,11 @@ class StudentController extends Controller
         $year = isset($validated['year']) ? (int) $validated['year'] : 0;
         $gradeId = isset($validated['grade_id']) ? (int) $validated['grade_id'] : 0;
         $classId = isset($validated['class_id']) ? (int) $validated['class_id'] : 0;
+        if ($classTeacherAssignment !== null) {
+            $year = $classTeacherAssignment['year'];
+            $gradeId = $classTeacherAssignment['grade_id'];
+            $classId = isset($validated['class_id']) ? (int) $validated['class_id'] : 0;
+        }
         $hasSchoolTable = Schema::hasTable('school_details_tbl');
 
         $studentsQuery = DB::table('student_tbl as st')
@@ -2540,7 +2592,10 @@ class StudentController extends Controller
             }
         }
 
-        $this->applySchoolScope($studentsQuery, $this->authUser(), 'st', 'census_id');
+        $this->applySchoolScope($studentsQuery, $user, 'st', 'census_id');
+        if ($classTeacherAssignment !== null) {
+            $this->applyClassTeacherStudentGradeScope($studentsQuery, 'st', $classTeacherAssignment);
+        }
 
         $students = $studentsQuery->get();
         $studentIds = $students->pluck('std_id')
@@ -2987,6 +3042,62 @@ class StudentController extends Controller
         }
 
         return $baseMessage;
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     */
+    private function applyClassTeacherStudentGradeScope($query, string $studentAlias, array $assignment): void
+    {
+        if (!Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('school_grade_class_tbl')) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->whereExists(function ($subQuery) use ($studentAlias, $assignment): void {
+            $subQuery
+                ->select(DB::raw('1'))
+                ->from('student_grade_class_tbl as ct_sgc')
+                ->join('school_grade_class_tbl as ct_sgct', 'ct_sgc.sch_grd_cls_id', '=', 'ct_sgct.sch_grd_cls_id')
+                ->whereColumn('ct_sgc.std_id', "{$studentAlias}.std_id")
+                ->where('ct_sgct.grade_id', $assignment['grade_id'])
+                ->where('ct_sgct.year', $assignment['year'])
+                ->whereIn('ct_sgct.census_id', $this->schoolCensusCandidates($assignment['census_id']));
+
+            if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+                $subQuery->where('ct_sgc.is_deleted', 0);
+            }
+
+            if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+                $subQuery->where('ct_sgct.is_deleted', 0);
+            }
+        });
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     */
+    private function studentMatchesClassTeacherGrade(int $studentId, array $assignment): bool
+    {
+        if ($studentId <= 0 || !Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('school_grade_class_tbl')) {
+            return false;
+        }
+
+        $query = DB::table('student_grade_class_tbl as sgc')
+            ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+            ->where('sgc.std_id', $studentId)
+            ->where('sgct.grade_id', $assignment['grade_id'])
+            ->where('sgct.year', $assignment['year'])
+            ->whereIn('sgct.census_id', $this->schoolCensusCandidates($assignment['census_id']));
+
+        if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgc.is_deleted', 0);
+        }
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        return $query->exists();
     }
 
     private function isPrincipal(User $user): bool
