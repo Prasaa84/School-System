@@ -160,16 +160,36 @@
 
     <section v-else class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
       <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <input
-          v-model="search"
-          type="text"
-          :placeholder="text.searchPlaceholder"
-          :class="[
-            'w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none ring-cyan-500 focus:ring-2',
-            isAdmin ? 'md:max-w-[150px] lg:max-w-[180px]' : 'md:max-w-[220px] lg:max-w-[260px]',
-          ]"
-          @keyup.enter="loadStudents(1)"
-        />
+        <div class="flex w-full flex-col gap-2 md:flex-row md:items-center">
+          <input
+            v-model="search"
+            type="text"
+            :placeholder="text.searchPlaceholder"
+            :class="[
+              'w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none ring-cyan-500 focus:ring-2',
+              isAdmin ? 'md:max-w-[150px] lg:max-w-[180px]' : isClassTeacher ? 'md:max-w-[220px] lg:max-w-[260px]' : 'md:max-w-[220px] lg:max-w-[260px]',
+            ]"
+            @keyup.enter="loadStudents(1)"
+          />
+          <select
+            v-if="isClassTeacher"
+            v-model.number="selectedStudentYear"
+            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 md:w-[180px]"
+            @change="loadStudents(1)"
+          >
+            <option :value="0">{{ text.selectAcademicYear }}</option>
+            <option v-for="year in studentAcademicYears" :key="`student-year-${year}`" :value="year">{{ year }}</option>
+          </select>
+          <select
+            v-if="isClassTeacher"
+            v-model.number="selectedStudentClassId"
+            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 md:w-[180px]"
+            @change="loadStudents(1)"
+          >
+            <option :value="0">{{ text.myClass }}</option>
+            <option v-for="row in studentClassOptions" :key="`student-class-${row.class_id}`" :value="row.class_id">{{ row.class }}</option>
+          </select>
+        </div>
         <div class="flex flex-wrap items-center gap-2 md:justify-end xl:flex-nowrap">
           <select
             v-if="isAdmin"
@@ -226,6 +246,21 @@
               <td class="px-3 py-2 text-slate-700">{{ student.dob || '-' }}</td>
               <td v-if="showActionColumn" class="px-3 py-2">
                 <div class="flex gap-2">
+                  <button
+                    class="inline-flex h-8 w-8 items-center justify-center rounded bg-cyan-600 text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="openingProfileStudentId === student.std_id || loadingEditStudentId === student.std_id || deletingStudentId === student.std_id"
+                    @click="openStudentProfile(student)"
+                    :aria-label="text.viewProfile"
+                    :title="text.viewProfile"
+                  >
+                    <svg v-if="openingProfileStudentId !== student.std_id" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                      <path d="M10 4c4.6 0 8 4.2 8.1 4.4a1 1 0 0 1 0 1.2C18 9.8 14.6 14 10 14S2 9.8 1.9 9.6a1 1 0 0 1 0-1.2C2 8.2 5.4 4 10 4Zm0 2C7 6 4.5 8.3 3.4 9c1.1.7 3.6 3 6.6 3s5.5-2.3 6.6-3C15.5 8.3 13 6 10 6Zm0 1.5A2.5 2.5 0 1 1 7.5 10 2.5 2.5 0 0 1 10 7.5Z" />
+                    </svg>
+                    <svg v-else viewBox="0 0 20 20" fill="none" class="h-4 w-4 animate-spin">
+                      <circle cx="10" cy="10" r="7" class="opacity-25" stroke="currentColor" stroke-width="2" />
+                      <path d="M17 10a7 7 0 0 0-7-7" class="opacity-90" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                  </button>
                   <button
                     v-if="student.can_edit || canEditStudents"
                     class="rounded bg-cyan-600 px-3 py-1 text-xs font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -899,6 +934,11 @@ interface StudentOptionsResponse {
   schools: OptionRow[]
 }
 
+interface GradeYearsResponse {
+  year?: number | null
+  years?: number[]
+}
+
 interface StudentReportResponse {
   data: Student[]
 }
@@ -1449,6 +1489,8 @@ const profileDetail = ref<StudentDetail | null>(null)
 const ethnicGroups = ref<OptionRow[]>([])
 const religions = ref<OptionRow[]>([])
 const schools = ref<OptionRow[]>([])
+const studentAcademicYears = ref<number[]>([])
+const studentClassOptions = ref<ClassRow[]>([])
 const importSchoolCensusId = ref(0)
 const importCreateUserLogin = ref(false)
 const academicYears = ref<number[]>([])
@@ -1462,6 +1504,8 @@ const studentPhotoPreview = ref('')
 const currentUser = ref<AuthUser | null>(getUser())
 const initialSchoolContextCensusId = getSchoolContextCensusId()
 const adminSchoolContextCensusId = ref<number>(initialSchoolContextCensusId ?? 0)
+const selectedStudentYear = ref<number>(Number(currentUser.value?.class_teacher_assignment_status?.year ?? 0))
+const selectedStudentClassId = ref<number>(0)
 const reportFilters = ref<StudentReportFilters>(createDefaultReportFilters())
 const roleName = computed(() => String(currentUser.value?.role_name ?? '').trim().toLowerCase())
 const isAdmin = computed(() => (currentUser.value?.role_id ?? 0) === 1 || roleName.value === 'admin' || roleName.value === 'administrator')
@@ -1531,7 +1575,7 @@ const genderOptions = computed<OptionRow[]>(() => [
 
 const editStudentId = ref<number | null>(null)
 const isEditMode = computed(() => editStudentId.value !== null)
-const showActionColumn = computed(() => canEditStudents.value || canDeleteStudents.value || students.value.some((row) => !!row.can_edit || !!row.can_delete))
+const showActionColumn = computed(() => students.value.length > 0 || canEditStudents.value || canDeleteStudents.value || students.value.some((row) => !!row.can_edit || !!row.can_delete))
 const loadingEditStudentId = ref<number | null>(null)
 const deletingStudentId = ref<number | null>(null)
 const buildSchoolScopedRequestHeaders = (): Record<string, string> | undefined => {
@@ -1880,6 +1924,13 @@ const loadStudents = async (page = 1): Promise<void> => {
       per_page: meta.value.per_page,
     }
 
+    if (isClassTeacher.value && selectedStudentYear.value > 0) {
+      params.year = selectedStudentYear.value
+    }
+    if (isClassTeacher.value && selectedStudentClassId.value > 0) {
+      params.class_id = selectedStudentClassId.value
+    }
+
     const requestConfig: {
       params: Record<string, string | number>
       headers?: Record<string, string>
@@ -2127,6 +2178,70 @@ const loadStudentOptions = async (): Promise<void> => {
   }
 }
 
+const loadStudentAcademicYears = async (): Promise<void> => {
+  if (!isClassTeacher.value) {
+    studentAcademicYears.value = []
+    studentClassOptions.value = []
+    return
+  }
+
+  try {
+    const { data } = await api.get<GradeYearsResponse>('/grades')
+    const normalizedYears = Array.isArray(data.years)
+      ? data.years
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value) && value >= 2000 && value <= 2100)
+      : []
+
+    studentAcademicYears.value = normalizedYears
+
+    if (selectedStudentYear.value <= 0) {
+      const fallbackYear = Number(currentUser.value?.class_teacher_assignment_status?.year ?? 0)
+      selectedStudentYear.value = normalizedYears.includes(fallbackYear)
+        ? fallbackYear
+        : (normalizedYears[0] ?? fallbackYear)
+    }
+  } catch {
+    studentAcademicYears.value = []
+    studentClassOptions.value = []
+  }
+}
+
+const loadStudentClasses = async (): Promise<void> => {
+  if (!isClassTeacher.value) {
+    studentClassOptions.value = []
+    selectedStudentClassId.value = 0
+    return
+  }
+
+  const gradeId = Number(currentUser.value?.class_teacher_assignment_status?.grade_id ?? 0)
+  const year = Number(selectedStudentYear.value)
+
+  if (gradeId <= 0 || year < 2000 || year > 2100) {
+    studentClassOptions.value = []
+    selectedStudentClassId.value = 0
+    return
+  }
+
+  try {
+    const { data } = await api.get<ClassResponse>(`/classes/by-grade/${gradeId}`, {
+      params: { year },
+    })
+
+    studentClassOptions.value = Array.isArray(data.data) ? data.data : []
+
+    const currentSelection = Number(selectedStudentClassId.value)
+    const hasCurrentSelection = studentClassOptions.value.some((row) => row.class_id === currentSelection)
+
+    if (!hasCurrentSelection) {
+      selectedStudentClassId.value = 0
+    }
+  } catch {
+    studentClassOptions.value = []
+    selectedStudentClassId.value = 0
+  }
+}
+
 const loadClasses = async (gradeId: number, year = Number(createForm.value.year)): Promise<void> => {
   const parsedGradeId = Number(gradeId)
   const parsedYear = Number(year)
@@ -2221,6 +2336,28 @@ const onReportSchoolChange = async (event: Event): Promise<void> => {
   reportClasses.value = []
   await loadReportGrades()
 }
+watch(
+  () => selectedStudentYear.value,
+  async (year, previousYear) => {
+    if (!isClassTeacher.value) {
+      return
+    }
+
+    const parsedYear = Number(year)
+    if (!Number.isFinite(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
+      studentClassOptions.value = []
+      selectedStudentClassId.value = 0
+      return
+    }
+
+    if (parsedYear !== Number(previousYear)) {
+      selectedStudentClassId.value = 0
+    }
+
+    await loadStudentClasses()
+  },
+)
+
 watch(
   () => createForm.value.year,
   async (year) => {
@@ -2345,6 +2482,8 @@ watch(
       return
     }
 
+    await loadStudentAcademicYears()
+    await loadStudentClasses()
     await loadStudents(1)
   },
 )
@@ -2606,6 +2745,8 @@ onMounted(async () => {
     return
   }
 
+  await loadStudentAcademicYears()
+  await loadStudentClasses()
   await loadGrades()
   await loadStudents(1)
 })

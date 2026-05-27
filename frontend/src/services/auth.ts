@@ -8,6 +8,8 @@ export interface AuthUser {
     is_assigned: boolean
     year: number
     message: string
+    grade_id?: number | null
+    class_id?: number | null
   } | null
   class_teacher_assignment_message?: string | null
   feature_permissions?: Record<string, boolean> | null

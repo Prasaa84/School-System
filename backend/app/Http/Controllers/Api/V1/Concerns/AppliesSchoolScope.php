@@ -242,7 +242,7 @@ trait AppliesSchoolScope
             $query->whereIn('sgct.census_id', $this->censusCandidates($schoolCensusId));
         }
 
-        $query->where('sgct.year', $this->resolveClassTeacherAcademicYear());
+        $query->where('sgct.year', $this->resolveClassTeacherAcademicYear($user));
 
         $row = $query
             ->orderByDesc('sgct.sch_grd_cls_id')
@@ -271,17 +271,22 @@ trait AppliesSchoolScope
         ];
     }
 
-    protected function resolveClassTeacherAcademicYear(): int
+    protected function resolveClassTeacherAcademicYear(?User $user = null): int
     {
-        $requestedYear = request()->header('X-Academic-Year');
-        if (!is_numeric($requestedYear)) {
-            $requestedYear = request()->query('year');
-        }
-        if (!is_numeric($requestedYear)) {
-            $requestedYear = request()->input('year');
+        $requestedYear = $this->resolveRequestedAcademicYear();
+        if ($requestedYear !== null) {
+            return $requestedYear;
         }
 
-        $year = is_numeric($requestedYear) ? (int) $requestedYear : (int) now()->year;
+        $resolvedUser = $user ?? $this->authUser();
+        if ($this->isClassTeacher($resolvedUser)) {
+            $latestAssignedYear = $this->resolveLatestClassTeacherAssignmentYear($resolvedUser);
+            if ($latestAssignedYear !== null) {
+                return $latestAssignedYear;
+            }
+        }
+
+        $year = (int) now()->year;
 
         return ($year >= 2000 && $year <= 2100) ? $year : (int) now()->year;
     }
@@ -292,7 +297,7 @@ trait AppliesSchoolScope
     }
 
     /**
-     * @return array{is_assigned:bool, year:int, message:string}|null
+     * @return array{is_assigned:bool, year:int, message:string, grade_id?:int|null, class_id?:int|null}|null
      */
     protected function resolveClassTeacherAssignmentStatus(?User $user): ?array
     {
@@ -300,13 +305,15 @@ trait AppliesSchoolScope
             return null;
         }
 
-        $year = $this->resolveClassTeacherAcademicYear();
+        $year = $this->resolveClassTeacherAcademicYear($user);
         $assignment = $this->resolveClassTeacherAssignment($user);
         if ($assignment !== null) {
             return [
                 'is_assigned' => true,
                 'year' => $year,
                 'message' => '',
+                'grade_id' => $assignment['grade_id'],
+                'class_id' => $assignment['class_id'],
             ];
         }
 
@@ -314,6 +321,8 @@ trait AppliesSchoolScope
             'is_assigned' => false,
             'year' => $year,
             'message' => sprintf('No class assigned for academic year %d.', $year),
+            'grade_id' => null,
+            'class_id' => null,
         ];
     }
 
@@ -331,6 +340,53 @@ trait AppliesSchoolScope
         }
 
         return $this->normalizeCensusId($rawValue);
+    }
+
+    private function resolveRequestedAcademicYear(): ?int
+    {
+        $requestedYear = request()->header('X-Academic-Year');
+        if (!is_numeric($requestedYear)) {
+            $requestedYear = request()->query('year');
+        }
+        if (!is_numeric($requestedYear)) {
+            $requestedYear = request()->input('year');
+        }
+
+        if (!is_numeric($requestedYear)) {
+            return null;
+        }
+
+        $year = (int) $requestedYear;
+
+        return ($year >= 2000 && $year <= 2100) ? $year : null;
+    }
+
+    private function resolveLatestClassTeacherAssignmentYear(?User $user): ?int
+    {
+        if (!$this->isClassTeacher($user) || !Schema::hasTable('school_grade_class_tbl')) {
+            return null;
+        }
+
+        $staffId = $this->resolveUserStaffId($user);
+        if ($staffId === null) {
+            return null;
+        }
+
+        $query = DB::table('school_grade_class_tbl as sgct')
+            ->where('sgct.stf_id', $staffId);
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        $schoolCensusId = $this->resolveUserCensusId($user);
+        if ($schoolCensusId !== null) {
+            $query->whereIn('sgct.census_id', $this->censusCandidates($schoolCensusId));
+        }
+
+        $year = $query->max('sgct.year');
+
+        return is_numeric($year) ? (int) $year : null;
     }
 
     private function isStudentRole(?User $user): bool

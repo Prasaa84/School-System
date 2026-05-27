@@ -73,6 +73,7 @@ class StudentController extends Controller
         $validated = $request->validated();
         $perPage = (int) ($validated['per_page'] ?? 20);
         $search = isset($validated['q']) ? trim((string) $validated['q']) : '';
+        $selectedClassId = isset($validated['class_id']) ? (int) $validated['class_id'] : 0;
         $user = $this->authUser();
         $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
 
@@ -134,7 +135,13 @@ class StudentController extends Controller
 
         $this->applySchoolScope($studentsQuery, $user, 'st', 'census_id');
         if ($classTeacherAssignment !== null) {
-            $this->applyClassTeacherStudentGradeScope($studentsQuery, 'st', $classTeacherAssignment);
+            $this->applyClassTeacherStudentGradeScope(
+                $studentsQuery,
+                'st',
+                $classTeacherAssignment,
+                $search === '' && $selectedClassId <= 0,
+                $selectedClassId,
+            );
         }
 
         $students = $studentsQuery->paginate($perPage);
@@ -179,6 +186,12 @@ class StudentController extends Controller
                 ])
                 ->orderByDesc('sgct.year')
                 ->orderByDesc('sgc.st_gr_cl_id');
+
+            if ($classTeacherAssignment !== null) {
+                $gradeClassQuery
+                    ->where('sgct.year', $classTeacherAssignment['year'])
+                    ->where('sgct.grade_id', $classTeacherAssignment['grade_id']);
+            }
 
             if ($gradeLabelColumn !== null) {
                 $gradeClassQuery->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));
@@ -3047,14 +3060,20 @@ class StudentController extends Controller
     /**
      * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
      */
-    private function applyClassTeacherStudentGradeScope($query, string $studentAlias, array $assignment): void
+    private function applyClassTeacherStudentGradeScope(
+        $query,
+        string $studentAlias,
+        array $assignment,
+        bool $restrictToAssignedClass = false,
+        int $selectedClassId = 0,
+    ): void
     {
         if (!Schema::hasTable('student_grade_class_tbl') || !Schema::hasTable('school_grade_class_tbl')) {
             $query->whereRaw('1 = 0');
             return;
         }
 
-        $query->whereExists(function ($subQuery) use ($studentAlias, $assignment): void {
+        $query->whereExists(function ($subQuery) use ($studentAlias, $assignment, $restrictToAssignedClass, $selectedClassId): void {
             $subQuery
                 ->select(DB::raw('1'))
                 ->from('student_grade_class_tbl as ct_sgc')
@@ -3063,6 +3082,12 @@ class StudentController extends Controller
                 ->where('ct_sgct.grade_id', $assignment['grade_id'])
                 ->where('ct_sgct.year', $assignment['year'])
                 ->whereIn('ct_sgct.census_id', $this->schoolCensusCandidates($assignment['census_id']));
+
+            if ($selectedClassId > 0) {
+                $subQuery->where('ct_sgct.class_id', $selectedClassId);
+            } elseif ($restrictToAssignedClass) {
+                $subQuery->where('ct_sgct.class_id', $assignment['class_id']);
+            }
 
             if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
                 $subQuery->where('ct_sgc.is_deleted', 0);

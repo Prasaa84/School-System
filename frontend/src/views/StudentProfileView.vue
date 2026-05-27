@@ -187,8 +187,10 @@ interface StudentProfileDetail {
 const route = useRoute()
 const router = useRouter()
 const currentUser = getUser()
+const roleName = computed(() => String((currentUser as { role_name?: string | null } | null)?.role_name ?? '').trim().toLowerCase())
 const isAdmin = computed(() => Number((currentUser as { role_id?: number } | null)?.role_id ?? 0) === 1)
 const isStudent = computed(() => Number((currentUser as { role_id?: number } | null)?.role_id ?? 0) === 7)
+const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName.value))
 
 const text = useLocalizedText({
   en: {
@@ -438,7 +440,17 @@ const exportPdf = (): void => {
 }
 
 const goBackToReports = async (): Promise<void> => {
-  await router.push(isStudent.value ? '/' : '/students/report')
+  if (isStudent.value) {
+    await router.push('/')
+    return
+  }
+
+  if (isClassTeacher.value) {
+    await router.push('/students')
+    return
+  }
+
+  await router.push('/students/report')
 }
 
 onMounted(async () => {
