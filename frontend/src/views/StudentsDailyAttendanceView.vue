@@ -133,6 +133,7 @@
                 <th v-for="dateHeader in principalDateHeaders" :key="`date-header-${dateHeader}`" class="px-3 py-2 text-center font-semibold text-slate-600">
                   {{ formatShortDate(dateHeader) }}
                 </th>
+                <th class="px-3 py-2 text-center font-semibold text-slate-600">{{ text.totalAttendance }}</th>
               </template>
               <th v-else class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.status }}</th>
             </tr>
@@ -164,6 +165,9 @@
                 <td v-for="dateHeader in principalDateHeaders" :key="`${student.std_id}-${dateHeader}`" class="px-3 py-2 text-center text-slate-700">
                   {{ renderAttendanceCell(student.attendance_map?.[dateHeader] ?? null) }}
                 </td>
+                <td class="px-3 py-2 text-center font-semibold text-slate-800">
+                  {{ principalStudentTotal(student) }}
+                </td>
               </template>
               <td v-else class="px-3 py-2">
                 <span
@@ -172,6 +176,17 @@
                 >
                   {{ student.status }}
                 </span>
+              </td>
+            </tr>
+            <tr v-if="isPrincipal && filteredStudents.length > 0" class="bg-slate-100 font-semibold">
+              <td class="px-3 py-2 text-slate-800"></td>
+              <td class="px-3 py-2 text-slate-800"></td>
+              <td class="px-3 py-2 text-slate-800">{{ text.totalAttendance }}</td>
+              <td v-for="dateHeader in principalDateHeaders" :key="`total-${dateHeader}`" class="px-3 py-2 text-center text-slate-800">
+                {{ principalDateTotals[dateHeader] ?? 0 }}
+              </td>
+              <td class="px-3 py-2 text-center text-slate-900">
+                {{ principalGrandTotal }}
               </td>
             </tr>
           </tbody>
@@ -377,6 +392,7 @@ const text = useLocalizedText({
     saving: 'Saving...',
     indexNo: 'No.',
     date: 'Date',
+    totalAttendance: 'Total Attendance',
     admissionNo: 'Admission No',
     nameWithInitials: 'Name With Initials',
     status: 'Status',
@@ -427,6 +443,7 @@ const text = useLocalizedText({
     saving: 'සුරකිමින්...',
     indexNo: 'අංකය',
     date: 'දිනය',
+    totalAttendance: 'මුළු පැමිණීම',
     admissionNo: 'ඇතුළත් අංකය',
     nameWithInitials: 'මුලකුරු සමග නම',
     status: 'තත්ත්වය',
@@ -477,6 +494,7 @@ const text = useLocalizedText({
     saving: 'சேமிக்கிறது...',
     indexNo: 'எண்',
     date: 'தேதி',
+    totalAttendance: 'மொத்த வருகை',
     admissionNo: 'அனுமதி இலக்கம்',
     nameWithInitials: 'முதற் எழுத்துகளுடன் பெயர்',
     status: 'நிலை',
@@ -582,6 +600,31 @@ const principalDateRangeLabel = computed(() => {
 
   return formatShortDate(to || from)
 })
+
+const principalStudentTotal = (student: AttendanceStudent): number => {
+  if (!student.attendance_map) {
+    return 0
+  }
+
+  return principalDateHeaders.value.reduce((total, dateHeader) => (
+    total + (student.attendance_map?.[dateHeader] === 1 ? 1 : 0)
+  ), 0)
+}
+
+const principalDateTotals = computed<Record<string, number>>(() => {
+  const totals: Record<string, number> = {}
+  for (const dateHeader of principalDateHeaders.value) {
+    totals[dateHeader] = students.value.reduce((total, student) => (
+      total + (student.attendance_map?.[dateHeader] === 1 ? 1 : 0)
+    ), 0)
+  }
+
+  return totals
+})
+
+const principalGrandTotal = computed(() => (
+  principalDateHeaders.value.reduce((total, dateHeader) => total + (principalDateTotals.value[dateHeader] ?? 0), 0)
+))
 
 const formattedDate = computed(() => {
   if (isPrincipal.value) {

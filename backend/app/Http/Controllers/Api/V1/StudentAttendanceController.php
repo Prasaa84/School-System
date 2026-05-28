@@ -209,7 +209,9 @@ class StudentAttendanceController extends Controller
                 $sheet->setCellValue($this->excelColumnName($columnIndex) . '1', $dateHeader);
                 $columnIndex++;
             }
+            $sheet->setCellValue($this->excelColumnName($columnIndex) . '1', 'Total Attendance');
 
+            $dateTotals = array_fill_keys($dateHeaders, 0);
             foreach (array_values($rows) as $rowIndex => $row) {
                 $excelRow = $rowIndex + 2;
                 $sheet->setCellValue("A{$excelRow}", (string) ($rowIndex + 1));
@@ -217,17 +219,38 @@ class StudentAttendanceController extends Controller
                 $sheet->setCellValue("C{$excelRow}", (string) ($row['name_with_initials'] ?? ''));
 
                 $dateColumnIndex = 4;
+                $studentTotal = 0;
                 foreach ($dateHeaders as $dateHeader) {
                     $value = $row['attendance_map'][$dateHeader] ?? null;
+                    if ($value === 1) {
+                        $studentTotal++;
+                        $dateTotals[$dateHeader] = ($dateTotals[$dateHeader] ?? 0) + 1;
+                    }
                     $sheet->setCellValue(
                         $this->excelColumnName($dateColumnIndex) . $excelRow,
                         $value === 0 || $value === 1 ? (string) $value : ''
                     );
                     $dateColumnIndex++;
                 }
+                $sheet->setCellValue($this->excelColumnName($dateColumnIndex) . $excelRow, (string) $studentTotal);
             }
 
-            for ($index = 1; $index < $columnIndex; $index++) {
+            $totalsRow = count($rows) + 2;
+            $sheet->setCellValue("A{$totalsRow}", '');
+            $sheet->setCellValue("B{$totalsRow}", '');
+            $sheet->setCellValue("C{$totalsRow}", 'Total Attendance');
+
+            $dateColumnIndex = 4;
+            $grandTotal = 0;
+            foreach ($dateHeaders as $dateHeader) {
+                $value = (int) ($dateTotals[$dateHeader] ?? 0);
+                $sheet->setCellValue($this->excelColumnName($dateColumnIndex) . $totalsRow, (string) $value);
+                $grandTotal += $value;
+                $dateColumnIndex++;
+            }
+            $sheet->setCellValue($this->excelColumnName($dateColumnIndex) . $totalsRow, (string) $grandTotal);
+
+            for ($index = 1; $index <= $columnIndex; $index++) {
                 $sheet->getColumnDimension($this->excelColumnName($index))->setAutoSize(true);
             }
 
