@@ -73,6 +73,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/students', [StudentController::class, 'index']);
         Route::get('/students/daily-attendance', [StudentAttendanceController::class, 'index']);
+        Route::get('/students/daily-attendance/export', [StudentAttendanceController::class, 'downloadReport']);
         Route::post('/students/daily-attendance/toggle', [StudentAttendanceController::class, 'toggle']);
         Route::get('/students/report', [StudentController::class, 'report']);
         Route::get('/students/report/download', [StudentController::class, 'downloadReport']);

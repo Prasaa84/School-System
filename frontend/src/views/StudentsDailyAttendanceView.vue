@@ -107,9 +107,9 @@
         </button>
         <button
           class="self-end rounded-xl bg-teal-500 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-600"
-          @click="printAttendance"
+          @click="isPrincipal ? exportAttendanceExcel() : printAttendance()"
         >
-          {{ text.print }}
+          {{ isPrincipal ? text.exportExcel : text.print }}
         </button>
         </div>
       </div>
@@ -372,6 +372,7 @@ const text = useLocalizedText({
     searchAction: 'Search',
     refresh: 'Refresh',
     print: 'Print',
+    exportExcel: 'Excel',
     loading: 'Loading...',
     saving: 'Saving...',
     indexNo: 'No.',
@@ -421,6 +422,7 @@ const text = useLocalizedText({
     searchAction: 'සොයන්න',
     refresh: 'නැවත පූරණය',
     print: 'මුද්‍රණය',
+    exportExcel: 'Excel',
     loading: 'පූරණය වෙමින්...',
     saving: 'සුරකිමින්...',
     indexNo: 'අංකය',
@@ -470,6 +472,7 @@ const text = useLocalizedText({
     searchAction: 'தேடு',
     refresh: 'மீண்டும் ஏற்று',
     print: 'அச்சிடு',
+    exportExcel: 'Excel',
     loading: 'ஏற்றப்படுகிறது...',
     saving: 'சேமிக்கிறது...',
     indexNo: 'எண்',
@@ -930,6 +933,38 @@ const goToPrincipalPage = async (page: number): Promise<void> => {
 
   pagination.page = nextPage
   await loadAttendance()
+}
+
+const exportAttendanceExcel = async (): Promise<void> => {
+  pageError.value = ''
+
+  try {
+    const params: Record<string, number | string> = {}
+    if (principalDateFrom.value) params.date_from = principalDateFrom.value
+    if (principalDateTo.value) params.date_to = principalDateTo.value
+    if (principalFilters.year > 0) params.year = principalFilters.year
+    if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
+    if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
+    if (principalFilters.gender_id > 0) params.gender_id = principalFilters.gender_id
+    if (searchKeyword.value !== '') params.search = searchKeyword.value
+
+    const response = await api.get('/students/daily-attendance/export', {
+      params,
+      responseType: 'blob',
+    })
+
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const disposition = String(response.headers?.['content-disposition'] ?? '')
+    const fileNameMatch = disposition.match(/filename="?([^"]+)"?/i)
+    link.href = url
+    link.download = fileNameMatch?.[1] || 'student-attendance-report.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    pageError.value = extractApiMessage(error) || text.value.unableToLoad
+  }
 }
 
 const printAttendance = (): void => {

@@ -13,6 +13,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StudentAttendanceController extends Controller
 {
@@ -166,6 +169,73 @@ class StudentAttendanceController extends Controller
                 'status' => $newStatus,
                 'date' => $date,
             ],
+        ]);
+    }
+
+    public function downloadReport(Request $request): StreamedResponse|JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->isPrincipal($user)) {
+            return response()->json(['message' => 'Only principals can export attendance reports.'], 403);
+        }
+
+        if (!Schema::hasTable('student_daily_attendance_tbl')) {
+            return response()->json(['message' => 'Attendance table is not available.'], 422);
+        }
+
+        $filters = $this->validatePrincipalFilters($request);
+        $dateHeaders = $this->buildDateHeaders($filters['date_from'], $filters['date_to']);
+        $rows = $this->buildPrincipalAttendanceExportRows($user, $filters, $dateHeaders);
+        $periodSuffix = $filters['date_from'] === $filters['date_to']
+            ? $filters['date_from']
+            : ($filters['date_from'] . '_to_' . $filters['date_to']);
+        $filename = 'student-attendance-report-' . $periodSuffix . '.xlsx';
+
+        return response()->streamDownload(function () use ($rows, $dateHeaders): void {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Attendance Report');
+
+            $sheet->setCellValue('A1', 'No.');
+            $sheet->setCellValue('B1', 'Admission No');
+            $sheet->setCellValue('C1', 'Name With Initials');
+
+            $columnIndex = 4;
+            foreach ($dateHeaders as $dateHeader) {
+                $sheet->setCellValue($this->excelColumnName($columnIndex) . '1', $dateHeader);
+                $columnIndex++;
+            }
+
+            foreach (array_values($rows) as $rowIndex => $row) {
+                $excelRow = $rowIndex + 2;
+                $sheet->setCellValue("A{$excelRow}", (string) ($rowIndex + 1));
+                $sheet->setCellValue("B{$excelRow}", (string) ($row['admission_no'] ?? ''));
+                $sheet->setCellValue("C{$excelRow}", (string) ($row['name_with_initials'] ?? ''));
+
+                $dateColumnIndex = 4;
+                foreach ($dateHeaders as $dateHeader) {
+                    $value = $row['attendance_map'][$dateHeader] ?? null;
+                    $sheet->setCellValue(
+                        $this->excelColumnName($dateColumnIndex) . $excelRow,
+                        $value === 0 || $value === 1 ? (string) $value : ''
+                    );
+                    $dateColumnIndex++;
+                }
+            }
+
+            for ($index = 1; $index < $columnIndex; $index++) {
+                $sheet->getColumnDimension($this->excelColumnName($index))->setAutoSize(true);
+            }
+
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 
@@ -708,5 +778,59 @@ class StudentAttendanceController extends Controller
         }
 
         return $headers;
+    }
+
+    /**
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     * @param  array<int, string>  $dateHeaders
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildPrincipalAttendanceExportRows(User $user, array $filters, array $dateHeaders): array
+    {
+        $rows = $this->buildPrincipalRosterQuery($user, $filters)->get();
+        $studentIds = $rows
+            ->pluck('std_id')
+            ->filter(fn ($value): bool => is_numeric($value))
+            ->map(fn ($value): int => (int) $value)
+            ->values()
+            ->all();
+
+        $attendanceMap = [];
+        if ($studentIds !== []) {
+            $attendanceRows = DB::table('student_daily_attendance_tbl as sda')
+                ->whereIn('sda.std_id', $studentIds)
+                ->whereBetween('sda.attendance_date', [$filters['date_from'], $filters['date_to']])
+                ->where('sda.is_deleted', 0)
+                ->select(['sda.std_id', 'sda.attendance_date', 'sda.status'])
+                ->orderBy('sda.attendance_date')
+                ->get();
+
+            foreach ($attendanceRows as $attendanceRow) {
+                $studentId = is_numeric($attendanceRow->std_id ?? null) ? (int) $attendanceRow->std_id : 0;
+                $date = (string) ($attendanceRow->attendance_date ?? '');
+                if ($studentId <= 0 || $date === '') {
+                    continue;
+                }
+
+                $attendanceMap[$studentId] ??= [];
+                $attendanceMap[$studentId][$date] = isset($attendanceRow->status) ? (int) $attendanceRow->status : null;
+            }
+        }
+
+        return $rows
+            ->map(fn ($row): array => $this->mapPrincipalAttendanceStudentRow($row, $dateHeaders, $attendanceMap))
+            ->all();
+    }
+
+    private function excelColumnName(int $index): string
+    {
+        $name = '';
+        while ($index > 0) {
+            $index--;
+            $name = chr(65 + ($index % 26)) . $name;
+            $index = intdiv($index, 26);
+        }
+
+        return $name;
     }
 }
