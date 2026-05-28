@@ -35,12 +35,20 @@
 
       <div class="mt-4 print:hidden">
         <div
-          class="grid gap-3 md:grid-cols-2 lg:grid-cols-4"
-          :class="isPrincipal ? 'xl:grid-cols-4' : 'xl:grid-cols-[220px_minmax(260px,1fr)_auto_auto]'"
+          class="grid gap-3 md:grid-cols-2"
+          :class="isPrincipal ? 'lg:grid-cols-5' : 'lg:grid-cols-[220px_minmax(220px,1fr)_90px_90px_90px]'"
         >
-        <label class="block text-sm text-slate-700">
+        <label v-if="!isPrincipal" class="block text-sm text-slate-700">
           {{ text.filterDate }}
           <input v-model="selectedDate" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onDateChange" />
+        </label>
+        <label v-if="isPrincipal" class="block text-sm text-slate-700">
+          {{ text.fromDate }}
+          <input v-model="principalDateFrom" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </label>
+        <label v-if="isPrincipal" class="block text-sm text-slate-700">
+          {{ text.toDate }}
+          <input v-model="principalDateTo" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label v-if="isPrincipal" class="block text-sm text-slate-700">
           {{ text.year }}
@@ -84,14 +92,21 @@
           />
         </label>
         <button
-          class="self-end rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          class="self-end rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="loading"
-          @click="loadAttendance"
+          @click="resetFilters"
         >
-          {{ loading ? text.loading : text.refresh }}
+          {{ text.reset }}
         </button>
         <button
-          class="self-end rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600"
+          class="self-end rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="loading"
+          @click="isPrincipal ? submitPrincipalSearch() : loadAttendance()"
+        >
+          {{ loading ? text.loading : (isPrincipal ? text.searchAction : text.refresh) }}
+        </button>
+        <button
+          class="self-end rounded-xl bg-teal-500 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-600"
           @click="printAttendance"
         >
           {{ text.print }}
@@ -114,20 +129,22 @@
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.indexNo }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.admissionNo }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.nameWithInitials }}</th>
-              <th v-if="isPrincipal" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.grade }}</th>
-              <th v-if="isPrincipal" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.class }}</th>
-              <th v-if="isPrincipal" class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gender }}</th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.status }}</th>
+              <template v-if="isPrincipal">
+                <th v-for="dateHeader in principalDateHeaders" :key="`date-header-${dateHeader}`" class="px-3 py-2 text-center font-semibold text-slate-600">
+                  {{ formatShortDate(dateHeader) }}
+                </th>
+              </template>
+              <th v-else class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.status }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-if="!loading && filteredStudents.length === 0">
-              <td :colspan="isPrincipal ? 7 : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
+              <td :colspan="isPrincipal ? 3 + principalDateHeaders.length : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
             </tr>
             <tr
               v-for="(student, index) in filteredStudents"
               :key="student.std_id"
-              :class="student.status === 1 ? 'bg-emerald-50/50' : ''"
+              :class="!isPrincipal && student.status === 1 ? 'bg-emerald-50/50' : ''"
             >
               <td class="px-3 py-2 font-medium text-slate-800">{{ index + 1 }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.admission_no }}</td>
@@ -143,10 +160,12 @@
                 </button>
                 <span v-else class="block px-3 py-2 text-slate-800">{{ student.name_with_initials }}</span>
               </td>
-              <td v-if="isPrincipal" class="px-3 py-2 text-slate-700">{{ student.grade || text.notAvailable }}</td>
-              <td v-if="isPrincipal" class="px-3 py-2 text-slate-700">{{ student.class || text.notAvailable }}</td>
-              <td v-if="isPrincipal" class="px-3 py-2 text-slate-700">{{ student.gender_label || text.notAvailable }}</td>
-              <td class="px-3 py-2">
+              <template v-if="isPrincipal">
+                <td v-for="dateHeader in principalDateHeaders" :key="`${student.std_id}-${dateHeader}`" class="px-3 py-2 text-center text-slate-700">
+                  {{ renderAttendanceCell(student.attendance_map?.[dateHeader] ?? null) }}
+                </td>
+              </template>
+              <td v-else class="px-3 py-2">
                 <span
                   class="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
                   :class="student.status === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'"
@@ -196,6 +215,8 @@ interface AttendanceStudent {
   admission_no: string
   name_with_initials: string
   status: number
+  attendance_date: string
+  attendance_map?: Record<string, number | null>
   gender_id: number
   gender_label: string
   year: number
@@ -224,6 +245,8 @@ interface AttendanceSummary {
 }
 
 interface AttendanceFilters {
+  date_from?: string
+  date_to?: string
   year: number
   grade_id: number
   class_id: number
@@ -246,6 +269,7 @@ interface AttendanceResponse {
   summary?: AttendanceSummary
   filters?: AttendanceFilters | null
   pagination?: AttendancePagination | null
+  date_headers?: string[]
   data: AttendanceStudent[]
   message?: string
 }
@@ -284,7 +308,10 @@ const pageMessage = ref('')
 const pageError = ref('')
 const attendanceDate = ref('')
 const selectedDate = ref('')
+const principalDateFrom = ref('')
+const principalDateTo = ref('')
 const students = ref<AttendanceStudent[]>([])
+const principalDateHeaders = ref<string[]>([])
 const classInfo = ref<AttendanceClassInfo | null>(null)
 const academicYears = ref<number[]>([])
 const grades = ref<GradeRow[]>([])
@@ -332,6 +359,8 @@ const text = useLocalizedText({
     helpPrincipal: 'Review school attendance by date, year, grade, class, and gender.',
     attendanceDate: 'Attendance Date',
     filterDate: 'Select Date',
+    fromDate: 'From Date',
+    toDate: 'To Date',
     assignedClass: 'Assigned Class',
     scope: 'Attendance Scope',
     present: 'Present',
@@ -339,11 +368,14 @@ const text = useLocalizedText({
     totalStudents: 'Total Students',
     search: 'Search',
     searchPlaceholder: 'Search by admission no, name, grade, or class',
+    reset: 'Reset',
+    searchAction: 'Search',
     refresh: 'Refresh',
     print: 'Print',
     loading: 'Loading...',
     saving: 'Saving...',
     indexNo: 'No.',
+    date: 'Date',
     admissionNo: 'Admission No',
     nameWithInitials: 'Name With Initials',
     status: 'Status',
@@ -376,6 +408,8 @@ const text = useLocalizedText({
     helpPrincipal: 'දිනය, වර්ෂය, ශ්‍රේණිය, පන්තිය සහ ස්ත්‍රී/පුරුෂ භාවය අනුව පාසල් පැමිණීම බලන්න.',
     attendanceDate: 'පැමිණීමේ දිනය',
     filterDate: 'දිනය තෝරන්න',
+    fromDate: 'ආරම්භක දිනය',
+    toDate: 'අවසාන දිනය',
     assignedClass: 'නියම කළ පන්තිය',
     scope: 'පැමිණීමේ පරාසය',
     present: 'පැමිණි',
@@ -383,11 +417,14 @@ const text = useLocalizedText({
     totalStudents: 'මුළු සිසුන්',
     search: 'සොයන්න',
     searchPlaceholder: 'ඇතුළත් අංකය, නම, ශ්‍රේණිය හෝ පන්තිය සොයන්න',
+    reset: 'යළි සකසන්න',
+    searchAction: 'සොයන්න',
     refresh: 'නැවත පූරණය',
     print: 'මුද්‍රණය',
     loading: 'පූරණය වෙමින්...',
     saving: 'සුරකිමින්...',
     indexNo: 'අංකය',
+    date: 'දිනය',
     admissionNo: 'ඇතුළත් අංකය',
     nameWithInitials: 'මුලකුරු සමග නම',
     status: 'තත්ත්වය',
@@ -420,6 +457,8 @@ const text = useLocalizedText({
     helpPrincipal: 'தேதி, ஆண்டு, தரம், வகுப்பு மற்றும் பாலினம் அடிப்படையில் பள்ளி வருகையை பார்க்கவும்.',
     attendanceDate: 'வருகை தேதி',
     filterDate: 'தேதி தேர்வு',
+    fromDate: 'தொடக்க தேதி',
+    toDate: 'முடிவு தேதி',
     assignedClass: 'ஒதுக்கப்பட்ட வகுப்பு',
     scope: 'வருகை வரம்பு',
     present: 'வருகையினர்',
@@ -427,11 +466,14 @@ const text = useLocalizedText({
     totalStudents: 'மொத்த மாணவர்கள்',
     search: 'தேடல்',
     searchPlaceholder: 'அனுமதி இலக்கம், பெயர், தரம் அல்லது வகுப்பு தேடவும்',
+    reset: 'மீட்டமை',
+    searchAction: 'தேடு',
     refresh: 'மீண்டும் ஏற்று',
     print: 'அச்சிடு',
     loading: 'ஏற்றப்படுகிறது...',
     saving: 'சேமிக்கிறது...',
     indexNo: 'எண்',
+    date: 'தேதி',
     admissionNo: 'அனுமதி இலக்கம்',
     nameWithInitials: 'முதற் எழுத்துகளுடன் பெயர்',
     status: 'நிலை',
@@ -520,7 +562,29 @@ const filteredStudents = computed(() => {
   )
 })
 
+const principalDateRangeLabel = computed(() => {
+  if (!isPrincipal.value) {
+    return ''
+  }
+
+  const from = principalDateFrom.value.trim()
+  const to = principalDateTo.value.trim()
+  if (from === '' && to === '') {
+    return text.value.notAvailable
+  }
+
+  if (from !== '' && to !== '' && from !== to) {
+    return `${formatShortDate(from)} - ${formatShortDate(to)}`
+  }
+
+  return formatShortDate(to || from)
+})
+
 const formattedDate = computed(() => {
+  if (isPrincipal.value) {
+    return principalDateRangeLabel.value
+  }
+
   if (!attendanceDate.value) {
     return text.value.notAvailable
   }
@@ -534,6 +598,26 @@ const formattedDate = computed(() => {
         day: 'numeric',
       })
 })
+
+const formatShortDate = (value: string): string => {
+  const raw = String(value ?? '').trim()
+  if (raw === '') {
+    return text.value.notAvailable
+  }
+
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime())
+    ? raw
+    : parsed.toLocaleDateString(ui.language === 'si' ? 'si-LK' : ui.language === 'ta' ? 'ta-LK' : 'en-GB', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+}
+
+const renderAttendanceCell = (value: number | null): string => {
+  return value === 0 || value === 1 ? String(value) : ''
+}
 
 const refreshCurrentUser = async (): Promise<void> => {
   const token = getToken()
@@ -576,6 +660,17 @@ const syncPagination = (nextPagination?: AttendancePagination | null): void => {
   pagination.last_page = Math.max(Number(nextPagination?.last_page ?? 1), 1)
   pagination.from = Number(nextPagination?.from ?? 0)
   pagination.to = Number(nextPagination?.to ?? 0)
+}
+
+const clearPrincipalResults = (): void => {
+  students.value = []
+  principalDateHeaders.value = []
+  classInfo.value = null
+  attendanceDate.value = ''
+  pageMessage.value = ''
+  pageError.value = ''
+  syncSummary()
+  syncPagination()
 }
 
 const loadGradeYears = async (): Promise<void> => {
@@ -668,10 +763,12 @@ const loadAttendance = async (): Promise<void> => {
 
   try {
     const params: Record<string, number | string> = {}
-    if (selectedDate.value) {
+    if (!isPrincipal.value && selectedDate.value) {
       params.date = selectedDate.value
     }
     if (isPrincipal.value) {
+      if (principalDateFrom.value) params.date_from = principalDateFrom.value
+      if (principalDateTo.value) params.date_to = principalDateTo.value
       if (principalFilters.year > 0) params.year = principalFilters.year
       if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
       if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
@@ -682,8 +779,14 @@ const loadAttendance = async (): Promise<void> => {
     }
 
     const { data } = await api.get<AttendanceResponse>('/students/daily-attendance', Object.keys(params).length > 0 ? { params } : undefined)
-    attendanceDate.value = data.date ?? ''
-    selectedDate.value = data.date ?? selectedDate.value
+    if (isPrincipal.value) {
+      attendanceDate.value = principalDateTo.value || data.date || ''
+      principalDateHeaders.value = Array.isArray(data.date_headers) ? data.date_headers : []
+    } else {
+      attendanceDate.value = data.date ?? ''
+      selectedDate.value = data.date ?? selectedDate.value
+      principalDateHeaders.value = []
+    }
     classInfo.value = data.class_info ?? null
     students.value = Array.isArray(data.data) ? data.data : []
     syncSummary(data.summary)
@@ -691,6 +794,8 @@ const loadAttendance = async (): Promise<void> => {
     pageMessage.value = typeof data.message === 'string' ? data.message : ''
 
     if (isPrincipal.value && data.filters) {
+      principalDateFrom.value = String(data.filters.date_from ?? principalDateFrom.value)
+      principalDateTo.value = String(data.filters.date_to ?? principalDateTo.value)
       principalFilters.year = Number(data.filters.year ?? principalFilters.year)
       principalFilters.grade_id = Number(data.filters.grade_id ?? principalFilters.grade_id)
       principalFilters.class_id = Number(data.filters.class_id ?? principalFilters.class_id)
@@ -780,6 +885,30 @@ const onGenderChange = async (): Promise<void> => {
   await loadAttendance()
 }
 
+const resetFilters = async (): Promise<void> => {
+  search.value = ''
+  selectedDate.value = new Date().toISOString().slice(0, 10)
+  pagination.page = 1
+
+  if (isPrincipal.value) {
+    const currentYear = new Date().getFullYear()
+    principalDateFrom.value = selectedDate.value
+    principalDateTo.value = selectedDate.value
+    principalFilters.year = academicYears.value.includes(currentYear)
+      ? currentYear
+      : (academicYears.value[0] ?? currentYear)
+    principalFilters.grade_id = 0
+    principalFilters.class_id = 0
+    principalFilters.gender_id = 0
+    classes.value = []
+    await loadGrades(principalFilters.year)
+    clearPrincipalResults()
+    return
+  }
+
+  await loadAttendance()
+}
+
 const submitPrincipalSearch = async (): Promise<void> => {
   if (!isPrincipal.value) {
     return
@@ -809,11 +938,15 @@ const printAttendance = (): void => {
 
 onMounted(async () => {
   selectedDate.value = new Date().toISOString().slice(0, 10)
+  principalDateFrom.value = selectedDate.value
+  principalDateTo.value = selectedDate.value
   await refreshCurrentUser()
 
   if (isPrincipal.value) {
     await loadGradeYears()
     await loadGrades(principalFilters.year)
+    clearPrincipalResults()
+    return
   }
 
   await loadAttendance()

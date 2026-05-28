@@ -71,6 +71,8 @@ class StudentAttendanceController extends Controller
                 'class_info' => $classInfo,
                 'summary' => $this->buildAttendanceSummary($students),
                 'filters' => [
+                    'date_from' => $date,
+                    'date_to' => $date,
                     'year' => $assignment['year'],
                     'grade_id' => $assignment['grade_id'],
                     'class_id' => $assignment['class_id'],
@@ -83,7 +85,7 @@ class StudentAttendanceController extends Controller
         }
 
         $filters = $this->validatePrincipalFilters($request);
-        ['data' => $students, 'summary' => $summary, 'pagination' => $pagination] = $this->loadAttendanceStudentsForPrincipal($user, $filters);
+        ['data' => $students, 'summary' => $summary, 'pagination' => $pagination, 'date_headers' => $dateHeaders] = $this->loadAttendanceStudentsForPrincipal($user, $filters);
 
         return response()->json([
             'date' => $filters['date'],
@@ -91,6 +93,7 @@ class StudentAttendanceController extends Controller
             'summary' => $summary,
             'filters' => $filters,
             'pagination' => $pagination,
+            'date_headers' => $dateHeaders,
             'data' => $students,
         ]);
     }
@@ -215,34 +218,67 @@ class StudentAttendanceController extends Controller
     }
 
     /**
-     * @param  array{date:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
-     * @return array{data:array<int, array<string, mixed>>, summary:array{total_students:int, present_students:int, absent_students:int}, pagination:array{page:int, per_page:int, total:int, last_page:int, from:int, to:int}}
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     * @return array{data:array<int, array<string, mixed>>, summary:array{total_students:int, present_students:int, absent_students:int}, pagination:array{page:int, per_page:int, total:int, last_page:int, from:int, to:int}, date_headers:array<int, string>}
      */
     private function loadAttendanceStudentsForPrincipal(User $user, array $filters): array
     {
-        $baseQuery = $this->buildPrincipalAttendanceBaseQuery($user, $filters);
-        $total = (int) (clone $baseQuery)->count();
-        $presentStudents = (int) (clone $baseQuery)->whereRaw('COALESCE(sda.status, 0) = 1')->count();
+        $rosterQuery = $this->buildPrincipalRosterQuery($user, $filters);
+        $summaryQuery = $this->buildPrincipalAttendanceSummaryQuery($user, $filters);
+        $total = (int) (clone $rosterQuery)->count();
+        $presentStudents = (int) (clone $summaryQuery)->where('sda.status', 1)->count();
+        $absentStudents = (int) (clone $summaryQuery)->where('sda.status', 0)->count();
         $page = max($filters['page'], 1);
         $perPage = max($filters['per_page'], 1);
         $lastPage = max((int) ceil($total / $perPage), 1);
         $page = min($page, $lastPage);
         $offset = ($page - 1) * $perPage;
+        $dateHeaders = $this->buildDateHeaders($filters['date_from'], $filters['date_to']);
 
-        $rows = (clone $baseQuery)
+        $rows = (clone $rosterQuery)
             ->offset($offset)
             ->limit($perPage)
             ->get();
+
+        $studentIds = $rows
+            ->pluck('std_id')
+            ->filter(fn ($value): bool => is_numeric($value))
+            ->map(fn ($value): int => (int) $value)
+            ->values()
+            ->all();
+
+        $attendanceRows = [];
+        if ($studentIds !== []) {
+            $attendanceRows = DB::table('student_daily_attendance_tbl as sda')
+                ->whereIn('sda.std_id', $studentIds)
+                ->whereBetween('sda.attendance_date', [$filters['date_from'], $filters['date_to']])
+                ->where('sda.is_deleted', 0)
+                ->select(['sda.std_id', 'sda.attendance_date', 'sda.status'])
+                ->orderBy('sda.attendance_date')
+                ->get();
+        }
+
+        $attendanceMap = [];
+        foreach ($attendanceRows as $attendanceRow) {
+            $studentId = is_numeric($attendanceRow->std_id ?? null) ? (int) $attendanceRow->std_id : 0;
+            $date = (string) ($attendanceRow->attendance_date ?? '');
+            if ($studentId <= 0 || $date === '') {
+                continue;
+            }
+
+            $attendanceMap[$studentId] ??= [];
+            $attendanceMap[$studentId][$date] = isset($attendanceRow->status) ? (int) $attendanceRow->status : null;
+        }
 
         $from = $total > 0 ? $offset + 1 : 0;
         $to = $total > 0 ? min($offset + $perPage, $total) : 0;
 
         return [
-            'data' => $rows->map(fn ($row): array => $this->mapAttendanceStudentRow($row))->all(),
+            'data' => $rows->map(fn ($row): array => $this->mapPrincipalAttendanceStudentRow($row, $dateHeaders, $attendanceMap))->all(),
             'summary' => [
                 'total_students' => $total,
                 'present_students' => $presentStudents,
-                'absent_students' => max($total - $presentStudents, 0),
+                'absent_students' => $absentStudents,
             ],
             'pagination' => [
                 'page' => $page,
@@ -252,6 +288,7 @@ class StudentAttendanceController extends Controller
                 'from' => $from,
                 'to' => $to,
             ],
+            'date_headers' => $dateHeaders,
         ];
     }
 
@@ -351,12 +388,14 @@ class StudentAttendanceController extends Controller
     }
 
     /**
-     * @return array{date:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}
+     * @return array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}
      */
     private function validatePrincipalFilters(Request $request): array
     {
         $validated = Validator::make($request->all(), [
             'date' => ['nullable', 'date_format:Y-m-d'],
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d'],
             'year' => ['nullable', 'integer', 'between:2000,2100'],
             'grade_id' => ['nullable', 'integer', 'min:0'],
             'class_id' => ['nullable', 'integer', 'min:0'],
@@ -366,8 +405,27 @@ class StudentAttendanceController extends Controller
             'search' => ['nullable', 'string', 'max:100'],
         ])->validate();
 
+        $fallbackDate = isset($validated['date']) ? (string) $validated['date'] : now()->toDateString();
+        $dateFrom = trim((string) ($validated['date_from'] ?? ''));
+        $dateTo = trim((string) ($validated['date_to'] ?? ''));
+
+        if ($dateFrom === '' && $dateTo === '') {
+            $dateFrom = $fallbackDate;
+            $dateTo = $fallbackDate;
+        } elseif ($dateFrom === '') {
+            $dateFrom = $dateTo;
+        } elseif ($dateTo === '') {
+            $dateTo = $dateFrom;
+        }
+
+        if ($dateFrom > $dateTo) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
         return [
-            'date' => isset($validated['date']) ? (string) $validated['date'] : now()->toDateString(),
+            'date' => $dateTo,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
             'year' => isset($validated['year']) ? (int) $validated['year'] : (int) now()->year,
             'grade_id' => isset($validated['grade_id']) ? (int) $validated['grade_id'] : 0,
             'class_id' => isset($validated['class_id']) ? (int) $validated['class_id'] : 0,
@@ -420,6 +478,7 @@ class StudentAttendanceController extends Controller
             'admission_no' => (string) ($row->index_no ?? ''),
             'name_with_initials' => (string) ($row->name_with_initials ?? ''),
             'status' => (int) ($row->attendance_status ?? $row->status ?? 0),
+            'attendance_date' => (string) ($row->attendance_date ?? ''),
             'gender_id' => (int) ($row->gender_id ?? 0),
             'gender_label' => $this->studentGenderLabel((int) ($row->gender_id ?? 0)),
             'year' => (int) ($row->year ?? 0),
@@ -490,9 +549,9 @@ class StudentAttendanceController extends Controller
     }
 
     /**
-     * @param  array{date:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
      */
-    private function buildPrincipalAttendanceBaseQuery(User $user, array $filters): Builder
+    private function buildPrincipalRosterQuery(User $user, array $filters): Builder
     {
         $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
             'grade_en',
@@ -513,11 +572,6 @@ class StudentAttendanceController extends Controller
         $query = DB::table('student_grade_class_tbl as sgc')
             ->join('school_grade_class_tbl as sgct', 'sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
             ->join('student_tbl as st', 'sgc.std_id', '=', 'st.std_id')
-            ->join('student_daily_attendance_tbl as sda', function ($join) use ($filters): void {
-                $join->on('sda.std_id', '=', 'st.std_id')
-                    ->where('sda.attendance_date', '=', $filters['date'])
-                    ->where('sda.is_deleted', '=', 0);
-            })
             ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
             ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
             ->select([
@@ -530,7 +584,6 @@ class StudentAttendanceController extends Controller
                 'sgct.class_id',
                 DB::raw("{$gradeSelect} as grade"),
                 DB::raw("{$classSelect} as class"),
-                DB::raw('COALESCE(sda.status, 0) as attendance_status'),
             ])
             ->where('sgct.year', $filters['year'])
             ->when($filters['grade_id'] > 0, fn ($builder) => $builder->where('sgct.grade_id', $filters['grade_id']))
@@ -560,6 +613,100 @@ class StudentAttendanceController extends Controller
 
         $this->applySchoolScope($query, $user, 'sgct', 'census_id');
 
+        return $query->groupBy([
+            'st.std_id',
+            'st.index_no',
+            'st.name_with_initials',
+            'st.gender_id',
+            'sgct.year',
+            'sgct.grade_id',
+            'sgct.class_id',
+            DB::raw($gradeSelect),
+            DB::raw($classSelect),
+        ]);
+    }
+
+    /**
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     */
+    private function buildPrincipalAttendanceSummaryQuery(User $user, array $filters): Builder
+    {
+        $search = $filters['search'];
+
+        $query = DB::table('student_daily_attendance_tbl as sda')
+            ->join('student_tbl as st', 'sda.std_id', '=', 'st.std_id')
+            ->join('school_grade_class_tbl as sgct', 'sda.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id')
+            ->whereBetween('sda.attendance_date', [$filters['date_from'], $filters['date_to']])
+            ->where('sgct.year', $filters['year'])
+            ->where('sda.is_deleted', 0)
+            ->when($filters['grade_id'] > 0, fn ($builder) => $builder->where('sgct.grade_id', $filters['grade_id']))
+            ->when($filters['class_id'] > 0, fn ($builder) => $builder->where('sgct.class_id', $filters['class_id']))
+            ->when($filters['gender_id'] > 0, fn ($builder) => $builder->where('st.gender_id', $filters['gender_id']))
+            ->when($search !== '', function ($builder) use ($search): void {
+                $builder->where(function ($inner) use ($search): void {
+                    $inner->where('st.index_no', 'like', "%{$search}%")
+                        ->orWhere('st.name_with_initials', 'like', "%{$search}%");
+                });
+            });
+
+        if (Schema::hasColumn('student_tbl', 'is_deleted')) {
+            $query->where('st.is_deleted', 0);
+        }
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        $this->applySchoolScope($query, $user, 'sgct', 'census_id');
+
         return $query;
+    }
+
+    /**
+     * @param  array<int, string>  $dateHeaders
+     * @param  array<int, array<string, int|null>>  $attendanceMap
+     * @return array<string, mixed>
+     */
+    private function mapPrincipalAttendanceStudentRow(object $row, array $dateHeaders, array $attendanceMap): array
+    {
+        $studentId = is_numeric($row->std_id ?? null) ? (int) $row->std_id : 0;
+        $statuses = [];
+        foreach ($dateHeaders as $date) {
+            $statuses[$date] = $attendanceMap[$studentId][$date] ?? null;
+        }
+
+        return [
+            'std_id' => $studentId,
+            'index_no' => (string) ($row->index_no ?? ''),
+            'admission_no' => (string) ($row->index_no ?? ''),
+            'name_with_initials' => (string) ($row->name_with_initials ?? ''),
+            'attendance_map' => $statuses,
+            'gender_id' => (int) ($row->gender_id ?? 0),
+            'gender_label' => $this->studentGenderLabel((int) ($row->gender_id ?? 0)),
+            'year' => (int) ($row->year ?? 0),
+            'grade_id' => (int) ($row->grade_id ?? 0),
+            'class_id' => (int) ($row->class_id ?? 0),
+            'grade' => trim((string) ($row->grade ?? '')),
+            'class' => trim((string) ($row->class ?? '')),
+            'grade_class' => trim(sprintf('%s %s', (string) ($row->grade ?? ''), (string) ($row->class ?? ''))),
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function buildDateHeaders(string $dateFrom, string $dateTo): array
+    {
+        $start = strtotime($dateFrom);
+        $end = strtotime($dateTo);
+        if ($start === false || $end === false || $start > $end) {
+            return [];
+        }
+
+        $headers = [];
+        for ($timestamp = $start; $timestamp <= $end; $timestamp = strtotime('+1 day', $timestamp)) {
+            $headers[] = date('Y-m-d', $timestamp);
+        }
+
+        return $headers;
     }
 }

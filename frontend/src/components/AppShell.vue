@@ -492,6 +492,10 @@ const isActive = (to: string): boolean => {
     return route.path === '/'
   }
 
+  if (to === '/students') {
+    return route.path === '/students' || route.path === '/students/report' || route.path === '/students/in-classes'
+  }
+
   return route.path.startsWith(to)
 }
 
