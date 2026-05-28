@@ -26,18 +26,26 @@ class DashboardSummaryController extends Controller
                     'staff_total' => 0,
                     'grades_total' => 0,
                     'classes_total' => 0,
-                    'students_last_updated' => null,
-                    'staff_last_updated' => null,
-                    'students_latest_year' => $year,
-                    'grades_latest_year' => $year,
-                    'classes_latest_year' => $year,
-                ],
-            ]);
+                'students_last_updated' => null,
+                'staff_last_updated' => null,
+                'students_latest_year' => $year,
+                'grades_latest_year' => $year,
+                'classes_latest_year' => $year,
+                'attendance_date' => now()->toDateString(),
+                'attendance_present_total' => 0,
+                'attendance_absent_total' => 0,
+                'attendance_marked_total' => 0,
+            ],
+        ]);
         }
 
         $studentsLatestYear = null;
         $gradesLatestYear = null;
         $classesLatestYear = null;
+        $attendanceDate = now()->toDateString();
+        $attendancePresentTotal = 0;
+        $attendanceAbsentTotal = 0;
+        $attendanceMarkedTotal = 0;
 
         $studentsTotal = 0;
         if (Schema::hasTable('student_grade_class_tbl') && Schema::hasTable('school_grade_class_tbl')) {
@@ -177,6 +185,7 @@ class DashboardSummaryController extends Controller
             $gradesLatestYear = $classTeacherAssignment['year'];
             $classesLatestYear = $classTeacherAssignment['year'];
             $gradesTotal = 1;
+            ['present' => $attendancePresentTotal, 'absent' => $attendanceAbsentTotal, 'marked' => $attendanceMarkedTotal] = $this->buildAttendanceSummaryForAssignment($classTeacherAssignment, $attendanceDate);
         }
 
         return response()->json([
@@ -190,8 +199,42 @@ class DashboardSummaryController extends Controller
                 'students_latest_year' => $studentsLatestYear !== null ? (int) $studentsLatestYear : null,
                 'grades_latest_year' => $gradesLatestYear !== null ? (int) $gradesLatestYear : null,
                 'classes_latest_year' => $classesLatestYear !== null ? (int) $classesLatestYear : null,
+                'attendance_date' => $attendanceDate,
+                'attendance_present_total' => $attendancePresentTotal,
+                'attendance_absent_total' => $attendanceAbsentTotal,
+                'attendance_marked_total' => $attendanceMarkedTotal,
             ],
         ]);
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     * @return array{present:int, absent:int, marked:int}
+     */
+    private function buildAttendanceSummaryForAssignment(array $assignment, string $date): array
+    {
+        $totalStudents = $this->countStudentsForClassTeacherAssignment($assignment);
+        if ($totalStudents <= 0 || !Schema::hasTable('student_daily_attendance_tbl')) {
+            return [
+                'present' => 0,
+                'absent' => max($totalStudents, 0),
+                'marked' => 0,
+            ];
+        }
+
+        $present = (int) DB::table('student_daily_attendance_tbl as sda')
+            ->where('sda.sch_grd_cls_id', $assignment['sch_grd_cls_id'])
+            ->where('sda.attendance_date', $date)
+            ->where('sda.is_deleted', 0)
+            ->where('sda.status', 1)
+            ->distinct('sda.std_id')
+            ->count('sda.std_id');
+
+        return [
+            'present' => $present,
+            'absent' => max($totalStudents - $present, 0),
+            'marked' => $present,
+        ];
     }
 
     /**

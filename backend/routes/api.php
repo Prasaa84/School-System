@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\ModuleCatalogController;
 use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\SchoolController;
 use App\Http\Controllers\Api\V1\StaffController;
+use App\Http\Controllers\Api\V1\StudentAttendanceController;
 use App\Http\Controllers\Api\V1\StudentController;
 use Illuminate\Support\Facades\Route;
 
@@ -71,6 +72,8 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/staff/{staff}', [StaffController::class, 'update']);
 
         Route::get('/students', [StudentController::class, 'index']);
+        Route::get('/students/daily-attendance', [StudentAttendanceController::class, 'index']);
+        Route::post('/students/daily-attendance/toggle', [StudentAttendanceController::class, 'toggle']);
         Route::get('/students/report', [StudentController::class, 'report']);
         Route::get('/students/report/download', [StudentController::class, 'downloadReport']);
         Route::get('/students/options', [StudentController::class, 'options']);

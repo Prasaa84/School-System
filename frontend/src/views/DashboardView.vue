@@ -43,11 +43,21 @@
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 class="font-display text-xl font-bold">{{ text.availableModules }}</h2>
-        <ul class="mt-4 space-y-2 text-sm text-slate-700">
-          <li v-for="(moduleLabel, index) in availableModuleLabels" :key="moduleLabel">{{ index + 1 }}. {{ moduleLabel }}</li>
-          <li v-if="availableModuleLabels.length === 0">{{ text.noModulesAvailable }}</li>
-        </ul>
+        <template v-if="isClassTeacher">
+          <h2 class="font-display text-xl font-bold">{{ text.attendanceSummary }}</h2>
+          <div class="mt-4 space-y-2 text-sm text-slate-700">
+            <p><strong>{{ text.attendanceDate }}:</strong> {{ formatDate(summary.attendance_date) }}</p>
+            <p><strong>{{ text.presentStudents }}:</strong> {{ summary.attendance_present_total }}</p>
+            <p><strong>{{ text.absentStudents }}:</strong> {{ summary.attendance_absent_total }}</p>
+          </div>
+        </template>
+        <template v-else>
+          <h2 class="font-display text-xl font-bold">{{ text.availableModules }}</h2>
+          <ul class="mt-4 space-y-2 text-sm text-slate-700">
+            <li v-for="(moduleLabel, index) in availableModuleLabels" :key="moduleLabel">{{ index + 1 }}. {{ moduleLabel }}</li>
+            <li v-if="availableModuleLabels.length === 0">{{ text.noModulesAvailable }}</li>
+          </ul>
+        </template>
       </article>
     </section>
 
@@ -129,6 +139,10 @@ interface Summary {
   students_latest_year: number | null
   grades_latest_year: number | null
   classes_latest_year: number | null
+  attendance_date: string | null
+  attendance_present_total: number
+  attendance_absent_total: number
+  attendance_marked_total: number
 }
 
 interface DashboardSummaryResponse {
@@ -185,6 +199,10 @@ const summary = reactive<Summary>({
   students_latest_year: null,
   grades_latest_year: null,
   classes_latest_year: null,
+  attendance_date: null,
+  attendance_present_total: 0,
+  attendance_absent_total: 0,
+  attendance_marked_total: 0,
 })
 
 const currentUser = ref<AuthUser | null>(getUser())
@@ -242,8 +260,7 @@ const text = useLocalizedText({
     heroTitlePrincipal: 'School Overview and Daily Operations',
     heroEyebrowSdsUser: 'SDS User Dashboard',
     heroTitleSdsUser: 'Student Data and School Operations',
-    heroEyebrowClassTeacher: 'Class Teacher Dashboard',
-    heroTitleClassTeacher: 'Your Class and Parallel Grade Overview',
+    heroTitleClassTeacher: 'Class Teacher Dashboard',
     students: 'Students',
     academicStaff: 'Academic Staff',
     grades: 'Grades',
@@ -263,6 +280,10 @@ const text = useLocalizedText({
     dataStatus: 'Data Status',
     studentsLastUpdated: 'Students last updated',
     staffLastUpdated: 'Staff last updated',
+    attendanceSummary: 'Attendance Summary',
+    attendanceDate: 'Attendance date',
+    presentStudents: 'Present students',
+    absentStudents: 'Absent students',
     availableModules: 'Available Modules',
     noModulesAvailable: 'No modules available.',
     roleFeatureAccess: 'Role Feature Access',
@@ -294,7 +315,6 @@ const text = useLocalizedText({
     heroTitlePrincipal: 'පාසල් සාරාංශය සහ දෛනික මෙහෙයුම්',
     heroEyebrowSdsUser: 'SDS පරිශීලක පුවරුව',
     heroTitleSdsUser: 'සිසු දත්ත සහ පාසල් මෙහෙයුම්',
-    heroEyebrowClassTeacher: 'පන්ති භාර ගුරු පුවරුව',
     heroTitleClassTeacher: 'ඔබගේ පන්තිය සහ සමාන්තර ශ්‍රේණි සාරාංශය',
     students: 'සිසුන්',
     academicStaff: 'ශාස්ත්‍රීය කාර්ය මණ්ඩලය',
@@ -315,6 +335,10 @@ const text = useLocalizedText({
     dataStatus: 'දත්ත තත්ත්වය',
     studentsLastUpdated: 'සිසුන් අවසන් වරට යාවත්කාලීන කළේ',
     staffLastUpdated: 'කාර්ය මණ්ඩලය අවසන් වරට යාවත්කාලීන කළේ',
+    attendanceSummary: 'පැමිණීමේ සාරාංශය',
+    attendanceDate: 'පැමිණීමේ දිනය',
+    presentStudents: 'පැමිණි සිසුන්',
+    absentStudents: 'නොපැමිණි සිසුන්',
     availableModules: 'ලභ්‍ය මොඩියුල',
     noModulesAvailable: 'ලභ්‍ය මොඩියුල නොමැත.',
     roleFeatureAccess: 'භූමිකා විශේෂාංග ප්‍රවේශය',
@@ -346,7 +370,6 @@ const text = useLocalizedText({
     heroTitlePrincipal: 'பள்ளி சுருக்கம் மற்றும் தினசரி செயல்பாடுகள்',
     heroEyebrowSdsUser: 'SDS பயனர் டாஷ்போர்ட்',
     heroTitleSdsUser: 'மாணவர் தரவு மற்றும் பள்ளி செயல்பாடுகள்',
-    heroEyebrowClassTeacher: 'வகுப்பு ஆசிரியர் டாஷ்போர்ட்',
     heroTitleClassTeacher: 'உங்கள் வகுப்பு மற்றும் இணை தர சுருக்கம்',
     students: 'மாணவர்கள்',
     academicStaff: 'கல்வி பணியாளர்கள்',
@@ -367,6 +390,10 @@ const text = useLocalizedText({
     dataStatus: 'தரவு நிலை',
     studentsLastUpdated: 'மாணவர்கள் கடைசியாக புதுப்பிக்கப்பட்டது',
     staffLastUpdated: 'பணியாளர்கள் கடைசியாக புதுப்பிக்கப்பட்டது',
+    attendanceSummary: 'வருகை சுருக்கம்',
+    attendanceDate: 'வருகை தேதி',
+    presentStudents: 'வந்த மாணவர்கள்',
+    absentStudents: 'வராத மாணவர்கள்',
     availableModules: 'கிடைக்கும் தொகுதிகள்',
     noModulesAvailable: 'கிடைக்கும் தொகுதிகள் இல்லை.',
     roleFeatureAccess: 'பங்கு அம்ச அணுகல்',
@@ -624,4 +651,3 @@ onMounted(async () => {
   }
 })
 </script>
-

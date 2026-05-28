@@ -61,6 +61,11 @@
                   <path d="M2.5 16c0-2.5 2.2-4 4.5-4s4.5 1.5 4.5 4" />
                   <path d="M8.5 16c.2-2.2 2.1-3.5 4.2-3.5 2.3 0 4.3 1.4 4.8 3.5" />
                 </svg>
+                <svg v-else-if="item.key === 'attendance'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="3" y="3" width="14" height="14" rx="2" />
+                  <path d="M6 6.5h8M6 10h4.5M6 13.5h3" stroke="white" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="m11.7 13 1.3 1.3 2.3-2.8" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
                 <svg v-else-if="item.key === 'payments' || item.key === 'payments-history'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
                   <rect x="2" y="4" width="16" height="12" rx="2" />
                   <rect x="4.5" y="7" width="11" height="1.8" rx="0.8" fill="white" />
@@ -531,6 +536,21 @@ const loadMenu = async (): Promise<void> => {
     .filter((item) => !(isClassTeacher.value && ['grades', 'reports'].includes(item.key)))
     .filter((item) => !(isSdsUser.value && item.key === 'students'))
     .filter((item) => !isStudent.value || ['payments-history'].includes(item.key))
+
+  if (isClassTeacher.value) {
+    const staffIndex = mappedModules.findIndex((item) => item.key === 'staff')
+    const attendanceItem: MenuItem = {
+      key: 'attendance',
+      label: 'Daily Attendance',
+      to: '/students/daily-attendance',
+    }
+
+    if (staffIndex >= 0) {
+      mappedModules.splice(staffIndex + 1, 0, attendanceItem)
+    } else {
+      mappedModules.push(attendanceItem)
+    }
+  }
 
   const schoolMenu: MenuItem = {
     key: 'school',

@@ -6,6 +6,7 @@ import ModulePlaceholderView from '../views/ModulePlaceholderView.vue'
 import PaymentsView from '../views/PaymentsView.vue'
 import AccountView from '../views/AccountView.vue'
 import StudentProfileView from '../views/StudentProfileView.vue'
+import StudentsDailyAttendanceView from '../views/StudentsDailyAttendanceView.vue'
 import StudentsInClassesView from '../views/StudentsInClassesView.vue'
 import StudentsView from '../views/StudentsView.vue'
 import { getUser, isAuthenticated } from '../services/auth'
@@ -50,6 +51,12 @@ const router = createRouter({
       path: '/students/report',
       name: 'students-report',
       component: StudentsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/students/daily-attendance',
+      name: 'students-daily-attendance',
+      component: StudentsDailyAttendanceView,
       meta: { requiresAuth: true },
     },
     {
@@ -111,6 +118,7 @@ router.beforeEach((to) => {
   const currentUser = getUser()
   const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
   const isStudent = (currentUser?.role_id ?? 0) === 7 || roleName === 'student'
+  const isClassTeacher = ['class teacher', 'class_teacher', 'classteacher'].includes(roleName)
 
   if (to.meta.requiresAuth && !authed) {
     return {
@@ -124,6 +132,10 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.guestOnly && authed) {
+    return { name: isStudent ? 'student-profile-me' : 'dashboard' }
+  }
+
+  if (to.name === 'students-daily-attendance' && !isClassTeacher) {
     return { name: isStudent ? 'student-profile-me' : 'dashboard' }
   }
 
