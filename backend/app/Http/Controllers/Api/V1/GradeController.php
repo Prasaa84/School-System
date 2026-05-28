@@ -35,6 +35,14 @@ class GradeController extends Controller
         }
 
         $user = $this->authUser();
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'year' => null,
+                'years' => [],
+                'data' => [],
+            ]);
+        }
         $gradeColumns = Schema::getColumnListing($gradeTable);
         $hasIsDeleted = in_array('is_deleted', $gradeColumns, true);
         $schoolColumn = $this->resolveSchoolColumn($gradeColumns);
@@ -54,6 +62,13 @@ class GradeController extends Controller
             ->values()
             ->all();
 
+        if ($classTeacherAssignment !== null) {
+            $availableYears = array_values(array_filter(
+                $availableYears,
+                fn (int $year): bool => $year === (int) $classTeacherAssignment['year']
+            ));
+        }
+
         if (empty($availableYears)) {
             return response()->json([
                 'year' => null,
@@ -64,9 +79,11 @@ class GradeController extends Controller
 
         $requestedYear = $request->query('year');
         $requestedYear = is_numeric($requestedYear) ? (int) $requestedYear : null;
-        $selectedYear = ($requestedYear !== null && in_array($requestedYear, $availableYears, true))
-            ? $requestedYear
-            : $availableYears[0];
+        $selectedYear = $classTeacherAssignment !== null
+            ? (int) $classTeacherAssignment['year']
+            : (($requestedYear !== null && in_array($requestedYear, $availableYears, true))
+                ? $requestedYear
+                : $availableYears[0]);
 
         $gradeLabelColumns = [
             'grade_en',
@@ -105,6 +122,10 @@ class GradeController extends Controller
 
         if ($hasIsDeleted) {
             $query->where('sgt.is_deleted', 0);
+        }
+
+        if ($classTeacherAssignment !== null) {
+            $query->where('sgt.grade_id', $classTeacherAssignment['grade_id']);
         }
 
         $this->applySchoolScope($query, $user, 'sgt', $schoolColumn);

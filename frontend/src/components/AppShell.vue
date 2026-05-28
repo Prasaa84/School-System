@@ -510,11 +510,17 @@ const loadMenu = async (): Promise<void> => {
         ? '/students/me'
         : resolveModulePath(module),
       children:
-        module.key === 'students' && !isStudent.value && !isClassTeacher.value
-          ? [
-              { key: 'students-in-classes', label: 'Students in Classes', to: '/students/in-classes' },
-              { key: 'students-report', label: 'Student Reports', to: '/students/report' },
-            ]
+        module.key === 'students' && !isStudent.value
+          ? (
+              isClassTeacher.value
+                ? [
+                    { key: 'students-report', label: 'Student Reports', to: '/students/report' },
+                  ]
+                : [
+                    { key: 'students-in-classes', label: 'Students in Classes', to: '/students/in-classes' },
+                    { key: 'students-report', label: 'Student Reports', to: '/students/report' },
+                  ]
+            )
           : module.key === 'payments' && (isAdmin.value || isPrincipal.value || isSdsUser.value)
             ? [
                 { key: 'payments-fee-types', label: 'Fee Types', to: '/module/payments/fee-types' },

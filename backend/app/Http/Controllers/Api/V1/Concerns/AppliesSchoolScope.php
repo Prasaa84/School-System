@@ -204,8 +204,43 @@ trait AppliesSchoolScope
         }
 
         $staffId = $query->orderByDesc('stf_id')->value('stf_id');
+        if (is_numeric($staffId) && (int) $staffId > 0) {
+            return (int) $staffId;
+        }
 
-        return is_numeric($staffId) ? (int) $staffId : null;
+        if (!Schema::hasColumn('staff_tbl', 'nic_no')) {
+            return null;
+        }
+
+        $username = strtolower(trim((string) ($user->username ?? '')));
+        if ($username === '') {
+            return null;
+        }
+
+        $baseUsername = explode('.', $username)[0] ?? '';
+        $normalizedUsername = strtolower((string) preg_replace('/[^A-Za-z0-9]/', '', $baseUsername));
+        if ($normalizedUsername === '') {
+            return null;
+        }
+
+        $fallbackQuery = DB::table('staff_tbl')
+            ->whereRaw(
+                "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(nic_no, ' ', ''), '-', ''), '/', ''), '.', '')) = ?",
+                [$normalizedUsername]
+            );
+
+        if (Schema::hasColumn('staff_tbl', 'is_deleted')) {
+            $fallbackQuery->where('is_deleted', 0);
+        }
+
+        $censusId = $this->resolveUserCensusId($user);
+        if ($censusId !== null && Schema::hasColumn('staff_tbl', 'census_id')) {
+            $fallbackQuery->whereIn('census_id', $this->censusCandidates($censusId));
+        }
+
+        $staffId = $fallbackQuery->orderByDesc('stf_id')->value('stf_id');
+
+        return is_numeric($staffId) && (int) $staffId > 0 ? (int) $staffId : null;
     }
 
     /**

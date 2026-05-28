@@ -1815,6 +1815,8 @@ class StudentController extends Controller
                 ->value('sch_name') ?? '');
         }
 
+        $loginAccount = $this->resolveStudentLoginAccount((string) ($student->index_no ?? ''), $censusId);
+
         return [
             'std_id' => (int) $student->std_id,
             'is_active' => !Schema::hasColumn('student_tbl', 'is_deleted') || (int) ($student->is_deleted ?? 0) === 0,
@@ -1851,6 +1853,8 @@ class StudentController extends Controller
             'guardian_job' => (string) ($guardian->guardian_job ?? ''),
             'guardian_mobile' => (string) ($guardian->guardian_mobile ?? ''),
             'photo_url' => $this->resolveStudentPhotoUrl((int) $student->std_id),
+            'login_username' => $loginAccount['username'],
+            'login_is_enabled' => $loginAccount['is_enabled'],
         ];
     }
 
@@ -2482,6 +2486,45 @@ class StudentController extends Controller
     }
 
     /**
+     * @return array{username:string, is_enabled:bool|null}
+     */
+    private function resolveStudentLoginAccount(string $indexNo, string $censusId): array
+    {
+        if ($indexNo === '' || !Schema::hasTable('user_tbl')) {
+            return [
+                'username' => '',
+                'is_enabled' => null,
+            ];
+        }
+
+        $user = User::query()
+            ->where('role_id', 7)
+            ->whereIn('username', $this->studentLoginUsernameCandidates($indexNo, $censusId))
+            ->orderBy('user_id')
+            ->first();
+
+        if (!$user instanceof User) {
+            return [
+                'username' => '',
+                'is_enabled' => null,
+            ];
+        }
+
+        $isDeleted = Schema::hasColumn('user_tbl', 'is_deleted')
+            ? (int) ($user->is_deleted ?? 0) === 1
+            : false;
+
+        $isActiveStatus = Schema::hasColumn('user_tbl', 'status_id')
+            ? (int) ($user->status_id ?? 0) === 1
+            : true;
+
+        return [
+            'username' => (string) ($user->username ?? ''),
+            'is_enabled' => !$isDeleted && $isActiveStatus,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validateStudentReportFilters(Request $request): array
@@ -2559,7 +2602,7 @@ class StudentController extends Controller
                 });
             })
             ->when($schoolCensusId !== '', function ($builder) use ($schoolCensusId): void {
-                $builder->where('st.census_id', $schoolCensusId);
+                $builder->whereIn('st.census_id', $this->schoolCensusCandidates($schoolCensusId));
             })
             ->when($genderId > 0, fn ($builder) => $builder->where('st.gender_id', $genderId))
             ->when($ethnicGroupId > 0, fn ($builder) => $builder->where('st.ethnic_group_id', $ethnicGroupId))
@@ -2607,7 +2650,13 @@ class StudentController extends Controller
 
         $this->applySchoolScope($studentsQuery, $user, 'st', 'census_id');
         if ($classTeacherAssignment !== null) {
-            $this->applyClassTeacherStudentGradeScope($studentsQuery, 'st', $classTeacherAssignment);
+            $this->applyClassTeacherStudentGradeScope(
+                $studentsQuery,
+                'st',
+                $classTeacherAssignment,
+                $search === '' && $classId <= 0,
+                $classId,
+            );
         }
 
         $students = $studentsQuery->get();
@@ -2651,6 +2700,18 @@ class StudentController extends Controller
                 ])
                 ->orderByDesc('sgct.year')
                 ->orderByDesc('sgc.st_gr_cl_id');
+
+            if ($year > 0) {
+                $gradeClassQuery->where('sgct.year', $year);
+            }
+
+            if ($gradeId > 0) {
+                $gradeClassQuery->where('sgct.grade_id', $gradeId);
+            }
+
+            if ($classId > 0) {
+                $gradeClassQuery->where('sgct.class_id', $classId);
+            }
 
             if ($gradeLabelColumn !== null) {
                 $gradeClassQuery->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));

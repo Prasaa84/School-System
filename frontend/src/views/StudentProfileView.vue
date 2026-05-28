@@ -88,6 +88,22 @@
 
           <section class="rounded-[1.35rem] border border-slate-200 bg-white">
             <div class="border-b border-slate-200 px-5 py-4">
+              <h4 class="font-display text-xl font-bold text-slate-900">{{ text.loginDetails }}</h4>
+            </div>
+            <div class="grid gap-6 px-5 py-5 md:grid-cols-2">
+              <div>
+                <p class="text-sm font-semibold text-slate-900">{{ text.username }}</p>
+                <p class="mt-2 break-words text-base text-slate-600">{{ detail.login_username || text.notAvailable }}</p>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-900">{{ text.accountStatus }}</p>
+                <p class="mt-2 text-base text-slate-600">{{ loginStatusLabel }}</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-[1.35rem] border border-slate-200 bg-white">
+            <div class="border-b border-slate-200 px-5 py-4">
               <h4 class="font-display text-xl font-bold text-slate-900">{{ text.address }}</h4>
             </div>
             <div class="grid gap-6 px-5 py-5">
@@ -182,6 +198,8 @@ interface StudentProfileDetail {
   guardian_job: string
   guardian_mobile: string
   photo_url?: string
+  login_username?: string
+  login_is_enabled?: boolean | null
 }
 
 const route = useRoute()
@@ -225,6 +243,13 @@ const text = useLocalizedText({
     whatsappNo: 'WhatsApp No',
     homePhone: 'Home Phone',
     email: 'Email',
+    loginDetails: 'Login Details',
+    username: 'Username',
+    accountStatus: 'Account Status',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    notCreated: 'Not Created',
+    notAvailable: 'N/A',
     address: 'Address',
     addressLine1: 'Current Address',
     addressLine2: 'Permanent Address',
@@ -262,6 +287,13 @@ const text = useLocalizedText({
     whatsappNo: 'WhatsApp අංකය',
     homePhone: 'නිවසේ දුරකථන',
     email: 'ඊමේල්',
+    loginDetails: 'පිවිසුම් විස්තර',
+    username: 'පරිශීලක නාමය',
+    accountStatus: 'ගිණුම් තත්ත්වය',
+    enabled: 'සක්‍රීයයි',
+    disabled: 'අක්‍රීයයි',
+    notCreated: 'සාදා නැත',
+    notAvailable: 'නොමැත',
     address: 'ලිපිනය',
     addressLine1: 'වත්මන් ලිපිනය',
     addressLine2: 'ස්ථිර ලිපිනය',
@@ -299,6 +331,13 @@ const text = useLocalizedText({
     whatsappNo: 'WhatsApp எண்',
     homePhone: 'வீட்டு தொலைபேசி',
     email: 'மின்னஞ்சல்',
+    loginDetails: 'உள்நுழைவு விவரங்கள்',
+    username: 'பயனர் பெயர்',
+    accountStatus: 'கணக்கு நிலை',
+    enabled: 'செயலில் உள்ளது',
+    disabled: 'செயலிழந்தது',
+    notCreated: 'உருவாக்கப்படவில்லை',
+    notAvailable: 'கிடைக்கவில்லை',
     address: 'முகவரி',
     addressLine1: 'தற்போதைய முகவரி',
     addressLine2: 'நிரந்தர முகவரி',
@@ -338,6 +377,8 @@ const detail = ref<StudentProfileDetail>({
   guardian_job: '',
   guardian_mobile: '',
   photo_url: '',
+  login_username: '',
+  login_is_enabled: null,
 })
 
 const loading = ref(false)
@@ -350,6 +391,21 @@ const statusClass = computed(() => (
     ? 'bg-rose-100 text-rose-600'
     : 'bg-emerald-100 text-emerald-600'
 ))
+const loginStatusLabel = computed(() => {
+  if (!detail.value.login_username) {
+    return text.value.notCreated
+  }
+
+  if (detail.value.login_is_enabled === false) {
+    return text.value.disabled
+  }
+
+  if (detail.value.login_is_enabled === true) {
+    return text.value.enabled
+  }
+
+  return text.value.notAvailable
+})
 
 const personalInfoRows = computed(() => {
   const rows = [
@@ -440,8 +496,20 @@ const exportPdf = (): void => {
 }
 
 const goBackToReports = async (): Promise<void> => {
+  const from = String(route.query.from ?? '').trim().toLowerCase()
+
   if (isStudent.value) {
     await router.push('/')
+    return
+  }
+
+  if (from === 'report') {
+    await router.push('/students/report')
+    return
+  }
+
+  if (from === 'students') {
+    await router.push('/students')
     return
   }
 
