@@ -40,25 +40,19 @@
         >
         <label v-if="!isPrincipal" class="block text-sm text-slate-700">
           {{ text.filterDate }}
-          <input v-model="selectedDate" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onDateChange" />
+          <input v-model="selectedDate" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onDateChange" />
         </label>
         <label v-if="isPrincipal" class="block text-sm text-slate-700">
           {{ text.fromDate }}
-          <input v-model="principalDateFrom" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input v-model="principalDateFrom" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label v-if="isPrincipal" class="block text-sm text-slate-700">
           {{ text.toDate }}
-          <input v-model="principalDateTo" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-        <label v-if="isPrincipal" class="block text-sm text-slate-700">
-          {{ text.year }}
-          <select v-model.number="principalFilters.year" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onYearChange">
-            <option v-for="year in academicYears" :key="`attendance-year-${year}`" :value="year">{{ year }}</option>
-          </select>
+          <input v-model="principalDateTo" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label v-if="isPrincipal" class="block text-sm text-slate-700">
           {{ text.grade }}
-          <select v-model.number="principalFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="principalFilters.year <= 0" @change="onGradeChange">
+          <select v-model.number="principalFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="principalSelectedYear <= 0" @change="onGradeChange">
             <option :value="0">{{ text.allGrades }}</option>
             <option v-for="row in grades" :key="`attendance-grade-${row.grade_id}`" :value="row.grade_id">{{ row.grade }}</option>
           </select>
@@ -68,7 +62,7 @@
           <select
             v-model.number="principalFilters.class_id"
             class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            :disabled="principalFilters.year <= 0 || principalFilters.grade_id <= 0"
+            :disabled="principalSelectedYear <= 0 || principalFilters.grade_id <= 0"
             @change="onClassChange"
           >
             <option :value="0">{{ text.allClasses }}</option>
@@ -130,6 +124,7 @@
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.admissionNo }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.nameWithInitials }}</th>
               <template v-if="isPrincipal">
+                <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gradeClass }}</th>
                 <th v-for="dateHeader in principalDateHeaders" :key="`date-header-${dateHeader}`" class="px-3 py-2 text-center font-semibold text-slate-600">
                   {{ formatShortDate(dateHeader) }}
                 </th>
@@ -140,7 +135,7 @@
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-if="!loading && filteredStudents.length === 0">
-              <td :colspan="isPrincipal ? 3 + principalDateHeaders.length : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
+              <td :colspan="isPrincipal ? 4 + principalDateHeaders.length : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
             </tr>
             <tr
               v-for="(student, index) in filteredStudents"
@@ -162,6 +157,7 @@
                 <span v-else class="block px-3 py-2 text-slate-800">{{ student.name_with_initials }}</span>
               </td>
               <template v-if="isPrincipal">
+                <td class="px-3 py-2 text-slate-700">{{ student.grade_class || text.notAvailable }}</td>
                 <td v-for="dateHeader in principalDateHeaders" :key="`${student.std_id}-${dateHeader}`" class="px-3 py-2 text-center text-slate-700">
                   {{ renderAttendanceCell(student.attendance_map?.[dateHeader] ?? null) }}
                 </td>
@@ -182,6 +178,7 @@
               <td class="px-3 py-2 text-slate-800"></td>
               <td class="px-3 py-2 text-slate-800"></td>
               <td class="px-3 py-2 text-slate-800">{{ text.totalAttendance }}</td>
+              <td class="px-3 py-2 text-slate-800"></td>
               <td v-for="dateHeader in principalDateHeaders" :key="`total-${dateHeader}`" class="px-3 py-2 text-center text-slate-800">
                 {{ principalDateTotals[dateHeader] ?? 0 }}
               </td>
@@ -262,7 +259,6 @@ interface AttendanceSummary {
 interface AttendanceFilters {
   date_from?: string
   date_to?: string
-  year: number
   grade_id: number
   class_id: number
   gender_id: number
@@ -316,6 +312,7 @@ interface OptionRow {
 
 const currentUser = ref<AuthUser | null>(getUser())
 const ui = useUiStore()
+const todayDate = new Date().toISOString().slice(0, 10)
 const loading = ref(false)
 const savingStudentId = ref<number | null>(null)
 const search = ref('')
@@ -345,7 +342,6 @@ const summary = reactive<AttendanceSummary>({
   absent_students: 0,
 })
 const principalFilters = reactive<AttendanceFilters>({
-  year: 0,
   grade_id: 0,
   class_id: 0,
   gender_id: 0,
@@ -392,6 +388,7 @@ const text = useLocalizedText({
     saving: 'Saving...',
     indexNo: 'No.',
     date: 'Date',
+    gradeClass: 'Grade/Class',
     totalAttendance: 'Total Attendance',
     admissionNo: 'Admission No',
     nameWithInitials: 'Name With Initials',
@@ -443,6 +440,7 @@ const text = useLocalizedText({
     saving: 'සුරකිමින්...',
     indexNo: 'අංකය',
     date: 'දිනය',
+    gradeClass: 'ශ්‍රේණිය/පන්තිය',
     totalAttendance: 'මුළු පැමිණීම',
     admissionNo: 'ඇතුළත් අංකය',
     nameWithInitials: 'මුලකුරු සමග නම',
@@ -494,6 +492,7 @@ const text = useLocalizedText({
     saving: 'சேமிக்கிறது...',
     indexNo: 'எண்',
     date: 'தேதி',
+    gradeClass: 'தரம்/வகுப்பு',
     totalAttendance: 'மொத்த வருகை',
     admissionNo: 'அனுமதி இலக்கம்',
     nameWithInitials: 'முதற் எழுத்துகளுடன் பெயர்',
@@ -542,6 +541,11 @@ const selectedClassLabel = computed(() => {
   return selected?.class ?? ''
 })
 const searchKeyword = computed(() => search.value.trim())
+const principalSelectedYear = computed(() => {
+  const value = principalDateFrom.value || principalDateTo.value
+  const year = Number(String(value || '').slice(0, 4))
+  return Number.isFinite(year) && year >= 2000 && year <= 2100 ? year : 0
+})
 
 const scopeLabel = computed(() => {
   if (isClassTeacher.value) {
@@ -549,8 +553,8 @@ const scopeLabel = computed(() => {
   }
 
   const parts: string[] = []
-  if (principalFilters.year > 0) {
-    parts.push(String(principalFilters.year))
+  if (principalSelectedYear.value > 0) {
+    parts.push(String(principalSelectedYear.value))
   }
   if (selectedGradeLabel.value) {
     parts.push(selectedGradeLabel.value)
@@ -731,18 +735,8 @@ const loadGradeYears = async (): Promise<void> => {
           .map((value) => Number(value))
           .filter((value) => Number.isFinite(value) && value >= 2000 && value <= 2100)
       : []
-
-    if (principalFilters.year <= 0) {
-      const currentYear = new Date().getFullYear()
-      principalFilters.year = academicYears.value.includes(currentYear)
-        ? currentYear
-        : (academicYears.value[0] ?? currentYear)
-    }
   } catch {
     academicYears.value = []
-    if (principalFilters.year <= 0) {
-      principalFilters.year = new Date().getFullYear()
-    }
   }
 }
 
@@ -815,7 +809,6 @@ const loadAttendance = async (): Promise<void> => {
     if (isPrincipal.value) {
       if (principalDateFrom.value) params.date_from = principalDateFrom.value
       if (principalDateTo.value) params.date_to = principalDateTo.value
-      if (principalFilters.year > 0) params.year = principalFilters.year
       if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
       if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
       if (principalFilters.gender_id > 0) params.gender_id = principalFilters.gender_id
@@ -842,7 +835,6 @@ const loadAttendance = async (): Promise<void> => {
     if (isPrincipal.value && data.filters) {
       principalDateFrom.value = String(data.filters.date_from ?? principalDateFrom.value)
       principalDateTo.value = String(data.filters.date_to ?? principalDateTo.value)
-      principalFilters.year = Number(data.filters.year ?? principalFilters.year)
       principalFilters.grade_id = Number(data.filters.grade_id ?? principalFilters.grade_id)
       principalFilters.class_id = Number(data.filters.class_id ?? principalFilters.class_id)
       principalFilters.gender_id = Number(data.filters.gender_id ?? principalFilters.gender_id)
@@ -894,15 +886,6 @@ const toggleAttendance = async (student: AttendanceStudent): Promise<void> => {
   }
 }
 
-const onYearChange = async (): Promise<void> => {
-  principalFilters.grade_id = 0
-  principalFilters.class_id = 0
-  classes.value = []
-  pagination.page = 1
-  await loadGrades(principalFilters.year)
-  await loadAttendance()
-}
-
 const onDateChange = async (): Promise<void> => {
   if (isPrincipal.value) {
     pagination.page = 1
@@ -913,8 +896,8 @@ const onDateChange = async (): Promise<void> => {
 const onGradeChange = async (): Promise<void> => {
   principalFilters.class_id = 0
   pagination.page = 1
-  if (principalFilters.grade_id > 0 && principalFilters.year > 0) {
-    await loadClasses(principalFilters.grade_id, principalFilters.year)
+  if (principalFilters.grade_id > 0 && principalSelectedYear.value > 0) {
+    await loadClasses(principalFilters.grade_id, principalSelectedYear.value)
   } else {
     classes.value = []
   }
@@ -937,17 +920,13 @@ const resetFilters = async (): Promise<void> => {
   pagination.page = 1
 
   if (isPrincipal.value) {
-    const currentYear = new Date().getFullYear()
     principalDateFrom.value = selectedDate.value
     principalDateTo.value = selectedDate.value
-    principalFilters.year = academicYears.value.includes(currentYear)
-      ? currentYear
-      : (academicYears.value[0] ?? currentYear)
     principalFilters.grade_id = 0
     principalFilters.class_id = 0
     principalFilters.gender_id = 0
     classes.value = []
-    await loadGrades(principalFilters.year)
+    await loadGrades(principalSelectedYear.value)
     clearPrincipalResults()
     return
   }
@@ -961,6 +940,13 @@ const submitPrincipalSearch = async (): Promise<void> => {
   }
 
   pagination.page = 1
+  await loadGrades(principalSelectedYear.value)
+  if (principalFilters.grade_id > 0) {
+    await loadClasses(principalFilters.grade_id, principalSelectedYear.value)
+  } else {
+    classes.value = []
+    principalFilters.class_id = 0
+  }
   await loadAttendance()
 }
 
@@ -985,7 +971,6 @@ const exportAttendanceExcel = async (): Promise<void> => {
     const params: Record<string, number | string> = {}
     if (principalDateFrom.value) params.date_from = principalDateFrom.value
     if (principalDateTo.value) params.date_to = principalDateTo.value
-    if (principalFilters.year > 0) params.year = principalFilters.year
     if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
     if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
     if (principalFilters.gender_id > 0) params.gender_id = principalFilters.gender_id
@@ -1015,14 +1000,14 @@ const printAttendance = (): void => {
 }
 
 onMounted(async () => {
-  selectedDate.value = new Date().toISOString().slice(0, 10)
+  selectedDate.value = todayDate
   principalDateFrom.value = selectedDate.value
   principalDateTo.value = selectedDate.value
   await refreshCurrentUser()
 
   if (isPrincipal.value) {
     await loadGradeYears()
-    await loadGrades(principalFilters.year)
+    await loadGrades(principalSelectedYear.value)
     clearPrincipalResults()
     return
   }

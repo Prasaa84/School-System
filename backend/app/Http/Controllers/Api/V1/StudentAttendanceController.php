@@ -76,7 +76,6 @@ class StudentAttendanceController extends Controller
                 'filters' => [
                     'date_from' => $date,
                     'date_to' => $date,
-                    'year' => $assignment['year'],
                     'grade_id' => $assignment['grade_id'],
                     'class_id' => $assignment['class_id'],
                     'gender_id' => 0,
@@ -203,8 +202,9 @@ class StudentAttendanceController extends Controller
             $sheet->setCellValue('A1', 'No.');
             $sheet->setCellValue('B1', 'Admission No');
             $sheet->setCellValue('C1', 'Name With Initials');
+            $sheet->setCellValue('D1', 'Grade/Class');
 
-            $columnIndex = 4;
+            $columnIndex = 5;
             foreach ($dateHeaders as $dateHeader) {
                 $sheet->setCellValue($this->excelColumnName($columnIndex) . '1', $dateHeader);
                 $columnIndex++;
@@ -217,8 +217,9 @@ class StudentAttendanceController extends Controller
                 $sheet->setCellValue("A{$excelRow}", (string) ($rowIndex + 1));
                 $sheet->setCellValue("B{$excelRow}", (string) ($row['admission_no'] ?? ''));
                 $sheet->setCellValue("C{$excelRow}", (string) ($row['name_with_initials'] ?? ''));
+                $sheet->setCellValue("D{$excelRow}", (string) ($row['grade_class'] ?? ''));
 
-                $dateColumnIndex = 4;
+                $dateColumnIndex = 5;
                 $studentTotal = 0;
                 foreach ($dateHeaders as $dateHeader) {
                     $value = $row['attendance_map'][$dateHeader] ?? null;
@@ -239,8 +240,9 @@ class StudentAttendanceController extends Controller
             $sheet->setCellValue("A{$totalsRow}", '');
             $sheet->setCellValue("B{$totalsRow}", '');
             $sheet->setCellValue("C{$totalsRow}", 'Total Attendance');
+            $sheet->setCellValue("D{$totalsRow}", '');
 
-            $dateColumnIndex = 4;
+            $dateColumnIndex = 5;
             $grandTotal = 0;
             foreach ($dateHeaders as $dateHeader) {
                 $value = (int) ($dateTotals[$dateHeader] ?? 0);
@@ -489,7 +491,6 @@ class StudentAttendanceController extends Controller
             'date' => ['nullable', 'date_format:Y-m-d'],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d'],
-            'year' => ['nullable', 'integer', 'between:2000,2100'],
             'grade_id' => ['nullable', 'integer', 'min:0'],
             'class_id' => ['nullable', 'integer', 'min:0'],
             'gender_id' => ['nullable', 'integer', 'in:0,1,2'],
@@ -515,11 +516,13 @@ class StudentAttendanceController extends Controller
             [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
         }
 
+        $derivedYear = (int) substr($dateFrom, 0, 4);
+
         return [
             'date' => $dateTo,
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
-            'year' => isset($validated['year']) ? (int) $validated['year'] : (int) now()->year,
+            'year' => ($derivedYear >= 2000 && $derivedYear <= 2100) ? $derivedYear : (int) now()->year,
             'grade_id' => isset($validated['grade_id']) ? (int) $validated['grade_id'] : 0,
             'class_id' => isset($validated['class_id']) ? (int) $validated['class_id'] : 0,
             'gender_id' => isset($validated['gender_id']) ? (int) $validated['gender_id'] : 0,
