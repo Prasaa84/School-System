@@ -119,6 +119,7 @@ router.beforeEach((to) => {
   const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
   const isStudent = (currentUser?.role_id ?? 0) === 7 || roleName === 'student'
   const isClassTeacher = ['class teacher', 'class_teacher', 'classteacher'].includes(roleName)
+  const isPrincipal = (currentUser?.role_id ?? 0) === 2 || roleName === 'principal'
 
   if (to.meta.requiresAuth && !authed) {
     return {
@@ -135,7 +136,7 @@ router.beforeEach((to) => {
     return { name: isStudent ? 'student-profile-me' : 'dashboard' }
   }
 
-  if (to.name === 'students-daily-attendance' && !isClassTeacher) {
+  if (to.name === 'students-daily-attendance' && !isClassTeacher && !isPrincipal) {
     return { name: isStudent ? 'student-profile-me' : 'dashboard' }
   }
 

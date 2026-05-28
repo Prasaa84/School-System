@@ -43,7 +43,7 @@
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <template v-if="isClassTeacher">
+        <template v-if="isClassTeacher || isPrincipal">
           <h2 class="font-display text-xl font-bold">{{ text.attendanceSummary }}</h2>
           <div class="mt-4 space-y-2 text-sm text-slate-700">
             <p><strong>{{ text.attendanceDate }}:</strong> {{ formatDate(summary.attendance_date) }}</p>

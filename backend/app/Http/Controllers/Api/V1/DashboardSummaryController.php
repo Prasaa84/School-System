@@ -186,6 +186,8 @@ class DashboardSummaryController extends Controller
             $classesLatestYear = $classTeacherAssignment['year'];
             $gradesTotal = 1;
             ['present' => $attendancePresentTotal, 'absent' => $attendanceAbsentTotal, 'marked' => $attendanceMarkedTotal] = $this->buildAttendanceSummaryForAssignment($classTeacherAssignment, $attendanceDate);
+        } elseif ($this->isPrincipal($user)) {
+            ['present' => $attendancePresentTotal, 'absent' => $attendanceAbsentTotal, 'marked' => $attendanceMarkedTotal] = $this->buildAttendanceSummaryForSchool($user, $attendanceDate);
         }
 
         return response()->json([
@@ -297,5 +299,62 @@ class DashboardSummaryController extends Controller
         }
 
         return (int) $query->distinct('sgct.stf_id')->count('sgct.stf_id');
+    }
+
+    /**
+     * @return array{present:int, absent:int, marked:int}
+     */
+    private function buildAttendanceSummaryForSchool(mixed $user, string $date): array
+    {
+        if (
+            !Schema::hasTable('student_tbl')
+            || !Schema::hasTable('student_daily_attendance_tbl')
+        ) {
+            return [
+                'present' => 0,
+                'absent' => 0,
+                'marked' => 0,
+            ];
+        }
+
+        $studentQuery = DB::table('student_tbl as st');
+        if (Schema::hasColumn('student_tbl', 'is_deleted')) {
+            $studentQuery->where('st.is_deleted', 0);
+        }
+        $this->applySchoolScope($studentQuery, $user, 'st', 'census_id');
+        $totalStudents = (int) $studentQuery->count('st.std_id');
+
+        $presentQuery = DB::table('student_daily_attendance_tbl as sda')
+            ->join('student_tbl as st', 'sda.std_id', '=', 'st.std_id')
+            ->where('sda.attendance_date', $date)
+            ->where('sda.is_deleted', 0)
+            ->where('sda.status', 1);
+
+        if (Schema::hasColumn('student_tbl', 'is_deleted')) {
+            $presentQuery->where('st.is_deleted', 0);
+        }
+        $this->applySchoolScope($presentQuery, $user, 'st', 'census_id');
+        $present = (int) $presentQuery->distinct('sda.std_id')->count('sda.std_id');
+
+        return [
+            'present' => $present,
+            'absent' => max($totalStudents - $present, 0),
+            'marked' => $present,
+        ];
+    }
+
+    private function isPrincipal(mixed $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        if ((int) ($user->role_id ?? 0) === 2) {
+            return true;
+        }
+
+        $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
+
+        return $roleName === 'principal';
     }
 }

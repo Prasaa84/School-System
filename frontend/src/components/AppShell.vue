@@ -378,6 +378,7 @@ const localizedMenu = computed(() => {
           grades: 'Grades',
           classes: 'Classes',
           staff: 'Staff',
+          attendance: 'Daily Attendance',
           payments: 'Payments',
           'payments-history': 'Payments History',
           account: 'Account',
@@ -391,6 +392,7 @@ const localizedMenu = computed(() => {
           grades: 'ශ්‍රේණි',
           classes: 'පන්ති',
           staff: 'කාර්ය මණ්ඩලය',
+          attendance: 'දෛනික පැමිණීම',
           payments: 'ගෙවීම්',
           'payments-history': 'ගෙවීම් ඉතිහාසය',
           account: 'ගිණුම',
@@ -404,6 +406,7 @@ const localizedMenu = computed(() => {
           grades: 'தரங்கள்',
           classes: 'வகுப்புகள்',
           staff: 'பணியாளர்கள்',
+          attendance: 'தினசரி வருகை',
           payments: 'கட்டணங்கள்',
           'payments-history': 'கட்டண வரலாறு',
           account: 'கணக்கு',
@@ -537,7 +540,7 @@ const loadMenu = async (): Promise<void> => {
     .filter((item) => !(isSdsUser.value && item.key === 'students'))
     .filter((item) => !isStudent.value || ['payments-history'].includes(item.key))
 
-  if (isClassTeacher.value) {
+  if (isClassTeacher.value || isPrincipal.value) {
     const staffIndex = mappedModules.findIndex((item) => item.key === 'staff')
     const attendanceItem: MenuItem = {
       key: 'attendance',
