@@ -9,6 +9,23 @@
       {{ assignmentWarning }}
     </p>
 
+    <div v-if="isClassTeacher" class="flex gap-2 print:hidden">
+      <button
+        class="rounded-xl px-4 py-2 text-sm font-semibold transition"
+        :class="isDailyMarkingMode ? 'bg-teal-500 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'"
+        @click="switchToDailyMarking"
+      >
+        {{ text.dailyMarking }}
+      </button>
+      <button
+        class="rounded-xl px-4 py-2 text-sm font-semibold transition"
+        :class="isReportViewer ? 'bg-teal-500 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'"
+        @click="switchToAttendanceReport"
+      >
+        {{ text.attendanceReport }}
+      </button>
+    </div>
+
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none">
       <div class="grid gap-3 md:grid-cols-5 print:hidden">
         <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -36,17 +53,17 @@
       <div class="mt-4 print:hidden">
         <div
           class="grid gap-3 md:grid-cols-2"
-          :class="isPrincipal ? 'lg:grid-cols-5' : 'lg:grid-cols-[220px_minmax(220px,1fr)_90px_90px_90px]'"
+          :class="isReportViewer ? 'lg:grid-cols-5' : 'lg:grid-cols-[220px_minmax(220px,1fr)_90px_90px_90px]'"
         >
-        <label v-if="!isPrincipal" class="block text-sm text-slate-700">
+        <label v-if="!isReportViewer" class="block text-sm text-slate-700">
           {{ text.filterDate }}
           <input v-model="selectedDate" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onDateChange" />
         </label>
-        <label v-if="isPrincipal" class="block text-sm text-slate-700">
+        <label v-if="isReportViewer" class="block text-sm text-slate-700">
           {{ text.fromDate }}
           <input v-model="principalDateFrom" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
-        <label v-if="isPrincipal" class="block text-sm text-slate-700">
+        <label v-if="isReportViewer" class="block text-sm text-slate-700">
           {{ text.toDate }}
           <input v-model="principalDateTo" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
@@ -82,7 +99,7 @@
             type="text"
             class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             :placeholder="text.searchPlaceholder"
-            @keydown.enter.prevent="isPrincipal ? submitPrincipalSearch() : null"
+            @keydown.enter.prevent="isReportViewer ? submitAttendanceReportSearch() : null"
           />
         </label>
         <button
@@ -95,15 +112,15 @@
         <button
           class="self-end rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="loading"
-          @click="isPrincipal ? submitPrincipalSearch() : loadAttendance()"
+          @click="isReportViewer ? submitAttendanceReportSearch() : loadAttendance()"
         >
-          {{ loading ? text.loading : (isPrincipal ? text.searchAction : text.refresh) }}
+          {{ loading ? text.loading : (isReportViewer ? text.searchAction : text.refresh) }}
         </button>
         <button
           class="self-end rounded-xl bg-teal-500 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-600"
-          @click="isPrincipal ? exportAttendanceExcel() : printAttendance()"
+          @click="isReportViewer ? exportAttendanceExcel() : printAttendance()"
         >
-          {{ isPrincipal ? text.exportExcel : text.print }}
+          {{ isReportViewer ? text.exportExcel : text.print }}
         </button>
         </div>
       </div>
@@ -123,7 +140,7 @@
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.indexNo }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.admissionNo }}</th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.nameWithInitials }}</th>
-              <template v-if="isPrincipal">
+              <template v-if="isReportViewer">
                 <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gradeClass }}</th>
                 <th v-for="dateHeader in principalDateHeaders" :key="`date-header-${dateHeader}`" class="px-3 py-2 text-center font-semibold text-slate-600">
                   {{ formatShortDate(dateHeader) }}
@@ -135,12 +152,12 @@
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-if="!loading && filteredStudents.length === 0">
-              <td :colspan="isPrincipal ? 4 + principalDateHeaders.length : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
+              <td :colspan="isReportViewer ? 4 + principalDateHeaders.length : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
             </tr>
             <tr
               v-for="(student, index) in filteredStudents"
               :key="student.std_id"
-              :class="!isPrincipal && student.status === 1 ? 'bg-emerald-50/50' : ''"
+              :class="!isReportViewer && student.status === 1 ? 'bg-emerald-50/50' : ''"
             >
               <td class="px-3 py-2 font-medium text-slate-800">{{ index + 1 }}</td>
               <td class="px-3 py-2 text-slate-700">{{ student.admission_no }}</td>
@@ -156,7 +173,7 @@
                 </button>
                 <span v-else class="block px-3 py-2 text-slate-800">{{ student.name_with_initials }}</span>
               </td>
-              <template v-if="isPrincipal">
+              <template v-if="isReportViewer">
                 <td class="px-3 py-2 text-slate-700">{{ student.grade_class || text.notAvailable }}</td>
                 <td v-for="dateHeader in principalDateHeaders" :key="`${student.std_id}-${dateHeader}`" class="px-3 py-2 text-center text-slate-700">
                   {{ renderAttendanceCell(student.attendance_map?.[dateHeader] ?? null) }}
@@ -174,7 +191,7 @@
                 </span>
               </td>
             </tr>
-            <tr v-if="isPrincipal && filteredStudents.length > 0" class="bg-slate-100 font-semibold">
+            <tr v-if="isReportViewer && filteredStudents.length > 0" class="bg-slate-100 font-semibold">
               <td class="px-3 py-2 text-slate-800"></td>
               <td class="px-3 py-2 text-slate-800"></td>
               <td class="px-3 py-2 text-slate-800">{{ text.totalAttendance }}</td>
@@ -190,7 +207,7 @@
         </table>
       </div>
 
-      <div v-if="isPrincipal && pagination.total > 0" class="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 print:hidden md:flex-row md:items-center md:justify-between">
+      <div v-if="isReportViewer && pagination.total > 0" class="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 print:hidden md:flex-row md:items-center md:justify-between">
         <p>{{ text.showing }} {{ pagination.from }}-{{ pagination.to }} {{ text.of }} {{ pagination.total }}</p>
         <div class="flex items-center gap-2">
           <button
@@ -310,11 +327,14 @@ interface OptionRow {
   label: string
 }
 
+type ClassTeacherViewMode = 'marking' | 'report'
+
 const currentUser = ref<AuthUser | null>(getUser())
 const ui = useUiStore()
 const todayDate = new Date().toISOString().slice(0, 10)
 const loading = ref(false)
 const savingStudentId = ref<number | null>(null)
+const classTeacherViewMode = ref<ClassTeacherViewMode>('marking')
 const search = ref('')
 const pageMessage = ref('')
 const pageError = ref('')
@@ -350,6 +370,8 @@ const principalFilters = reactive<AttendanceFilters>({
 const roleName = computed(() => String(currentUser.value?.role_name ?? '').trim().toLowerCase())
 const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName.value))
 const isPrincipal = computed(() => (currentUser.value?.role_id ?? 0) === 2 || roleName.value === 'principal')
+const isReportViewer = computed(() => isPrincipal.value || (isClassTeacher.value && classTeacherViewMode.value === 'report'))
+const isDailyMarkingMode = computed(() => isClassTeacher.value && classTeacherViewMode.value === 'marking')
 const canEditAttendance = computed(() => isClassTeacher.value)
 const assignmentWarning = computed(() => {
   if (!isClassTeacher.value) return ''
@@ -366,6 +388,8 @@ const assignmentWarning = computed(() => {
 const text = useLocalizedText({
   en: {
     title: 'Daily Attendance',
+    dailyMarking: 'Daily Marking',
+    attendanceReport: 'Attendance Report',
     helpClassTeacher: 'Tap a student name to toggle attendance between 0 and 1 for the selected date.',
     helpPrincipal: 'Review school attendance by date, year, grade, class, and gender.',
     attendanceDate: 'Attendance Date',
@@ -418,6 +442,8 @@ const text = useLocalizedText({
   },
   si: {
     title: 'දෛනික පැමිණීම',
+    dailyMarking: 'දෛනික සටහන් කිරීම',
+    attendanceReport: 'පැමිණීමේ වාර්තාව',
     helpClassTeacher: 'තෝරාගත් දිනය සඳහා පැමිණීම 0 සහ 1 අතර මාරු කිරීමට සිසු නාමය මත තට්ටු කරන්න.',
     helpPrincipal: 'දිනය, වර්ෂය, ශ්‍රේණිය, පන්තිය සහ ස්ත්‍රී/පුරුෂ භාවය අනුව පාසල් පැමිණීම බලන්න.',
     attendanceDate: 'පැමිණීමේ දිනය',
@@ -470,6 +496,8 @@ const text = useLocalizedText({
   },
   ta: {
     title: 'தினசரி வருகை',
+    dailyMarking: 'தினசரி பதிவு',
+    attendanceReport: 'வருகை அறிக்கை',
     helpClassTeacher: 'தேர்ந்தெடுத்த தேதிக்கான வருகையை 0 மற்றும் 1 இடையில் மாற்ற மாணவர் பெயரைத் தொடவும்.',
     helpPrincipal: 'தேதி, ஆண்டு, தரம், வகுப்பு மற்றும் பாலினம் அடிப்படையில் பள்ளி வருகையை பார்க்கவும்.',
     attendanceDate: 'வருகை தேதி',
@@ -528,8 +556,8 @@ const genderOptions = computed<OptionRow[]>(() => [
   { id: 2, label: text.value.female },
 ])
 
-const pageHelpText = computed(() => (isPrincipal.value ? text.value.helpPrincipal : text.value.helpClassTeacher))
-const scopeTitle = computed(() => (isPrincipal.value ? text.value.scope : text.value.assignedClass))
+const pageHelpText = computed(() => (isReportViewer.value ? text.value.helpPrincipal : text.value.helpClassTeacher))
+const scopeTitle = computed(() => (isReportViewer.value ? text.value.scope : text.value.assignedClass))
 
 const selectedGradeLabel = computed(() => {
   const selected = grades.value.find((row) => row.grade_id === principalFilters.grade_id)
@@ -570,7 +598,7 @@ const scopeLabel = computed(() => {
 })
 
 const filteredStudents = computed(() => {
-  if (isPrincipal.value) {
+  if (isReportViewer.value) {
     return students.value
   }
 
@@ -588,7 +616,7 @@ const filteredStudents = computed(() => {
 })
 
 const principalDateRangeLabel = computed(() => {
-  if (!isPrincipal.value) {
+  if (!isReportViewer.value) {
     return ''
   }
 
@@ -631,7 +659,7 @@ const principalGrandTotal = computed(() => (
 ))
 
 const formattedDate = computed(() => {
-  if (isPrincipal.value) {
+  if (isReportViewer.value) {
     return principalDateRangeLabel.value
   }
 
@@ -803,12 +831,13 @@ const loadAttendance = async (): Promise<void> => {
 
   try {
     const params: Record<string, number | string> = {}
-    if (!isPrincipal.value && selectedDate.value) {
+    if (!isReportViewer.value && selectedDate.value) {
       params.date = selectedDate.value
     }
-    if (isPrincipal.value) {
+    if (isReportViewer.value) {
       if (principalDateFrom.value) params.date_from = principalDateFrom.value
       if (principalDateTo.value) params.date_to = principalDateTo.value
+      if (isClassTeacher.value) params.report_mode = 1
       if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
       if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
       if (principalFilters.gender_id > 0) params.gender_id = principalFilters.gender_id
@@ -818,7 +847,7 @@ const loadAttendance = async (): Promise<void> => {
     }
 
     const { data } = await api.get<AttendanceResponse>('/students/daily-attendance', Object.keys(params).length > 0 ? { params } : undefined)
-    if (isPrincipal.value) {
+    if (isReportViewer.value) {
       attendanceDate.value = principalDateTo.value || data.date || ''
       principalDateHeaders.value = Array.isArray(data.date_headers) ? data.date_headers : []
     } else {
@@ -832,12 +861,14 @@ const loadAttendance = async (): Promise<void> => {
     syncPagination(data.pagination)
     pageMessage.value = typeof data.message === 'string' ? data.message : ''
 
-    if (isPrincipal.value && data.filters) {
+    if (isReportViewer.value && data.filters) {
       principalDateFrom.value = String(data.filters.date_from ?? principalDateFrom.value)
       principalDateTo.value = String(data.filters.date_to ?? principalDateTo.value)
-      principalFilters.grade_id = Number(data.filters.grade_id ?? principalFilters.grade_id)
-      principalFilters.class_id = Number(data.filters.class_id ?? principalFilters.class_id)
-      principalFilters.gender_id = Number(data.filters.gender_id ?? principalFilters.gender_id)
+      if (isPrincipal.value) {
+        principalFilters.grade_id = Number(data.filters.grade_id ?? principalFilters.grade_id)
+        principalFilters.class_id = Number(data.filters.class_id ?? principalFilters.class_id)
+        principalFilters.gender_id = Number(data.filters.gender_id ?? principalFilters.gender_id)
+      }
     }
   } catch (error) {
     students.value = []
@@ -887,7 +918,7 @@ const toggleAttendance = async (student: AttendanceStudent): Promise<void> => {
 }
 
 const onDateChange = async (): Promise<void> => {
-  if (isPrincipal.value) {
+  if (isReportViewer.value) {
     pagination.page = 1
   }
   await loadAttendance()
@@ -919,14 +950,16 @@ const resetFilters = async (): Promise<void> => {
   selectedDate.value = new Date().toISOString().slice(0, 10)
   pagination.page = 1
 
-  if (isPrincipal.value) {
+  if (isReportViewer.value) {
     principalDateFrom.value = selectedDate.value
     principalDateTo.value = selectedDate.value
-    principalFilters.grade_id = 0
-    principalFilters.class_id = 0
-    principalFilters.gender_id = 0
-    classes.value = []
-    await loadGrades(principalSelectedYear.value)
+    if (isPrincipal.value) {
+      principalFilters.grade_id = 0
+      principalFilters.class_id = 0
+      principalFilters.gender_id = 0
+      classes.value = []
+      await loadGrades(principalSelectedYear.value)
+    }
     clearPrincipalResults()
     return
   }
@@ -934,24 +967,26 @@ const resetFilters = async (): Promise<void> => {
   await loadAttendance()
 }
 
-const submitPrincipalSearch = async (): Promise<void> => {
-  if (!isPrincipal.value) {
+const submitAttendanceReportSearch = async (): Promise<void> => {
+  if (!isReportViewer.value) {
     return
   }
 
   pagination.page = 1
-  await loadGrades(principalSelectedYear.value)
-  if (principalFilters.grade_id > 0) {
-    await loadClasses(principalFilters.grade_id, principalSelectedYear.value)
-  } else {
-    classes.value = []
-    principalFilters.class_id = 0
+  if (isPrincipal.value) {
+    await loadGrades(principalSelectedYear.value)
+    if (principalFilters.grade_id > 0) {
+      await loadClasses(principalFilters.grade_id, principalSelectedYear.value)
+    } else {
+      classes.value = []
+      principalFilters.class_id = 0
+    }
   }
   await loadAttendance()
 }
 
 const goToPrincipalPage = async (page: number): Promise<void> => {
-  if (!isPrincipal.value || loading.value) {
+  if (!isReportViewer.value || loading.value) {
     return
   }
 
@@ -971,6 +1006,7 @@ const exportAttendanceExcel = async (): Promise<void> => {
     const params: Record<string, number | string> = {}
     if (principalDateFrom.value) params.date_from = principalDateFrom.value
     if (principalDateTo.value) params.date_to = principalDateTo.value
+    if (isClassTeacher.value) params.report_mode = 1
     if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
     if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
     if (principalFilters.gender_id > 0) params.gender_id = principalFilters.gender_id
@@ -997,6 +1033,19 @@ const exportAttendanceExcel = async (): Promise<void> => {
 
 const printAttendance = (): void => {
   window.print()
+}
+
+const switchToDailyMarking = async (): Promise<void> => {
+  classTeacherViewMode.value = 'marking'
+  pagination.page = 1
+  await loadAttendance()
+}
+
+const switchToAttendanceReport = async (): Promise<void> => {
+  classTeacherViewMode.value = 'report'
+  search.value = ''
+  pagination.page = 1
+  clearPrincipalResults()
 }
 
 onMounted(async () => {

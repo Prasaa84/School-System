@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-slate-100 text-slate-900 print:bg-white">
     <div v-if="isMobile && ui.mobileSidebarOpen" class="fixed inset-0 z-30 bg-slate-900/40 print:hidden" @click="ui.closeMobileSidebar" />
 
-    <div class="mx-auto flex min-h-screen max-w-[1600px] print:block print:max-w-none">
+    <div class="flex min-h-screen w-full print:block print:max-w-none">
       <aside
         class="border-r border-slate-200 bg-white/95 backdrop-blur transition-all duration-300 print:hidden"
         :class="sidebarClasses"

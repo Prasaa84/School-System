@@ -61,6 +61,28 @@ class StudentAttendanceController extends Controller
                 ]);
             }
 
+            if ($this->wantsAttendanceReportMode($request)) {
+                $filters = $this->validatePrincipalFilters($request);
+                ['data' => $students, 'summary' => $summary, 'pagination' => $pagination, 'date_headers' => $dateHeaders] = $this->loadAttendanceStudentsForClassTeacherReport($assignment, $filters);
+
+                return response()->json([
+                    'date' => $filters['date'],
+                    'class_info' => $this->loadAttendanceClassInfo($assignment['sch_grd_cls_id']),
+                    'summary' => $summary,
+                    'filters' => [
+                        'date_from' => $filters['date_from'],
+                        'date_to' => $filters['date_to'],
+                        'grade_id' => $assignment['grade_id'],
+                        'class_id' => $assignment['class_id'],
+                        'gender_id' => 0,
+                        'search' => $filters['search'],
+                    ],
+                    'pagination' => $pagination,
+                    'date_headers' => $dateHeaders,
+                    'data' => $students,
+                ]);
+            }
+
             $date = $this->resolveAttendanceDate($request);
             $this->ensureClassAttendanceRows($assignment, $date, $user);
             $students = $this->loadAttendanceStudentsForClass($assignment['sch_grd_cls_id'], $date);
@@ -178,21 +200,31 @@ class StudentAttendanceController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 401);
         }
 
-        if (!$this->isPrincipal($user)) {
-            return response()->json(['message' => 'Only principals can export attendance reports.'], 403);
-        }
-
         if (!Schema::hasTable('student_daily_attendance_tbl')) {
             return response()->json(['message' => 'Attendance table is not available.'], 422);
         }
 
         $filters = $this->validatePrincipalFilters($request);
         $dateHeaders = $this->buildDateHeaders($filters['date_from'], $filters['date_to']);
-        $rows = $this->buildPrincipalAttendanceExportRows($user, $filters, $dateHeaders);
+        $classInfo = null;
+        if ($this->isClassTeacher($user)) {
+            $assignment = $this->resolveClassTeacherAssignment($user);
+            if ($assignment === null) {
+                return response()->json(['message' => 'No class assignment found for this class teacher.'], 422);
+            }
+            $rows = $this->buildClassTeacherAttendanceExportRows($assignment, $filters, $dateHeaders);
+            $classInfo = $this->loadAttendanceClassInfo($assignment['sch_grd_cls_id']);
+        } elseif ($this->isPrincipal($user)) {
+            $rows = $this->buildPrincipalAttendanceExportRows($user, $filters, $dateHeaders);
+        } else {
+            return response()->json(['message' => 'Only principals and class teachers can export attendance reports.'], 403);
+        }
         $periodSuffix = $filters['date_from'] === $filters['date_to']
             ? $filters['date_from']
             : ($filters['date_from'] . '_to_' . $filters['date_to']);
-        $filename = 'student-attendance-report-' . $periodSuffix . '.xlsx';
+        $classSuffix = trim((string) ($classInfo['grade_class'] ?? ''));
+        $normalizedClassSuffix = $classSuffix !== '' ? ('-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $classSuffix)) : '';
+        $filename = 'student-attendance-report' . $normalizedClassSuffix . '-' . $periodSuffix . '.xlsx';
 
         return response()->streamDownload(function () use ($rows, $dateHeaders): void {
             $spreadsheet = new Spreadsheet();
@@ -465,6 +497,15 @@ class StudentAttendanceController extends Controller
     private function canViewAttendance(?User $user): bool
     {
         return $this->isClassTeacher($user) || $this->isPrincipal($user);
+    }
+
+    private function wantsAttendanceReportMode(Request $request): bool
+    {
+        if (filter_var($request->query('report_mode', false), FILTER_VALIDATE_BOOL)) {
+            return true;
+        }
+
+        return trim((string) $request->query('date_from', '')) !== '' || trim((string) $request->query('date_to', '')) !== '';
     }
 
     private function isPrincipal(?User $user): bool
@@ -807,6 +848,82 @@ class StudentAttendanceController extends Controller
     }
 
     /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     * @return array{data:array<int, array<string, mixed>>, summary:array{total_students:int, present_students:int, absent_students:int}, pagination:array{page:int, per_page:int, total:int, last_page:int, from:int, to:int}, date_headers:array<int, string>}
+     */
+    private function loadAttendanceStudentsForClassTeacherReport(array $assignment, array $filters): array
+    {
+        $rosterQuery = $this->buildClassTeacherRosterQuery($assignment, $filters);
+        $summaryQuery = $this->buildClassTeacherAttendanceSummaryQuery($assignment, $filters);
+        $total = (int) (clone $rosterQuery)->count();
+        $presentStudents = (int) (clone $summaryQuery)->where('sda.status', 1)->count();
+        $absentStudents = (int) (clone $summaryQuery)->where('sda.status', 0)->count();
+        $page = max($filters['page'], 1);
+        $perPage = max($filters['per_page'], 1);
+        $lastPage = max((int) ceil($total / $perPage), 1);
+        $page = min($page, $lastPage);
+        $offset = ($page - 1) * $perPage;
+        $dateHeaders = $this->buildDateHeaders($filters['date_from'], $filters['date_to']);
+
+        $rows = (clone $rosterQuery)
+            ->offset($offset)
+            ->limit($perPage)
+            ->get();
+
+        $studentIds = $rows
+            ->pluck('std_id')
+            ->filter(fn ($value): bool => is_numeric($value))
+            ->map(fn ($value): int => (int) $value)
+            ->values()
+            ->all();
+
+        $attendanceMap = [];
+        if ($studentIds !== []) {
+            $attendanceRows = DB::table('student_daily_attendance_tbl as sda')
+                ->whereIn('sda.std_id', $studentIds)
+                ->where('sda.sch_grd_cls_id', $assignment['sch_grd_cls_id'])
+                ->whereBetween('sda.attendance_date', [$filters['date_from'], $filters['date_to']])
+                ->where('sda.is_deleted', 0)
+                ->select(['sda.std_id', 'sda.attendance_date', 'sda.status'])
+                ->orderBy('sda.attendance_date')
+                ->get();
+
+            foreach ($attendanceRows as $attendanceRow) {
+                $studentId = is_numeric($attendanceRow->std_id ?? null) ? (int) $attendanceRow->std_id : 0;
+                $date = (string) ($attendanceRow->attendance_date ?? '');
+                if ($studentId <= 0 || $date === '') {
+                    continue;
+                }
+
+                $attendanceMap[$studentId] ??= [];
+                $attendanceMap[$studentId][$date] = isset($attendanceRow->status) ? (int) $attendanceRow->status : null;
+            }
+        }
+
+        $from = $total > 0 ? $offset + 1 : 0;
+        $to = $total > 0 ? min($offset + $perPage, $total) : 0;
+
+        return [
+            'data' => $rows->map(fn ($row): array => $this->mapPrincipalAttendanceStudentRow($row, $dateHeaders, $attendanceMap))->all(),
+            'summary' => [
+                'total_students' => $total,
+                'present_students' => $presentStudents,
+                'absent_students' => $absentStudents,
+            ],
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
+                'from' => $from,
+                'to' => $to,
+            ],
+            'date_headers' => $dateHeaders,
+        ];
+    }
+
+    /**
      * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
      * @param  array<int, string>  $dateHeaders
      * @return array<int, array<string, mixed>>
@@ -846,6 +963,123 @@ class StudentAttendanceController extends Controller
         return $rows
             ->map(fn ($row): array => $this->mapPrincipalAttendanceStudentRow($row, $dateHeaders, $attendanceMap))
             ->all();
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     * @param  array<int, string>  $dateHeaders
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildClassTeacherAttendanceExportRows(array $assignment, array $filters, array $dateHeaders): array
+    {
+        $rows = $this->buildClassTeacherRosterQuery($assignment, $filters)->get();
+        $studentIds = $rows
+            ->pluck('std_id')
+            ->filter(fn ($value): bool => is_numeric($value))
+            ->map(fn ($value): int => (int) $value)
+            ->values()
+            ->all();
+
+        $attendanceMap = [];
+        if ($studentIds !== []) {
+            $attendanceRows = DB::table('student_daily_attendance_tbl as sda')
+                ->whereIn('sda.std_id', $studentIds)
+                ->where('sda.sch_grd_cls_id', $assignment['sch_grd_cls_id'])
+                ->whereBetween('sda.attendance_date', [$filters['date_from'], $filters['date_to']])
+                ->where('sda.is_deleted', 0)
+                ->select(['sda.std_id', 'sda.attendance_date', 'sda.status'])
+                ->orderBy('sda.attendance_date')
+                ->get();
+
+            foreach ($attendanceRows as $attendanceRow) {
+                $studentId = is_numeric($attendanceRow->std_id ?? null) ? (int) $attendanceRow->std_id : 0;
+                $date = (string) ($attendanceRow->attendance_date ?? '');
+                if ($studentId <= 0 || $date === '') {
+                    continue;
+                }
+
+                $attendanceMap[$studentId] ??= [];
+                $attendanceMap[$studentId][$date] = isset($attendanceRow->status) ? (int) $attendanceRow->status : null;
+            }
+        }
+
+        return $rows
+            ->map(fn ($row): array => $this->mapPrincipalAttendanceStudentRow($row, $dateHeaders, $attendanceMap))
+            ->all();
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     */
+    private function buildClassTeacherRosterQuery(array $assignment, array $filters): Builder
+    {
+        $classInfo = $this->loadAttendanceClassInfo($assignment['sch_grd_cls_id']);
+        $gradeClass = trim((string) ($classInfo['grade_class'] ?? ''));
+        $search = $filters['search'];
+
+        $query = DB::table('student_grade_class_tbl as sgc')
+            ->join('student_tbl as st', 'sgc.std_id', '=', 'st.std_id')
+            ->select([
+                'st.std_id',
+                'st.index_no',
+                'st.name_with_initials',
+                'st.gender_id',
+                DB::raw((int) $assignment['year'] . ' as year'),
+                DB::raw((int) $assignment['grade_id'] . ' as grade_id'),
+                DB::raw((int) $assignment['class_id'] . ' as class_id'),
+                DB::raw("'" . str_replace("'", "''", trim((string) ($classInfo['grade'] ?? ''))) . "' as grade"),
+                DB::raw("'" . str_replace("'", "''", trim((string) ($classInfo['class'] ?? ''))) . "' as class"),
+            ])
+            ->where('sgc.sch_grd_cls_id', $assignment['sch_grd_cls_id'])
+            ->when($search !== '', function ($builder) use ($search, $gradeClass): void {
+                $builder->where(function ($inner) use ($search, $gradeClass): void {
+                    $inner->where('st.index_no', 'like', "%{$search}%")
+                        ->orWhere('st.name_with_initials', 'like', "%{$search}%");
+
+                    if ($gradeClass !== '') {
+                        $inner->orWhereRaw('? like ?', [$gradeClass, "%{$search}%"]);
+                    }
+                });
+            })
+            ->orderBy('st.index_no');
+
+        if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgc.is_deleted', 0);
+        }
+        if (Schema::hasColumn('student_tbl', 'is_deleted')) {
+            $query->where('st.is_deleted', 0);
+        }
+
+        return $query->groupBy(['st.std_id', 'st.index_no', 'st.name_with_initials', 'st.gender_id']);
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     * @param  array{date:string, date_from:string, date_to:string, year:int, grade_id:int, class_id:int, gender_id:int, page:int, per_page:int, search:string}  $filters
+     */
+    private function buildClassTeacherAttendanceSummaryQuery(array $assignment, array $filters): Builder
+    {
+        $search = $filters['search'];
+
+        $query = DB::table('student_daily_attendance_tbl as sda')
+            ->join('student_tbl as st', 'sda.std_id', '=', 'st.std_id')
+            ->where('sda.sch_grd_cls_id', $assignment['sch_grd_cls_id'])
+            ->whereBetween('sda.attendance_date', [$filters['date_from'], $filters['date_to']])
+            ->where('sda.is_deleted', 0)
+            ->when($search !== '', function ($builder) use ($search): void {
+                $builder->where(function ($inner) use ($search): void {
+                    $inner->where('st.index_no', 'like', "%{$search}%")
+                        ->orWhere('st.name_with_initials', 'like', "%{$search}%");
+                });
+            });
+
+        if (Schema::hasColumn('student_tbl', 'is_deleted')) {
+            $query->where('st.is_deleted', 0);
+        }
+
+        return $query;
     }
 
     private function excelColumnName(int $index): string
