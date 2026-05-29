@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\AppliesSchoolScope;
+use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolDetail;
 use App\Models\User;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 class PaymentController extends Controller
 {
     use AppliesSchoolScope;
+    use ResolvesLocalizedLookupLabels;
 
     public function options(): JsonResponse
     {
@@ -124,6 +126,56 @@ class PaymentController extends Controller
         return response()->json([
             'student' => $student,
             'payments' => $payments,
+        ]);
+    }
+
+    public function report(Request $request): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canViewPaymentReport($user)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json([
+                'filters' => $this->validateReportFilters($request),
+                'scope' => null,
+                'summary' => $this->emptyPaymentReportSummary(),
+                'data' => [],
+                'message' => 'No class assignment found for this class teacher.',
+            ]);
+        }
+
+        $censusId = $this->resolveTargetSchoolCensusId($user);
+        if ($censusId === null) {
+            return response()->json([
+                'message' => $this->isAdministrator($user)
+                    ? 'Select a school first.'
+                    : 'School is not assigned for this user.',
+            ], 422);
+        }
+
+        $filters = $this->validateReportFilters($request);
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+        if ($classTeacherAssignment !== null) {
+            $filters['year'] = (int) $classTeacherAssignment['year'];
+            $filters['grade_id'] = (int) $classTeacherAssignment['grade_id'];
+            $filters['class_id'] = (int) $classTeacherAssignment['class_id'];
+        }
+
+        $rows = $this->loadPaymentReportRows($user, $censusId, $filters, $classTeacherAssignment);
+
+        return response()->json([
+            'filters' => $filters,
+            'scope' => $classTeacherAssignment !== null
+                ? $this->loadPaymentReportScope($classTeacherAssignment['sch_grd_cls_id'])
+                : null,
+            'summary' => $this->buildPaymentReportSummary($rows),
+            'data' => $rows,
         ]);
     }
 
@@ -505,6 +557,30 @@ class PaymentController extends Controller
         return in_array($roleName, ['admin', 'administrator', 'principal', 'student'], true);
     }
 
+    private function canViewPaymentReport(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        if ($this->isUnassignedClassTeacher($user)) {
+            return true;
+        }
+
+        if ($this->isClassTeacher($user)) {
+            return true;
+        }
+
+        $roleId = (int) ($user->role_id ?? 0);
+        if (in_array($roleId, [1, 2, 4], true)) {
+            return true;
+        }
+
+        $roleName = strtolower(trim((string) ($user->role?->role_name ?? '')));
+
+        return in_array($roleName, ['admin', 'administrator', 'principal', 'sds user'], true);
+    }
+
     private function canManagePayments(?User $user): bool
     {
         if ($user === null) {
@@ -807,6 +883,260 @@ class PaymentController extends Controller
                 'member_fee' => (float) ($row->sds_member_fee ?? 0),
             ])
             ->all();
+    }
+
+    /**
+     * @return array{year:int, grade_id:int, class_id:int, admission_no:string, invoice_no:string, payment_status:string}
+     */
+    private function validateReportFilters(Request $request): array
+    {
+        $validated = Validator::make($request->all(), [
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'grade_id' => ['nullable', 'integer', 'min:1'],
+            'class_id' => ['nullable', 'integer', 'min:1'],
+            'admission_no' => ['nullable', 'string', 'max:20'],
+            'invoice_no' => ['nullable', 'string', 'max:50'],
+            'payment_status' => ['nullable', 'string', 'in:all,paid,not_paid'],
+        ])->validate();
+
+        return [
+            'year' => (int) ($validated['year'] ?? 0),
+            'grade_id' => (int) ($validated['grade_id'] ?? 0),
+            'class_id' => (int) ($validated['class_id'] ?? 0),
+            'admission_no' => trim((string) ($validated['admission_no'] ?? '')),
+            'invoice_no' => trim((string) ($validated['invoice_no'] ?? '')),
+            'payment_status' => trim((string) ($validated['payment_status'] ?? 'all')) ?: 'all',
+        ];
+    }
+
+    /**
+     * @param  array{year:int, grade_id:int, class_id:int, admission_no:string, invoice_no:string, payment_status:string}  $filters
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}|null  $classTeacherAssignment
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadPaymentReportRows(?User $user, string $censusId, array $filters, ?array $classTeacherAssignment = null): array
+    {
+        if (
+            !Schema::hasTable('sds_fee_payment_tbl')
+            || !Schema::hasTable('student_tbl')
+            || !Schema::hasTable('student_grade_class_tbl')
+            || !Schema::hasTable('school_grade_class_tbl')
+        ) {
+            return [];
+        }
+
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+            'grade_en',
+            'grade_si',
+            'grade_ta',
+            'grade',
+        ]);
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+            'class_en',
+            'class_si',
+            'class_ta',
+            'class',
+        ]);
+        $gradeSelect = $gradeLabelColumn !== null ? "gt.{$gradeLabelColumn}" : "''";
+        $classSelect = $classLabelColumn !== null ? "ct.{$classLabelColumn}" : "''";
+        $assignmentKeyColumn = Schema::hasColumn('student_grade_class_tbl', 'st_gr_cl_id') ? 'st_gr_cl_id' : 'sch_grd_cls_id';
+        $reportYear = (int) ($filters['year'] ?? 0);
+
+        $latestAssignmentSubquery = DB::table('student_grade_class_tbl as sgc_latest')
+            ->select([
+                'sgc_latest.std_id',
+                DB::raw("MAX(sgc_latest.{$assignmentKeyColumn}) as latest_assignment_key"),
+            ])
+            ->groupBy('sgc_latest.std_id');
+
+        if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+            $latestAssignmentSubquery->where('sgc_latest.is_deleted', 0);
+        }
+
+        $query = DB::table('student_tbl as st')
+            ->joinSub($latestAssignmentSubquery, 'latest_sgc', function ($join): void {
+                $join->on('latest_sgc.std_id', '=', 'st.std_id');
+            })
+            ->join('student_grade_class_tbl as sgc', function ($join) use ($assignmentKeyColumn): void {
+                $join->on('sgc.std_id', '=', 'st.std_id')
+                    ->on("sgc.{$assignmentKeyColumn}", '=', 'latest_sgc.latest_assignment_key');
+            })
+            ->join('school_grade_class_tbl as sgct', function ($join): void {
+                $join->on('sgc.sch_grd_cls_id', '=', 'sgct.sch_grd_cls_id');
+            })
+            ->leftJoin('sds_fee_payment_tbl as p', function ($join) use ($filters): void {
+                $join->on('p.adm_no', '=', 'st.index_no');
+                if (($filters['year'] ?? 0) > 0) {
+                    $join->where('p.year', '=', (int) $filters['year']);
+                }
+                if (Schema::hasColumn('sds_fee_payment_tbl', 'is_deleted')) {
+                    $join->where('p.is_deleted', '=', 0);
+                }
+            })
+            ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+            ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+            ->leftJoin('sds_annual_fee_type_tbl as f', 'f.year', '=', DB::raw((string) $reportYear))
+            ->select([
+                'p.id',
+                'st.index_no',
+                'p.invoice_no',
+                DB::raw(($reportYear > 0 ? (string) $reportYear : 'p.year') . ' as report_year'),
+                'p.is_sds_member_fee',
+                'p.total',
+                'p.paid_date',
+                'st.std_id',
+                'st.fullname',
+                'st.name_with_initials',
+                'sgct.grade_id',
+                'sgct.class_id',
+                DB::raw("{$gradeSelect} as grade"),
+                DB::raw("{$classSelect} as class"),
+                'f.sds_annual_fee',
+                'f.sds_member_fee',
+                DB::raw("CASE WHEN p.id IS NULL THEN 'not_paid' ELSE 'paid' END as payment_status"),
+            ])
+            ->whereIn('st.census_id', $this->censusCandidates($censusId));
+
+        if (Schema::hasColumn('student_tbl', 'is_deleted')) {
+            $query->where('st.is_deleted', 0);
+        }
+        if (Schema::hasColumn('student_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgc.is_deleted', 0);
+        }
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        if ($classTeacherAssignment !== null) {
+            $query->where('sgct.sch_grd_cls_id', (int) $classTeacherAssignment['sch_grd_cls_id']);
+        } else {
+            if (($filters['grade_id'] ?? 0) > 0) {
+                $query->where('sgct.grade_id', (int) $filters['grade_id']);
+            }
+            if (($filters['class_id'] ?? 0) > 0) {
+                $query->where('sgct.class_id', (int) $filters['class_id']);
+            }
+        }
+
+        if (($filters['admission_no'] ?? '') !== '') {
+            $query->where('st.index_no', 'like', '%' . $filters['admission_no'] . '%');
+        }
+        if (($filters['invoice_no'] ?? '') !== '') {
+            $query->where('p.invoice_no', 'like', '%' . $filters['invoice_no'] . '%');
+        }
+        if (($filters['payment_status'] ?? 'all') === 'paid') {
+            $query->whereNotNull('p.id');
+        } elseif (($filters['payment_status'] ?? 'all') === 'not_paid') {
+            $query->whereNull('p.id');
+        }
+
+        return $query
+            ->orderBy('sgct.grade_id')
+            ->orderBy('sgct.class_id')
+            ->orderBy('st.index_no')
+            ->orderByDesc('p.id')
+            ->get()
+            ->map(fn (object $row): array => [
+                'id' => (int) ($row->id ?? 0),
+                'std_id' => (int) ($row->std_id ?? 0),
+                'admission_no' => (string) ($row->index_no ?? ''),
+                'invoice_no' => (string) ($row->invoice_no ?? ''),
+                'year' => (int) ($row->report_year ?? 0),
+                'include_member_fee' => (string) ($row->is_sds_member_fee ?? '0') === '1',
+                'total' => (float) ($row->total ?? 0),
+                'paid_date' => (string) ($row->paid_date ?? ''),
+                'annual_fee' => (float) ($row->sds_annual_fee ?? 0),
+                'member_fee' => (float) ($row->sds_member_fee ?? 0),
+                'fullname' => (string) ($row->fullname ?? ''),
+                'name_with_initials' => (string) ($row->name_with_initials ?? ''),
+                'grade_id' => (int) ($row->grade_id ?? 0),
+                'class_id' => (int) ($row->class_id ?? 0),
+                'grade' => (string) ($row->grade ?? ''),
+                'class' => (string) ($row->class ?? ''),
+                'grade_class' => trim(sprintf('%s %s', (string) ($row->grade ?? ''), (string) ($row->class ?? ''))),
+                'payment_status' => (string) ($row->payment_status ?? 'not_paid'),
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array{payment_count:int,total_amount:float}
+     */
+    private function buildPaymentReportSummary(array $rows): array
+    {
+        return [
+            'payment_count' => count($rows),
+            'total_amount' => array_reduce($rows, fn (float $total, array $row): float => $total + (float) ($row['total'] ?? 0), 0.0),
+        ];
+    }
+
+    /**
+     * @return array{payment_count:int,total_amount:float}
+     */
+    private function emptyPaymentReportSummary(): array
+    {
+        return [
+            'payment_count' => 0,
+            'total_amount' => 0.0,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadPaymentReportScope(int $schoolGradeClassId): ?array
+    {
+        if ($schoolGradeClassId <= 0 || !Schema::hasTable('school_grade_class_tbl')) {
+            return null;
+        }
+
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+            'grade_en',
+            'grade_si',
+            'grade_ta',
+            'grade',
+        ]);
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+            'class_en',
+            'class_si',
+            'class_ta',
+            'class',
+        ]);
+        $gradeSelect = $gradeLabelColumn !== null ? "gt.{$gradeLabelColumn}" : "''";
+        $classSelect = $classLabelColumn !== null ? "ct.{$classLabelColumn}" : "''";
+
+        $query = DB::table('school_grade_class_tbl as sgct')
+            ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+            ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+            ->select([
+                'sgct.sch_grd_cls_id',
+                'sgct.year',
+                'sgct.grade_id',
+                'sgct.class_id',
+                DB::raw("{$gradeSelect} as grade"),
+                DB::raw("{$classSelect} as class"),
+            ])
+            ->where('sgct.sch_grd_cls_id', $schoolGradeClassId);
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        $row = $query->first();
+        if ($row === null) {
+            return null;
+        }
+
+        return [
+            'sch_grd_cls_id' => (int) ($row->sch_grd_cls_id ?? 0),
+            'year' => (int) ($row->year ?? 0),
+            'grade_id' => (int) ($row->grade_id ?? 0),
+            'class_id' => (int) ($row->class_id ?? 0),
+            'grade' => (string) ($row->grade ?? ''),
+            'class' => (string) ($row->class ?? ''),
+            'grade_class' => trim(sprintf('%s %s', (string) ($row->grade ?? ''), (string) ($row->class ?? ''))),
+        ];
     }
 
     private function paymentExists(string $indexNo, string $censusId, int $year): bool
