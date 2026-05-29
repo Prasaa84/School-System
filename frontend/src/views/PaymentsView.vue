@@ -1158,7 +1158,9 @@ const loadPaymentReport = async (): Promise<void> => {
     return
   }
 
-  if (!isClassTeacher.value && reportFilters.value.year <= 0) {
+  const hasHistoryLookup = reportFilters.value.admission_no.trim() !== '' || reportFilters.value.invoice_no.trim() !== ''
+
+  if (!isClassTeacher.value && reportFilters.value.year <= 0 && !hasHistoryLookup) {
     clearStatus()
     resetReportState()
     return
@@ -1242,7 +1244,9 @@ const exportPaymentReportExcel = async (): Promise<void> => {
 
   clearStatus()
 
-  if (!isClassTeacher.value && reportFilters.value.year <= 0) {
+  const hasHistoryLookup = reportFilters.value.admission_no.trim() !== '' || reportFilters.value.invoice_no.trim() !== ''
+
+  if (!isClassTeacher.value && reportFilters.value.year <= 0 && !hasHistoryLookup) {
     errorMessage.value = text.value.yearRequired
     return
   }

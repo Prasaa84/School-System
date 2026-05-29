@@ -7,15 +7,13 @@ use App\Http\Controllers\Api\V1\Concerns\ResolvesLocalizedLookupLabels;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolDetail;
 use App\Models\User;
+use App\Services\ExcelReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
-use PhpOffice\PhpSpreadsheet\Cell\DataType;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
@@ -186,7 +184,7 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function downloadReport(Request $request): StreamedResponse|JsonResponse
+    public function downloadReport(Request $request, ExcelReportService $excelReportService): StreamedResponse|JsonResponse
     {
         $user = $this->authUser();
         if ($user === null) {
@@ -235,92 +233,83 @@ class PaymentController extends Controller
         $classSuffix = trim((string) ($scope['grade_class'] ?? ''));
         $normalizedClassSuffix = $classSuffix !== '' ? ('-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $classSuffix)) : '';
         $filename = 'payments-report' . $normalizedClassSuffix . '-' . $yearSuffix . '.xlsx';
+        $printedByName = $this->resolvePrintedByName($user);
+        $printedByRole = trim((string) ($user->role_name ?? $user->role?->role_name ?? ''));
+        $printedByLabel = trim($printedByName . ($printedByRole !== '' ? ' - ' . $printedByRole : ''));
+        $footerLines = [
+            'Printed By: ' . $printedByLabel . ' | Printed At: ' . now()->format('Y-m-d H:i:s'),
+        ];
 
-        return response()->streamDownload(function () use ($rows, $mainHeading, $reportHeading, $paidTotal): void {
-            $spreadsheet = new Spreadsheet();
-            $sheet = $spreadsheet->getActiveSheet();
-            $sheet->setTitle('Payments Report');
+        $headers = [
+            'No.',
+            'Admission No',
+            'Name With Initials',
+            'Grade/Class',
+            'Invoice No',
+            'Year',
+            'Status',
+            'Annual Fee',
+            'Member Fee',
+            'Total',
+            'Paid Date',
+        ];
 
-            $headers = [
-                'No.',
-                'Admission No',
-                'Name With Initials',
-                'Grade/Class',
-                'Invoice No',
-                'Year',
-                'Status',
-                'Annual Fee',
-                'Member Fee',
-                'Total',
-                'Paid Date',
+        $excelRows = array_map(function (array $row, int $rowIndex): array {
+            $isPaid = ($row['payment_status'] ?? 'not_paid') === 'paid';
+            $hasMemberFee = $isPaid && (bool) ($row['include_member_fee'] ?? false);
+            $paidDate = $isPaid
+                ? $this->normalizeExportDate((string) ($row['paid_date'] ?? ''))
+                : '-';
+
+            return [
+                ['value' => (string) ($rowIndex + 1), 'type' => 'string'],
+                ['value' => (string) ($row['admission_no'] ?? ''), 'type' => 'string'],
+                ['value' => (string) ($row['name_with_initials'] ?? ''), 'type' => 'string'],
+                ['value' => (string) ($row['grade_class'] ?? ''), 'type' => 'string'],
+                ['value' => (string) ($row['invoice_no'] ?? ''), 'type' => 'string'],
+                ['value' => (string) ($row['year'] ?? ''), 'type' => 'string'],
+                ['value' => $isPaid ? 'Paid' : 'Not Paid', 'type' => 'string'],
+                ['value' => (float) ($row['annual_fee'] ?? 0), 'format' => NumberFormat::FORMAT_NUMBER_00],
+                $hasMemberFee
+                    ? ['value' => (float) ($row['member_fee'] ?? 0), 'format' => NumberFormat::FORMAT_NUMBER_00]
+                    : ['value' => '-', 'type' => 'string', 'align' => Alignment::HORIZONTAL_CENTER],
+                $isPaid
+                    ? ['value' => (float) ($row['total'] ?? 0), 'format' => NumberFormat::FORMAT_NUMBER_00]
+                    : ['value' => '-', 'type' => 'string', 'align' => Alignment::HORIZONTAL_CENTER],
+                ['value' => $paidDate, 'type' => 'string', 'align' => $isPaid ? '' : Alignment::HORIZONTAL_CENTER],
             ];
+        }, array_values($rows), array_keys(array_values($rows)));
 
-            $sheet->setCellValue('A1', $mainHeading);
-            $sheet->mergeCells('A1:K1');
-            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-            $sheet->setCellValue('A2', $reportHeading);
-            $sheet->mergeCells('A2:K2');
-            $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(12);
+        $summaryRow = [
+            ['value' => '', 'type' => 'string'],
+            ['value' => '', 'type' => 'string'],
+            ['value' => '', 'type' => 'string'],
+            ['value' => '', 'type' => 'string'],
+            ['value' => '', 'type' => 'string'],
+            ['value' => '', 'type' => 'string'],
+            ['value' => '', 'type' => 'string'],
+            ['value' => '', 'type' => 'string'],
+            ['value' => 'Total Fee', 'type' => 'string', 'bold' => true],
+            [
+                'value' => $paidTotal,
+                'format' => NumberFormat::FORMAT_NUMBER_00,
+                'bold' => true,
+                'top_border' => Border::BORDER_THIN,
+                'bottom_border' => Border::BORDER_DOUBLE,
+            ],
+            ['value' => '', 'type' => 'string'],
+        ];
 
-            foreach ($headers as $index => $header) {
-                $sheet->setCellValue($this->excelColumnName($index + 1) . '4', $header);
-            }
-            $sheet->getStyle('A4:K4')->getFont()->setBold(true);
-
-            foreach (array_values($rows) as $rowIndex => $row) {
-                $excelRow = $rowIndex + 5;
-                $isPaid = ($row['payment_status'] ?? 'not_paid') === 'paid';
-                $hasMemberFee = $isPaid && (bool) ($row['include_member_fee'] ?? false);
-                $paidDate = ($row['payment_status'] ?? 'not_paid') === 'paid'
-                    ? $this->normalizeExportDate((string) ($row['paid_date'] ?? ''))
-                    : '-';
-
-                $sheet->setCellValue("A{$excelRow}", (string) ($rowIndex + 1));
-                $sheet->setCellValueExplicit("B{$excelRow}", (string) ($row['admission_no'] ?? ''), DataType::TYPE_STRING);
-                $sheet->setCellValue("C{$excelRow}", (string) ($row['name_with_initials'] ?? ''));
-                $sheet->setCellValue("D{$excelRow}", (string) ($row['grade_class'] ?? ''));
-                $sheet->setCellValueExplicit("E{$excelRow}", (string) ($row['invoice_no'] ?? ''), DataType::TYPE_STRING);
-                $sheet->setCellValue("F{$excelRow}", (string) ($row['year'] ?? ''));
-                $sheet->setCellValue("G{$excelRow}", $isPaid ? 'Paid' : 'Not Paid');
-                $sheet->setCellValue("H{$excelRow}", (float) ($row['annual_fee'] ?? 0));
-                $sheet->getStyle("H{$excelRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
-
-                if ($hasMemberFee) {
-                    $sheet->setCellValue("I{$excelRow}", (float) ($row['member_fee'] ?? 0));
-                    $sheet->getStyle("I{$excelRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
-                } else {
-                    $sheet->setCellValue("I{$excelRow}", '-');
-                    $sheet->getStyle("I{$excelRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                }
-
-                if ($isPaid) {
-                    $sheet->setCellValue("J{$excelRow}", (float) ($row['total'] ?? 0));
-                    $sheet->getStyle("J{$excelRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
-                } else {
-                    $sheet->setCellValue("J{$excelRow}", '-');
-                    $sheet->getStyle("J{$excelRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                }
-
-                $sheet->setCellValue("K{$excelRow}", $paidDate);
-            }
-
-            $totalsRow = count($rows) + 5;
-            $sheet->setCellValue("I{$totalsRow}", 'Total Fee');
-            $sheet->setCellValue("J{$totalsRow}", $paidTotal);
-            $sheet->getStyle("J{$totalsRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
-            $sheet->getStyle("I{$totalsRow}:J{$totalsRow}")->getFont()->setBold(true);
-            $sheet->getStyle("J{$totalsRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-
-            for ($index = 1; $index <= count($headers); $index++) {
-                $sheet->getColumnDimension($this->excelColumnName($index))->setAutoSize(true);
-            }
-
-            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-            $writer->save('php://output');
-            $spreadsheet->disconnectWorksheets();
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        return $excelReportService->streamTableReport(
+            $filename,
+            'Payments Report',
+            $mainHeading,
+            $reportHeading,
+            $headers,
+            $excelRows,
+            $summaryRow,
+            $footerLines
+        );
     }
 
     public function fee(Request $request): JsonResponse
@@ -1085,6 +1074,9 @@ class PaymentController extends Controller
         $classSelect = $classLabelColumn !== null ? "ct.{$classLabelColumn}" : "''";
         $assignmentKeyColumn = Schema::hasColumn('student_grade_class_tbl', 'st_gr_cl_id') ? 'st_gr_cl_id' : 'sch_grd_cls_id';
         $reportYear = (int) ($filters['year'] ?? 0);
+        $hasHistoryLookup = (($filters['admission_no'] ?? '') !== '') || (($filters['invoice_no'] ?? '') !== '');
+        $feeJoinYearExpression = $hasHistoryLookup ? 'p.year' : (string) ($reportYear > 0 ? $reportYear : 'p.year');
+        $reportYearExpression = $hasHistoryLookup ? 'p.year' : ($reportYear > 0 ? (string) $reportYear : 'p.year');
 
         $latestAssignmentSubquery = DB::table('student_grade_class_tbl as sgc_latest')
             ->select([
@@ -1119,12 +1111,12 @@ class PaymentController extends Controller
             })
             ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
             ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
-            ->leftJoin('sds_annual_fee_type_tbl as f', 'f.year', '=', DB::raw((string) $reportYear))
+            ->leftJoin('sds_annual_fee_type_tbl as f', 'f.year', '=', DB::raw($feeJoinYearExpression))
             ->select([
                 'p.id',
                 'st.index_no',
                 'p.invoice_no',
-                DB::raw(($reportYear > 0 ? (string) $reportYear : 'p.year') . ' as report_year'),
+                DB::raw($reportYearExpression . ' as report_year'),
                 'p.is_sds_member_fee',
                 'p.total',
                 'p.paid_date',
@@ -1336,6 +1328,37 @@ class PaymentController extends Controller
             : 'School';
     }
 
+    private function resolvePrintedByName(?User $user): string
+    {
+        if ($user === null) {
+            return '';
+        }
+
+        $staffId = $this->resolveUserStaffId($user);
+        if ($staffId !== null && Schema::hasTable('staff_tbl')) {
+            $query = DB::table('staff_tbl')->where('stf_id', $staffId);
+            if (Schema::hasColumn('staff_tbl', 'is_deleted')) {
+                $query->where('is_deleted', 0);
+            }
+
+            $nameColumn = null;
+            if (Schema::hasColumn('staff_tbl', 'name_with_ini')) {
+                $nameColumn = 'name_with_ini';
+            } elseif (Schema::hasColumn('staff_tbl', 'name_with_initials')) {
+                $nameColumn = 'name_with_initials';
+            }
+
+            if ($nameColumn !== null) {
+                $resolved = trim((string) ($query->value($nameColumn) ?? ''));
+                if ($resolved !== '') {
+                    return $resolved;
+                }
+            }
+        }
+
+        return trim((string) ($user->username ?? ''));
+    }
+
     private function normalizeExportDate(string $value): string
     {
         $trimmed = trim($value);
@@ -1396,18 +1419,6 @@ class PaymentController extends Controller
             ->first();
 
         return trim((string) ($row->label ?? ''));
-    }
-
-    private function excelColumnName(int $index): string
-    {
-        $name = '';
-        while ($index > 0) {
-            $index--;
-            $name = chr(65 + ($index % 26)) . $name;
-            $index = intdiv($index, 26);
-        }
-
-        return $name;
     }
 
     private function paymentExists(string $indexNo, string $censusId, int $year): bool
