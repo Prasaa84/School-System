@@ -61,15 +61,15 @@
         </label>
         <label v-if="isReportViewer" class="block text-sm text-slate-700">
           {{ text.fromDate }}
-          <input v-model="principalDateFrom" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input v-model="reportDateFrom" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label v-if="isReportViewer" class="block text-sm text-slate-700">
           {{ text.toDate }}
-          <input v-model="principalDateTo" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input v-model="reportDateTo" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label v-if="isPrincipal" class="block text-sm text-slate-700">
           {{ text.grade }}
-          <select v-model.number="principalFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="principalSelectedYear <= 0" @change="onGradeChange">
+          <select v-model.number="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="reportSelectedYear <= 0" @change="onGradeChange">
             <option :value="0">{{ text.allGrades }}</option>
             <option v-for="row in grades" :key="`attendance-grade-${row.grade_id}`" :value="row.grade_id">{{ row.grade }}</option>
           </select>
@@ -77,9 +77,9 @@
         <label v-if="isPrincipal" class="block text-sm text-slate-700">
           {{ text.class }}
           <select
-            v-model.number="principalFilters.class_id"
+            v-model.number="reportFilters.class_id"
             class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            :disabled="principalSelectedYear <= 0 || principalFilters.grade_id <= 0"
+            :disabled="reportSelectedYear <= 0 || reportFilters.grade_id <= 0"
             @change="onClassChange"
           >
             <option :value="0">{{ text.allClasses }}</option>
@@ -88,7 +88,7 @@
         </label>
         <label v-if="isPrincipal" class="block text-sm text-slate-700">
           {{ text.gender }}
-          <select v-model.number="principalFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onGenderChange">
+          <select v-model.number="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onGenderChange">
             <option v-for="row in genderOptions" :key="`attendance-gender-${row.id}`" :value="row.id">{{ row.label }}</option>
           </select>
         </label>
@@ -138,12 +138,37 @@
           <thead class="bg-slate-50">
             <tr>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.indexNo }}</th>
-              <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.admissionNo }}</th>
+              <th class="px-3 py-2 text-left font-semibold text-slate-600">
+                <SortableHeader
+                  v-if="isReportViewer"
+                  :label="text.admissionNo"
+                  field="admission_no"
+                  :arrow="sortArrow('admission_no')"
+                  :active-class="sortArrowClass('admission_no')"
+                  @toggle="toggleSort"
+                />
+                <span v-else>{{ text.admissionNo }}</span>
+              </th>
               <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.nameWithInitials }}</th>
               <template v-if="isReportViewer">
-                <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ text.gradeClass }}</th>
-                <th v-for="dateHeader in principalDateHeaders" :key="`date-header-${dateHeader}`" class="px-3 py-2 text-center font-semibold text-slate-600">
-                  {{ formatShortDate(dateHeader) }}
+                <th class="px-3 py-2 text-left font-semibold text-slate-600">
+                  <SortableHeader
+                    :label="text.gradeClass"
+                    field="grade_class"
+                    :arrow="sortArrow('grade_class')"
+                    :active-class="sortArrowClass('grade_class')"
+                    @toggle="toggleSort"
+                  />
+                </th>
+                <th v-for="dateHeader in reportDateHeaders" :key="`date-header-${dateHeader}`" class="px-3 py-2 text-center font-semibold text-slate-600">
+                  <SortableHeader
+                    :label="formatShortDate(dateHeader)"
+                    :field="`date:${dateHeader}`"
+                    :arrow="sortArrow(`date:${dateHeader}`)"
+                    :active-class="sortArrowClass(`date:${dateHeader}`)"
+                    align="center"
+                    @toggle="toggleSort"
+                  />
                 </th>
                 <th class="px-3 py-2 text-center font-semibold text-slate-600">{{ text.totalAttendance }}</th>
               </template>
@@ -152,7 +177,7 @@
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-if="!loading && filteredStudents.length === 0">
-              <td :colspan="isReportViewer ? 4 + principalDateHeaders.length : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
+              <td :colspan="isReportViewer ? 4 + reportDateHeaders.length : 4" class="px-3 py-6 text-center text-slate-500">{{ text.noStudents }}</td>
             </tr>
             <tr
               v-for="(student, index) in filteredStudents"
@@ -175,11 +200,11 @@
               </td>
               <template v-if="isReportViewer">
                 <td class="px-3 py-2 text-slate-700">{{ student.grade_class || text.notAvailable }}</td>
-                <td v-for="dateHeader in principalDateHeaders" :key="`${student.std_id}-${dateHeader}`" class="px-3 py-2 text-center text-slate-700">
+                <td v-for="dateHeader in reportDateHeaders" :key="`${student.std_id}-${dateHeader}`" class="px-3 py-2 text-center text-slate-700">
                   {{ renderAttendanceCell(student.attendance_map?.[dateHeader] ?? null) }}
                 </td>
                 <td class="px-3 py-2 text-center font-semibold text-slate-800">
-                  {{ principalStudentTotal(student) }}
+                  {{ reportStudentTotal(student) }}
                 </td>
               </template>
               <td v-else class="px-3 py-2">
@@ -196,11 +221,11 @@
               <td class="px-3 py-2 text-slate-800"></td>
               <td class="px-3 py-2 text-slate-800">{{ text.totalAttendance }}</td>
               <td class="px-3 py-2 text-slate-800"></td>
-              <td v-for="dateHeader in principalDateHeaders" :key="`total-${dateHeader}`" class="px-3 py-2 text-center text-slate-800">
-                {{ principalDateTotals[dateHeader] ?? 0 }}
+              <td v-for="dateHeader in reportDateHeaders" :key="`total-${dateHeader}`" class="px-3 py-2 text-center text-slate-800">
+                {{ reportDateTotals[dateHeader] ?? 0 }}
               </td>
               <td class="px-3 py-2 text-center text-slate-900">
-                {{ principalGrandTotal }}
+                {{ reportGrandTotal }}
               </td>
             </tr>
           </tbody>
@@ -233,9 +258,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import SortableHeader from '../components/SortableHeader.vue'
 import api from '../services/api'
 import { getToken, getUser, setAuthSession, type AuthUser } from '../services/auth'
 import { useUiStore } from '../stores/ui'
+import { useTableSort } from '../utils/useTableSort'
 import { useLocalizedText } from '../utils/uiText'
 
 interface AttendanceStudent {
@@ -328,6 +355,7 @@ interface OptionRow {
 }
 
 type ClassTeacherViewMode = 'marking' | 'report'
+type AttendanceSortField = 'admission_no' | 'grade_class' | `date:${string}`
 
 const currentUser = ref<AuthUser | null>(getUser())
 const ui = useUiStore()
@@ -340,10 +368,10 @@ const pageMessage = ref('')
 const pageError = ref('')
 const attendanceDate = ref('')
 const selectedDate = ref('')
-const principalDateFrom = ref('')
-const principalDateTo = ref('')
+const reportDateFrom = ref('')
+const reportDateTo = ref('')
 const students = ref<AttendanceStudent[]>([])
-const principalDateHeaders = ref<string[]>([])
+const reportDateHeaders = ref<string[]>([])
 const classInfo = ref<AttendanceClassInfo | null>(null)
 const academicYears = ref<number[]>([])
 const grades = ref<GradeRow[]>([])
@@ -361,7 +389,7 @@ const summary = reactive<AttendanceSummary>({
   present_students: 0,
   absent_students: 0,
 })
-const principalFilters = reactive<AttendanceFilters>({
+const reportFilters = reactive<AttendanceFilters>({
   grade_id: 0,
   class_id: 0,
   gender_id: 0,
@@ -560,17 +588,54 @@ const pageHelpText = computed(() => (isReportViewer.value ? text.value.helpPrinc
 const scopeTitle = computed(() => (isReportViewer.value ? text.value.scope : text.value.assignedClass))
 
 const selectedGradeLabel = computed(() => {
-  const selected = grades.value.find((row) => row.grade_id === principalFilters.grade_id)
+  const selected = grades.value.find((row) => row.grade_id === reportFilters.grade_id)
   return selected?.grade ?? ''
 })
 
 const selectedClassLabel = computed(() => {
-  const selected = classes.value.find((row) => row.class_id === principalFilters.class_id)
+  const selected = classes.value.find((row) => row.class_id === reportFilters.class_id)
   return selected?.class ?? ''
 })
+
+const compareText = (left: string, right: string): number => (
+  left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+)
+
+const compareAttendanceValue = (left: number | null | undefined, right: number | null | undefined): number => {
+  const normalize = (value: number | null | undefined): number => {
+    if (value === 1) return 2
+    if (value === 0) return 1
+    return 0
+  }
+
+  return normalize(left) - normalize(right)
+}
+
+const {
+  toggleSort,
+  resetSort,
+  sortArrow,
+  sortArrowClass,
+  sortItems,
+} = useTableSort<AttendanceStudent, AttendanceSortField>({
+  compare: (field, left, right) => {
+    if (field === 'admission_no') {
+      return compareText(String(left.admission_no ?? ''), String(right.admission_no ?? ''))
+    }
+
+    if (field === 'grade_class') {
+      return compareText(String(left.grade_class ?? ''), String(right.grade_class ?? ''))
+    }
+
+    const dateHeader = field.slice(5)
+    return compareAttendanceValue(left.attendance_map?.[dateHeader], right.attendance_map?.[dateHeader])
+  },
+  fallbackCompare: (left, right) => compareText(String(left.name_with_initials ?? ''), String(right.name_with_initials ?? '')),
+})
+
 const searchKeyword = computed(() => search.value.trim())
-const principalSelectedYear = computed(() => {
-  const value = principalDateFrom.value || principalDateTo.value
+const reportSelectedYear = computed(() => {
+  const value = reportDateFrom.value || reportDateTo.value
   const year = Number(String(value || '').slice(0, 4))
   return Number.isFinite(year) && year >= 2000 && year <= 2100 ? year : 0
 })
@@ -581,8 +646,8 @@ const scopeLabel = computed(() => {
   }
 
   const parts: string[] = []
-  if (principalSelectedYear.value > 0) {
-    parts.push(String(principalSelectedYear.value))
+  if (reportSelectedYear.value > 0) {
+    parts.push(String(reportSelectedYear.value))
   }
   if (selectedGradeLabel.value) {
     parts.push(selectedGradeLabel.value)
@@ -590,8 +655,8 @@ const scopeLabel = computed(() => {
   if (selectedClassLabel.value) {
     parts.push(selectedClassLabel.value)
   }
-  if (principalFilters.gender_id > 0) {
-    parts.push(genderOptions.value.find((row) => row.id === principalFilters.gender_id)?.label ?? '')
+  if (reportFilters.gender_id > 0) {
+    parts.push(genderOptions.value.find((row) => row.id === reportFilters.gender_id)?.label ?? '')
   }
 
   return parts.filter((value) => value.trim() !== '').join(' / ') || text.value.wholeSchool
@@ -599,7 +664,7 @@ const scopeLabel = computed(() => {
 
 const filteredStudents = computed(() => {
   if (isReportViewer.value) {
-    return students.value
+    return sortItems(students.value)
   }
 
   const keyword = searchKeyword.value.toLowerCase()
@@ -615,13 +680,13 @@ const filteredStudents = computed(() => {
   )
 })
 
-const principalDateRangeLabel = computed(() => {
+const reportDateRangeLabel = computed(() => {
   if (!isReportViewer.value) {
     return ''
   }
 
-  const from = principalDateFrom.value.trim()
-  const to = principalDateTo.value.trim()
+  const from = reportDateFrom.value.trim()
+  const to = reportDateTo.value.trim()
   if (from === '' && to === '') {
     return text.value.notAvailable
   }
@@ -633,19 +698,19 @@ const principalDateRangeLabel = computed(() => {
   return formatShortDate(to || from)
 })
 
-const principalStudentTotal = (student: AttendanceStudent): number => {
+const reportStudentTotal = (student: AttendanceStudent): number => {
   if (!student.attendance_map) {
     return 0
   }
 
-  return principalDateHeaders.value.reduce((total, dateHeader) => (
+  return reportDateHeaders.value.reduce((total, dateHeader) => (
     total + (student.attendance_map?.[dateHeader] === 1 ? 1 : 0)
   ), 0)
 }
 
-const principalDateTotals = computed<Record<string, number>>(() => {
+const reportDateTotals = computed<Record<string, number>>(() => {
   const totals: Record<string, number> = {}
-  for (const dateHeader of principalDateHeaders.value) {
+  for (const dateHeader of reportDateHeaders.value) {
     totals[dateHeader] = students.value.reduce((total, student) => (
       total + (student.attendance_map?.[dateHeader] === 1 ? 1 : 0)
     ), 0)
@@ -654,13 +719,13 @@ const principalDateTotals = computed<Record<string, number>>(() => {
   return totals
 })
 
-const principalGrandTotal = computed(() => (
-  principalDateHeaders.value.reduce((total, dateHeader) => total + (principalDateTotals.value[dateHeader] ?? 0), 0)
+const reportGrandTotal = computed(() => (
+  reportDateHeaders.value.reduce((total, dateHeader) => total + (reportDateTotals.value[dateHeader] ?? 0), 0)
 ))
 
 const formattedDate = computed(() => {
   if (isReportViewer.value) {
-    return principalDateRangeLabel.value
+    return reportDateRangeLabel.value
   }
 
   if (!attendanceDate.value) {
@@ -740,9 +805,10 @@ const syncPagination = (nextPagination?: AttendancePagination | null): void => {
   pagination.to = Number(nextPagination?.to ?? 0)
 }
 
-const clearPrincipalResults = (): void => {
+const clearReportResults = (): void => {
   students.value = []
-  principalDateHeaders.value = []
+  reportDateHeaders.value = []
+  resetSort()
   classInfo.value = null
   attendanceDate.value = ''
   pageMessage.value = ''
@@ -776,9 +842,9 @@ const loadGrades = async (year?: number): Promise<void> => {
   const parsedYear = Number(year)
   if (!Number.isFinite(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
     grades.value = []
-    principalFilters.grade_id = 0
+    reportFilters.grade_id = 0
     classes.value = []
-    principalFilters.class_id = 0
+    reportFilters.class_id = 0
     return
   }
 
@@ -788,12 +854,12 @@ const loadGrades = async (year?: number): Promise<void> => {
     })
 
     grades.value = Array.isArray(data.data) ? data.data : []
-    if (!grades.value.some((row) => row.grade_id === principalFilters.grade_id)) {
-      principalFilters.grade_id = 0
+    if (!grades.value.some((row) => row.grade_id === reportFilters.grade_id)) {
+      reportFilters.grade_id = 0
     }
   } catch {
     grades.value = []
-    principalFilters.grade_id = 0
+    reportFilters.grade_id = 0
   }
 }
 
@@ -806,7 +872,7 @@ const loadClasses = async (gradeId: number, year: number): Promise<void> => {
   const parsedYear = Number(year)
   if (!Number.isFinite(parsedGradeId) || parsedGradeId <= 0 || !Number.isFinite(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
     classes.value = []
-    principalFilters.class_id = 0
+    reportFilters.class_id = 0
     return
   }
 
@@ -816,12 +882,12 @@ const loadClasses = async (gradeId: number, year: number): Promise<void> => {
     })
 
     classes.value = Array.isArray(data.data) ? data.data : []
-    if (!classes.value.some((row) => row.class_id === principalFilters.class_id)) {
-      principalFilters.class_id = 0
+    if (!classes.value.some((row) => row.class_id === reportFilters.class_id)) {
+      reportFilters.class_id = 0
     }
   } catch {
     classes.value = []
-    principalFilters.class_id = 0
+    reportFilters.class_id = 0
   }
 }
 
@@ -835,12 +901,12 @@ const loadAttendance = async (): Promise<void> => {
       params.date = selectedDate.value
     }
     if (isReportViewer.value) {
-      if (principalDateFrom.value) params.date_from = principalDateFrom.value
-      if (principalDateTo.value) params.date_to = principalDateTo.value
+      if (reportDateFrom.value) params.date_from = reportDateFrom.value
+      if (reportDateTo.value) params.date_to = reportDateTo.value
       if (isClassTeacher.value) params.report_mode = 1
-      if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
-      if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
-      if (principalFilters.gender_id > 0) params.gender_id = principalFilters.gender_id
+      if (reportFilters.grade_id > 0) params.grade_id = reportFilters.grade_id
+      if (reportFilters.class_id > 0) params.class_id = reportFilters.class_id
+      if (reportFilters.gender_id > 0) params.gender_id = reportFilters.gender_id
       if (searchKeyword.value !== '') params.search = searchKeyword.value
       params.page = pagination.page
       params.per_page = pagination.per_page
@@ -848,12 +914,12 @@ const loadAttendance = async (): Promise<void> => {
 
     const { data } = await api.get<AttendanceResponse>('/students/daily-attendance', Object.keys(params).length > 0 ? { params } : undefined)
     if (isReportViewer.value) {
-      attendanceDate.value = principalDateTo.value || data.date || ''
-      principalDateHeaders.value = Array.isArray(data.date_headers) ? data.date_headers : []
+      attendanceDate.value = reportDateTo.value || data.date || ''
+      reportDateHeaders.value = Array.isArray(data.date_headers) ? data.date_headers : []
     } else {
       attendanceDate.value = data.date ?? ''
       selectedDate.value = data.date ?? selectedDate.value
-      principalDateHeaders.value = []
+      reportDateHeaders.value = []
     }
     classInfo.value = data.class_info ?? null
     students.value = Array.isArray(data.data) ? data.data : []
@@ -862,12 +928,12 @@ const loadAttendance = async (): Promise<void> => {
     pageMessage.value = typeof data.message === 'string' ? data.message : ''
 
     if (isReportViewer.value && data.filters) {
-      principalDateFrom.value = String(data.filters.date_from ?? principalDateFrom.value)
-      principalDateTo.value = String(data.filters.date_to ?? principalDateTo.value)
+      reportDateFrom.value = String(data.filters.date_from ?? reportDateFrom.value)
+      reportDateTo.value = String(data.filters.date_to ?? reportDateTo.value)
       if (isPrincipal.value) {
-        principalFilters.grade_id = Number(data.filters.grade_id ?? principalFilters.grade_id)
-        principalFilters.class_id = Number(data.filters.class_id ?? principalFilters.class_id)
-        principalFilters.gender_id = Number(data.filters.gender_id ?? principalFilters.gender_id)
+        reportFilters.grade_id = Number(data.filters.grade_id ?? reportFilters.grade_id)
+        reportFilters.class_id = Number(data.filters.class_id ?? reportFilters.class_id)
+        reportFilters.gender_id = Number(data.filters.gender_id ?? reportFilters.gender_id)
       }
     }
   } catch (error) {
@@ -925,10 +991,10 @@ const onDateChange = async (): Promise<void> => {
 }
 
 const onGradeChange = async (): Promise<void> => {
-  principalFilters.class_id = 0
+  reportFilters.class_id = 0
   pagination.page = 1
-  if (principalFilters.grade_id > 0 && principalSelectedYear.value > 0) {
-    await loadClasses(principalFilters.grade_id, principalSelectedYear.value)
+  if (reportFilters.grade_id > 0 && reportSelectedYear.value > 0) {
+    await loadClasses(reportFilters.grade_id, reportSelectedYear.value)
   } else {
     classes.value = []
   }
@@ -951,16 +1017,16 @@ const resetFilters = async (): Promise<void> => {
   pagination.page = 1
 
   if (isReportViewer.value) {
-    principalDateFrom.value = selectedDate.value
-    principalDateTo.value = selectedDate.value
+    reportDateFrom.value = selectedDate.value
+    reportDateTo.value = selectedDate.value
     if (isPrincipal.value) {
-      principalFilters.grade_id = 0
-      principalFilters.class_id = 0
-      principalFilters.gender_id = 0
+      reportFilters.grade_id = 0
+      reportFilters.class_id = 0
+      reportFilters.gender_id = 0
       classes.value = []
-      await loadGrades(principalSelectedYear.value)
+      await loadGrades(reportSelectedYear.value)
     }
-    clearPrincipalResults()
+    clearReportResults()
     return
   }
 
@@ -974,12 +1040,12 @@ const submitAttendanceReportSearch = async (): Promise<void> => {
 
   pagination.page = 1
   if (isPrincipal.value) {
-    await loadGrades(principalSelectedYear.value)
-    if (principalFilters.grade_id > 0) {
-      await loadClasses(principalFilters.grade_id, principalSelectedYear.value)
+    await loadGrades(reportSelectedYear.value)
+    if (reportFilters.grade_id > 0) {
+      await loadClasses(reportFilters.grade_id, reportSelectedYear.value)
     } else {
       classes.value = []
-      principalFilters.class_id = 0
+      reportFilters.class_id = 0
     }
   }
   await loadAttendance()
@@ -1004,12 +1070,12 @@ const exportAttendanceExcel = async (): Promise<void> => {
 
   try {
     const params: Record<string, number | string> = {}
-    if (principalDateFrom.value) params.date_from = principalDateFrom.value
-    if (principalDateTo.value) params.date_to = principalDateTo.value
+    if (reportDateFrom.value) params.date_from = reportDateFrom.value
+    if (reportDateTo.value) params.date_to = reportDateTo.value
     if (isClassTeacher.value) params.report_mode = 1
-    if (principalFilters.grade_id > 0) params.grade_id = principalFilters.grade_id
-    if (principalFilters.class_id > 0) params.class_id = principalFilters.class_id
-    if (principalFilters.gender_id > 0) params.gender_id = principalFilters.gender_id
+    if (reportFilters.grade_id > 0) params.grade_id = reportFilters.grade_id
+    if (reportFilters.class_id > 0) params.class_id = reportFilters.class_id
+    if (reportFilters.gender_id > 0) params.gender_id = reportFilters.gender_id
     if (searchKeyword.value !== '') params.search = searchKeyword.value
 
     const response = await api.get('/students/daily-attendance/export', {
@@ -1045,19 +1111,19 @@ const switchToAttendanceReport = async (): Promise<void> => {
   classTeacherViewMode.value = 'report'
   search.value = ''
   pagination.page = 1
-  clearPrincipalResults()
+  clearReportResults()
 }
 
 onMounted(async () => {
   selectedDate.value = todayDate
-  principalDateFrom.value = selectedDate.value
-  principalDateTo.value = selectedDate.value
+  reportDateFrom.value = selectedDate.value
+  reportDateTo.value = selectedDate.value
   await refreshCurrentUser()
 
   if (isPrincipal.value) {
     await loadGradeYears()
-    await loadGrades(principalSelectedYear.value)
-    clearPrincipalResults()
+    await loadGrades(reportSelectedYear.value)
+    clearReportResults()
     return
   }
 
