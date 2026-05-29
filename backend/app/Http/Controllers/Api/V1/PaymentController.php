@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PaymentController extends Controller
 {
@@ -176,6 +183,143 @@ class PaymentController extends Controller
                 : null,
             'summary' => $this->buildPaymentReportSummary($rows),
             'data' => $rows,
+        ]);
+    }
+
+    public function downloadReport(Request $request): StreamedResponse|JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canViewPaymentReport($user)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        if ($this->isUnassignedClassTeacher($user)) {
+            return response()->json(['message' => 'No class assignment found for this class teacher.'], 422);
+        }
+
+        $censusId = $this->resolveTargetSchoolCensusId($user);
+        if ($censusId === null) {
+            return response()->json([
+                'message' => $this->isAdministrator($user)
+                    ? 'Select a school first.'
+                    : 'School is not assigned for this user.',
+            ], 422);
+        }
+
+        $filters = $this->validateReportFilters($request);
+        $classTeacherAssignment = $this->resolveClassTeacherAssignment($user);
+        if ($classTeacherAssignment !== null) {
+            $filters['year'] = (int) $classTeacherAssignment['year'];
+            $filters['grade_id'] = (int) $classTeacherAssignment['grade_id'];
+            $filters['class_id'] = (int) $classTeacherAssignment['class_id'];
+        }
+
+        $rows = $this->loadPaymentReportRows($user, $censusId, $filters, $classTeacherAssignment);
+        $scope = $classTeacherAssignment !== null
+            ? $this->loadPaymentReportScope((int) $classTeacherAssignment['sch_grd_cls_id'])
+            : null;
+        $schoolName = $this->loadSchoolName($censusId);
+        $mainHeading = trim($schoolName) !== '' ? ($schoolName . ' - SDS Payments') : 'SDS Payments';
+        $reportHeading = $this->buildPaymentExportHeading($filters, $scope);
+        $paidTotal = array_reduce(
+            $rows,
+            fn (float $total, array $row): float => $total + (($row['payment_status'] ?? 'not_paid') === 'paid' ? (float) ($row['total'] ?? 0) : 0.0),
+            0.0
+        );
+
+        $yearSuffix = (int) ($filters['year'] ?? 0) > 0 ? (string) $filters['year'] : 'all-years';
+        $classSuffix = trim((string) ($scope['grade_class'] ?? ''));
+        $normalizedClassSuffix = $classSuffix !== '' ? ('-' . preg_replace('/[^A-Za-z0-9_-]+/', '-', $classSuffix)) : '';
+        $filename = 'payments-report' . $normalizedClassSuffix . '-' . $yearSuffix . '.xlsx';
+
+        return response()->streamDownload(function () use ($rows, $mainHeading, $reportHeading, $paidTotal): void {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Payments Report');
+
+            $headers = [
+                'No.',
+                'Admission No',
+                'Name With Initials',
+                'Grade/Class',
+                'Invoice No',
+                'Year',
+                'Status',
+                'Annual Fee',
+                'Member Fee',
+                'Total',
+                'Paid Date',
+            ];
+
+            $sheet->setCellValue('A1', $mainHeading);
+            $sheet->mergeCells('A1:K1');
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+            $sheet->setCellValue('A2', $reportHeading);
+            $sheet->mergeCells('A2:K2');
+            $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(12);
+
+            foreach ($headers as $index => $header) {
+                $sheet->setCellValue($this->excelColumnName($index + 1) . '4', $header);
+            }
+            $sheet->getStyle('A4:K4')->getFont()->setBold(true);
+
+            foreach (array_values($rows) as $rowIndex => $row) {
+                $excelRow = $rowIndex + 5;
+                $isPaid = ($row['payment_status'] ?? 'not_paid') === 'paid';
+                $hasMemberFee = $isPaid && (bool) ($row['include_member_fee'] ?? false);
+                $paidDate = ($row['payment_status'] ?? 'not_paid') === 'paid'
+                    ? $this->normalizeExportDate((string) ($row['paid_date'] ?? ''))
+                    : '-';
+
+                $sheet->setCellValue("A{$excelRow}", (string) ($rowIndex + 1));
+                $sheet->setCellValueExplicit("B{$excelRow}", (string) ($row['admission_no'] ?? ''), DataType::TYPE_STRING);
+                $sheet->setCellValue("C{$excelRow}", (string) ($row['name_with_initials'] ?? ''));
+                $sheet->setCellValue("D{$excelRow}", (string) ($row['grade_class'] ?? ''));
+                $sheet->setCellValueExplicit("E{$excelRow}", (string) ($row['invoice_no'] ?? ''), DataType::TYPE_STRING);
+                $sheet->setCellValue("F{$excelRow}", (string) ($row['year'] ?? ''));
+                $sheet->setCellValue("G{$excelRow}", $isPaid ? 'Paid' : 'Not Paid');
+                $sheet->setCellValue("H{$excelRow}", (float) ($row['annual_fee'] ?? 0));
+                $sheet->getStyle("H{$excelRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+
+                if ($hasMemberFee) {
+                    $sheet->setCellValue("I{$excelRow}", (float) ($row['member_fee'] ?? 0));
+                    $sheet->getStyle("I{$excelRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+                } else {
+                    $sheet->setCellValue("I{$excelRow}", '-');
+                    $sheet->getStyle("I{$excelRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                }
+
+                if ($isPaid) {
+                    $sheet->setCellValue("J{$excelRow}", (float) ($row['total'] ?? 0));
+                    $sheet->getStyle("J{$excelRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+                } else {
+                    $sheet->setCellValue("J{$excelRow}", '-');
+                    $sheet->getStyle("J{$excelRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                }
+
+                $sheet->setCellValue("K{$excelRow}", $paidDate);
+            }
+
+            $totalsRow = count($rows) + 5;
+            $sheet->setCellValue("I{$totalsRow}", 'Total Fee');
+            $sheet->setCellValue("J{$totalsRow}", $paidTotal);
+            $sheet->getStyle("J{$totalsRow}")->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+            $sheet->getStyle("I{$totalsRow}:J{$totalsRow}")->getFont()->setBold(true);
+            $sheet->getStyle("J{$totalsRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+
+            for ($index = 1; $index <= count($headers); $index++) {
+                $sheet->getColumnDimension($this->excelColumnName($index))->setAutoSize(true);
+            }
+
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 
@@ -1137,6 +1281,133 @@ class PaymentController extends Controller
             'class' => (string) ($row->class ?? ''),
             'grade_class' => trim(sprintf('%s %s', (string) ($row->grade ?? ''), (string) ($row->class ?? ''))),
         ];
+    }
+
+    /**
+     * @param  array{year:int, grade_id:int, class_id:int, admission_no:string, invoice_no:string, payment_status:string}  $filters
+     * @param  array<string, mixed>|null  $scope
+     */
+    private function buildPaymentExportHeading(array $filters, ?array $scope): string
+    {
+        $yearLabel = (int) ($filters['year'] ?? 0) > 0 ? (string) $filters['year'] : 'All';
+        $statusLabel = match ((string) ($filters['payment_status'] ?? 'all')) {
+            'paid' => 'Paid',
+            'not_paid' => 'Not Paid',
+            default => 'All',
+        };
+
+        if ($scope !== null) {
+            $gradeLabel = trim((string) ($scope['grade_class'] ?? ''));
+        } else {
+            $gradeLabel = '';
+            $gradeId = (int) ($filters['grade_id'] ?? 0);
+            $classId = (int) ($filters['class_id'] ?? 0);
+
+            if ($gradeId > 0) {
+                $gradeLabel = $this->loadGradeLabel($gradeId);
+            }
+
+            if ($classId > 0) {
+                $classLabel = $this->loadClassLabel($classId);
+                $gradeLabel = trim($gradeLabel . $classLabel);
+            }
+
+            if ($gradeLabel === '') {
+                $gradeLabel = 'All';
+            }
+        }
+
+        return sprintf('Year - %s, Grade - %s, Status - %s', $yearLabel, $gradeLabel, $statusLabel);
+    }
+
+    private function loadSchoolName(string $censusId): string
+    {
+        if ($censusId === '' || !Schema::hasTable((new SchoolDetail())->getTable())) {
+            return 'School';
+        }
+
+        $schoolName = SchoolDetail::query()
+            ->whereIn('census_id', $this->censusCandidates($censusId))
+            ->orderByDesc('census_id')
+            ->value('sch_name');
+
+        return trim((string) ($schoolName ?? '')) !== ''
+            ? trim((string) $schoolName)
+            : 'School';
+    }
+
+    private function normalizeExportDate(string $value): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}/', $trimmed) === 1
+            ? substr($trimmed, 0, 10)
+            : $trimmed;
+    }
+
+    private function loadGradeLabel(int $gradeId): string
+    {
+        if ($gradeId <= 0 || !Schema::hasTable('grade_tbl')) {
+            return '';
+        }
+
+        $gradeLabelColumn = $this->resolveLookupLabelColumn('grade_tbl', [
+            'grade_en',
+            'grade_si',
+            'grade_ta',
+            'grade',
+        ]);
+
+        if ($gradeLabelColumn === null) {
+            return '';
+        }
+
+        $row = DB::table('grade_tbl')
+            ->select(DB::raw($gradeLabelColumn . ' as label'))
+            ->where('grade_id', $gradeId)
+            ->first();
+
+        return trim((string) ($row->label ?? ''));
+    }
+
+    private function loadClassLabel(int $classId): string
+    {
+        if ($classId <= 0 || !Schema::hasTable('class_tbl')) {
+            return '';
+        }
+
+        $classLabelColumn = $this->resolveLookupLabelColumn('class_tbl', [
+            'class_en',
+            'class_si',
+            'class_ta',
+            'class',
+        ]);
+
+        if ($classLabelColumn === null) {
+            return '';
+        }
+
+        $row = DB::table('class_tbl')
+            ->select(DB::raw($classLabelColumn . ' as label'))
+            ->where('class_id', $classId)
+            ->first();
+
+        return trim((string) ($row->label ?? ''));
+    }
+
+    private function excelColumnName(int $index): string
+    {
+        $name = '';
+        while ($index > 0) {
+            $index--;
+            $name = chr(65 + ($index % 26)) . $name;
+            $index = intdiv($index, 26);
+        }
+
+        return $name;
     }
 
     private function paymentExists(string $indexNo, string $censusId, int $year): bool

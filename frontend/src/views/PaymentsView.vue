@@ -193,6 +193,12 @@
           </div>
 
           <div class="flex items-end">
+            <button class="w-full rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loadingReport" @click="exportPaymentReportExcel">
+              {{ text.exportExcel }}
+            </button>
+          </div>
+
+          <div class="flex items-end">
             <button class="w-full rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loadingReport" @click="searchPaymentReport">
               {{ loadingReport ? text.searching : text.refresh }}
             </button>
@@ -257,6 +263,12 @@
                 <td class="px-3 py-2 text-slate-700 whitespace-nowrap">{{ row.payment_status === 'paid' && row.include_member_fee ? formatAmount(row.member_fee) : text.notIncluded }}</td>
                 <td class="px-3 py-2 font-semibold text-slate-900 whitespace-nowrap">{{ row.payment_status === 'paid' ? formatAmount(row.total) : '-' }}</td>
                 <td class="px-3 py-2 text-slate-700 whitespace-nowrap">{{ row.payment_status === 'paid' ? formatDate(row.paid_date) : '-' }}</td>
+              </tr>
+              <tr v-if="!loadingReport && reportRows.length > 0" class="bg-slate-50">
+                <td colspan="8" class="px-3 py-3"></td>
+                <td class="px-3 py-3 text-right font-semibold text-slate-900 whitespace-nowrap">{{ text.totalFee }}</td>
+                <td class="px-3 py-3 font-semibold text-slate-900 whitespace-nowrap">{{ formatAmount(reportSummary.total_amount) }}</td>
+                <td class="px-3 py-3"></td>
               </tr>
             </tbody>
           </table>
@@ -638,6 +650,7 @@ const text = computed(() => {
       includeMemberFee: 'සාමාජික ගාස්තුව එකතු කරන්න',
       total: 'මුළු මුදල',
       totalPayments: 'මුළු ගෙවීම්',
+      totalFee: 'මුළු ගාස්තුව',
       addPayment: 'ගෙවීම එක් කරන්න',
       addFeeType: 'ගාස්තු වර්ගය එක් කරන්න',
       paymentEntry: 'ගෙවීම් ඇතුළත් කිරීම',
@@ -684,6 +697,7 @@ const text = computed(() => {
       class: 'පන්තිය',
       scope: 'පරාසය',
       status: 'තත්ත්වය',
+      exportExcel: 'Excel',
       refresh: 'නැවත පූරණය',
       reset: 'යළි සකසන්න',
       close: 'වසන්න',
@@ -718,6 +732,7 @@ const text = computed(() => {
       includeMemberFee: 'உறுப்பினர் கட்டணத்தை சேர்க்கவும்',
       total: 'மொத்தம்',
       totalPayments: 'மொத்த கட்டணங்கள்',
+      totalFee: 'மொத்த கட்டணம்',
       addPayment: 'கட்டணம் சேர்க்கவும்',
       addFeeType: 'கட்டண வகை சேர்க்கவும்',
       paymentEntry: 'கட்டண பதிவு',
@@ -764,6 +779,7 @@ const text = computed(() => {
       class: 'வகுப்பு',
       scope: 'வரம்பு',
       status: 'நிலை',
+      exportExcel: 'Excel',
       refresh: 'மீண்டும் ஏற்று',
       reset: 'மீட்டமை',
       close: 'மூடு',
@@ -797,6 +813,7 @@ const text = computed(() => {
     includeMemberFee: 'Include member fee',
     total: 'Total',
     totalPayments: 'Total Payments',
+    totalFee: 'Total Fee',
     addPayment: 'Add Payment',
     addFeeType: 'Add Fee Type',
     paymentEntry: 'Payment Entry',
@@ -843,6 +860,7 @@ const text = computed(() => {
     class: 'Class',
     scope: 'Scope',
     status: 'Status',
+    exportExcel: 'Excel',
     refresh: 'Refresh',
     reset: 'Reset',
     close: 'Close',
@@ -1215,6 +1233,53 @@ const onReportGradeChange = async (): Promise<void> => {
 
 const searchPaymentReport = async (): Promise<void> => {
   await loadPaymentReport()
+}
+
+const exportPaymentReportExcel = async (): Promise<void> => {
+  if (!canViewPaymentReport.value) {
+    return
+  }
+
+  clearStatus()
+
+  if (!isClassTeacher.value && reportFilters.value.year <= 0) {
+    errorMessage.value = text.value.yearRequired
+    return
+  }
+
+  if (lookupDisabled.value) {
+    errorMessage.value = text.value.selectSchoolFirst
+    return
+  }
+
+  try {
+    const headers = buildSchoolHeaders()
+    const params: Record<string, number | string> = {}
+    if (reportFilters.value.year > 0) params.year = reportFilters.value.year
+    if (reportFilters.value.grade_id > 0) params.grade_id = reportFilters.value.grade_id
+    if (reportFilters.value.class_id > 0) params.class_id = reportFilters.value.class_id
+    if (reportFilters.value.admission_no.trim() !== '') params.admission_no = reportFilters.value.admission_no.trim()
+    if (reportFilters.value.invoice_no.trim() !== '') params.invoice_no = reportFilters.value.invoice_no.trim()
+    if (reportFilters.value.payment_status !== 'all') params.payment_status = reportFilters.value.payment_status
+
+    const response = await api.get('/payments/report/export', {
+      headers,
+      params,
+      responseType: 'blob',
+    })
+
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const disposition = String(response.headers?.['content-disposition'] ?? '')
+    const fileNameMatch = disposition.match(/filename=\"?([^\"]+)\"?/i)
+    link.href = url
+    link.download = fileNameMatch?.[1] || 'payments-report.xlsx'
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (reason) {
+    errorMessage.value = extractApiMessage(reason) || text.value.unableToLoadPayments
+  }
 }
 
 const resetPaymentReport = async (): Promise<void> => {
