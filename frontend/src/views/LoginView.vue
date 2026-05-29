@@ -1,11 +1,11 @@
 <template>
-  <div class="min-h-screen bg-slate-100">
+  <div class="flex min-h-screen flex-col bg-slate-100">
     <header class="bg-gradient-to-r from-cyan-700 via-cyan-600 to-teal-600 py-4 text-center text-white shadow-sm">
       <h1 class="font-display text-2xl font-bold tracking-wide">SCHOOL RECORDS</h1>
       <p class="mt-1 text-sm">Multi-School Management Portal</p>
     </header>
 
-    <main class="mx-auto grid w-full max-w-6xl gap-6 px-4 py-10 md:grid-cols-[1.1fr_1fr] md:items-center">
+    <main class="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-10 md:grid-cols-[1.1fr_1fr] md:items-center">
       <section class="hidden items-center justify-center md:flex">
         <div class="max-w-md rounded-2xl border border-slate-200 bg-white/80 p-8 text-slate-700 shadow-lg">
           <h3 class="font-display text-2xl font-bold text-slate-900">Welcome to School Records</h3>
