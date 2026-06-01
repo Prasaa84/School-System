@@ -16,6 +16,7 @@ const fallbackModules: ModuleCatalogItem[] = [
   { key: 'classes', label: 'Classes' },
   { key: 'staff', label: 'Teachers' },
   { key: 'payments', label: 'SDS Payments' },
+  { key: 'subjects', label: 'Subjects' },
   { key: 'reports', label: 'Reports' },
 ]
 
@@ -29,6 +30,8 @@ const keyAliases: Record<string, string> = {
   staff: 'staff',
   payments: 'payments',
   payment: 'payments',
+  subjects: 'subjects',
+  subject: 'subjects',
   reports: 'reports',
   report: 'reports',
   student: 'students',

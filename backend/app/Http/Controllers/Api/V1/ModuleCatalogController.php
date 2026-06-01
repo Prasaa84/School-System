@@ -95,7 +95,7 @@ class ModuleCatalogController extends Controller
             $roleName = strtolower(trim((string) ($user?->role?->role_name ?? '')));
             if (in_array($roleName, ['class teacher', 'class_teacher', 'classteacher'], true)) {
                 $normalizedModules = $normalizedModules
-                    ->filter(fn (array $module): bool => in_array($module['key'], ['students', 'classes', 'staff', 'payments'], true))
+                    ->filter(fn (array $module): bool => in_array($module['key'], ['students', 'classes', 'staff', 'payments', 'subjects'], true))
                     ->values();
             }
 
@@ -190,6 +190,7 @@ class ModuleCatalogController extends Controller
             'staff' => ['key' => 'staff', 'label' => 'Staff'],
             'students' => ['key' => 'students', 'label' => 'Students', 'path' => '/students'],
             'payments' => ['key' => 'payments', 'label' => 'SDS Payments'],
+            'subjects' => ['key' => 'subjects', 'label' => 'Subjects'],
             'reports' => ['key' => 'reports', 'label' => 'Reports'],
         ]);
 
@@ -197,7 +198,7 @@ class ModuleCatalogController extends Controller
         $roleName = strtolower(trim((string) ($user?->role?->role_name ?? '')));
 
         if (in_array($roleName, ['class teacher', 'class_teacher', 'classteacher'], true)) {
-            $keys = ['students', 'classes', 'staff', 'payments'];
+            $keys = ['students', 'classes', 'staff', 'payments', 'subjects'];
 
             return collect($keys)
                 ->map(fn (string $key): ?array => $catalog->get($key))
@@ -206,16 +207,16 @@ class ModuleCatalogController extends Controller
         }
 
         $roleMap = [
-            1 => ['grades', 'classes', 'students', 'staff', 'payments', 'reports'],
-            2 => ['grades', 'classes', 'students', 'staff', 'payments', 'reports'],
+            1 => ['grades', 'classes', 'students', 'staff', 'payments', 'subjects', 'reports'],
+            2 => ['grades', 'classes', 'students', 'staff', 'payments', 'subjects', 'reports'],
             3 => ['grades', 'classes', 'students', 'staff', 'reports'],
             4 => ['payments', 'students', 'grades', 'classes'],
-            5 => ['students', 'grades', 'classes'],
-            6 => ['students', 'grades', 'classes'],
+            5 => ['students', 'grades', 'classes', 'subjects'],
+            6 => ['students', 'grades', 'classes', 'subjects'],
             7 => ['students', 'payments']
         ];
 
-        $keys = $roleMap[$roleId ?? -1] ?? ['grades', 'grades', 'classes', 'staff', 'payments', 'reports'];
+        $keys = $roleMap[$roleId ?? -1] ?? ['grades', 'grades', 'classes', 'staff', 'payments', 'subjects', 'reports'];
 
         return collect($keys)
             ->map(fn (string $key): ?array => $catalog->get($key))

@@ -71,6 +71,11 @@
                   <rect x="4.5" y="7" width="11" height="1.8" rx="0.8" fill="white" />
                   <circle cx="14" cy="12.5" r="1.5" fill="white" />
                 </svg>
+                <svg v-else-if="item.key === 'subjects'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="3" y="2.5" width="14" height="15" rx="2" />
+                  <path d="M6 6h8M6 9h8M6 12h5" stroke="white" stroke-width="1.6" stroke-linecap="round" />
+                  <circle cx="13.5" cy="12.2" r="1.8" fill="white" />
+                </svg>
                 <svg v-else-if="item.key === 'account'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
                   <circle cx="10" cy="6" r="3" />
                   <path d="M4 17c0-2.8 2.7-4.5 6-4.5s6 1.7 6 4.5" />
@@ -266,6 +271,7 @@ const roleName = computed(() => String(currentUser.value?.role_name ?? '').trim(
 const isAdmin = computed(() => (currentUser.value?.role_id ?? 0) === 1 || roleName.value === 'admin' || roleName.value === 'administrator')
 const isPrincipal = computed(() => (currentUser.value?.role_id ?? 0) === 2 || roleName.value === 'principal')
 const isSdsUser = computed(() => (currentUser.value?.role_id ?? 0) === 4 || roleName.value === 'sds user')
+const isClerk = computed(() => (currentUser.value?.role_id ?? 0) === 6 || roleName.value === 'clerk')
 const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName.value))
 const isStudent = computed(() => (currentUser.value?.role_id ?? 0) === 7 || roleName.value === 'student')
 const schoolName = ref('')
@@ -380,6 +386,7 @@ const localizedMenu = computed(() => {
           staff: 'Staff',
           attendance: 'Daily Attendance',
           payments: 'Payments',
+          subjects: 'Subjects',
           'payments-history': 'Payments History',
           account: 'Account',
           reports: 'Reports',
@@ -394,6 +401,7 @@ const localizedMenu = computed(() => {
           staff: 'කාර්ය මණ්ඩලය',
           attendance: 'දෛනික පැමිණීම',
           payments: 'ගෙවීම්',
+          subjects: 'විෂයයන්',
           'payments-history': 'ගෙවීම් ඉතිහාසය',
           account: 'ගිණුම',
           reports: 'වාර්තා',
@@ -408,6 +416,7 @@ const localizedMenu = computed(() => {
           staff: 'பணியாளர்கள்',
           attendance: 'தினசரி வருகை',
           payments: 'கட்டணங்கள்',
+          subjects: 'பாடங்கள்',
           'payments-history': 'கட்டண வரலாறு',
           account: 'கணக்கு',
           reports: 'அறிக்கைகள்',
@@ -420,16 +429,19 @@ const localizedMenu = computed(() => {
             'students-in-classes': 'Students in Classes',
             'students-report': 'Student Reports',
             'payments-fee-types': 'Fee Types',
+            'subjects-report': 'Subjects Report',
           }[child.key] ?? child.label,
           si: {
             'students-in-classes': 'පන්තිවල සිසුන්',
             'students-report': 'සිසු වාර්තා',
             'payments-fee-types': 'ගාස්තු වර්ග',
+            'subjects-report': 'විෂය වාර්තාව',
           }[child.key] ?? child.label,
           ta: {
             'students-in-classes': 'வகுப்புகளில் மாணவர்கள்',
             'students-report': 'மாணவர் அறிக்கைகள்',
             'payments-fee-types': 'கட்டண வகைகள்',
+            'subjects-report': 'பாட அறிக்கை',
           }[child.key] ?? child.label,
         }),
       })),
@@ -537,6 +549,10 @@ const loadMenu = async (): Promise<void> => {
             ? [
                 { key: 'payments-fee-types', label: 'Fee Types', to: '/module/payments/fee-types' },
               ]
+            : module.key === 'subjects' && (isAdmin.value || isPrincipal.value || isClerk.value)
+              ? [
+                  { key: 'subjects-report', label: 'Subjects Report', to: '/module/subjects/report' },
+                ]
             : undefined,
     }))
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))

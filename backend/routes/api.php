@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\SchoolController;
 use App\Http\Controllers\Api\V1\StaffController;
 use App\Http\Controllers\Api\V1\StudentAttendanceController;
 use App\Http\Controllers\Api\V1\StudentController;
+use App\Http\Controllers\Api\V1\SubjectsController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -49,6 +50,13 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/payments/fee-types', [PaymentController::class, 'storeFeeType']);
         Route::put('/payments/fee-types/{feeTypeId}', [PaymentController::class, 'updateFeeType'])->whereNumber('feeTypeId');
         Route::post('/payments', [PaymentController::class, 'store']);
+
+        Route::get('/subjects/options', [SubjectsController::class, 'options']);
+        Route::get('/subjects/grade-subjects', [SubjectsController::class, 'subjects']);
+        Route::get('/subjects/grade-subjects/export', [SubjectsController::class, 'downloadSubjects']);
+        Route::get('/subjects/report', [SubjectsController::class, 'report']);
+        Route::get('/subjects/report/export', [SubjectsController::class, 'downloadReport']);
+        Route::post('/subjects/grade-subjects', [SubjectsController::class, 'saveSubjects']);
 
         Route::get('/grades', GradeController::class);
         Route::post('/grades/initialize-year', [GradeController::class, 'initializeYear']);
