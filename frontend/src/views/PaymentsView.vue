@@ -130,7 +130,7 @@
           <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{{ reportSummary.payment_count }}</span>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div class="grid gap-2 md:grid-cols-2 lg:grid-cols-5 xl:grid-cols-6">
           <label v-if="isAdmin" class="text-sm text-slate-700 lg:col-span-5">
             {{ text.school }}
             <select v-model.number="selectedSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onSchoolChange">
@@ -139,11 +139,11 @@
             </select>
           </label>
 
-          <label class="text-sm text-slate-700">
+          <label class="min-w-0 text-[11px] text-slate-700">
             {{ text.year }}
             <select
               v-model.number="reportFilters.year"
-              class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]"
               @change="onReportYearChange"
             >
               <option :value="0">{{ text.allYears }}</option>
@@ -167,19 +167,19 @@
             </select>
           </label>
 
-          <label class="text-sm text-slate-700">
+          <label class="min-w-0 text-[11px] text-slate-700">
             {{ text.admissionLabel }}
-            <input v-model="reportFilters.admission_no" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model="reportFilters.admission_no" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" />
           </label>
 
-          <label class="text-sm text-slate-700">
+          <label class="min-w-0 text-[11px] text-slate-700">
             {{ text.invoiceNo }}
-            <input v-model="reportFilters.invoice_no" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model="reportFilters.invoice_no" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" />
           </label>
 
-          <label class="text-sm text-slate-700">
+          <label class="min-w-0 text-[11px] text-slate-700">
             {{ text.paymentStatus }}
-            <select v-model="reportFilters.payment_status" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <select v-model="reportFilters.payment_status" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]">
               <option value="all">{{ text.paymentStatusAll }}</option>
               <option value="paid">{{ text.paymentStatusPaid }}</option>
               <option value="not_paid">{{ text.paymentStatusNotPaid }}</option>

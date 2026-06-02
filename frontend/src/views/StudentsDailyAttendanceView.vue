@@ -55,33 +55,33 @@
 
       <div class="mt-4 print:hidden">
         <div
-          class="grid gap-3 md:grid-cols-2"
-          :class="isReportViewer ? 'lg:grid-cols-5' : 'lg:grid-cols-[220px_minmax(220px,1fr)_90px_90px_90px]'"
+          class="grid gap-2 md:grid-cols-2"
+          :class="isReportViewer ? (isPrincipal ? 'lg:grid-cols-8' : 'lg:grid-cols-5') : 'lg:grid-cols-[220px_minmax(220px,1fr)_90px_90px_90px]'"
         >
         <label v-if="!isReportViewer" class="block text-sm text-slate-700">
           {{ text.filterDate }}
           <input v-model="selectedDate" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onDateChange" />
         </label>
-        <label v-if="isReportViewer" class="block text-sm text-slate-700">
+        <label v-if="isReportViewer" class="block min-w-0 text-[11px] text-slate-700">
           {{ text.fromDate }}
-          <input v-model="reportDateFrom" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input v-model="reportDateFrom" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" />
         </label>
-        <label v-if="isReportViewer" class="block text-sm text-slate-700">
+        <label v-if="isReportViewer" class="block min-w-0 text-[11px] text-slate-700">
           {{ text.toDate }}
-          <input v-model="reportDateTo" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input v-model="reportDateTo" type="date" :max="todayDate" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" />
         </label>
-        <label v-if="isPrincipal" class="block text-sm text-slate-700">
+        <label v-if="isPrincipal" class="block min-w-0 text-[11px] text-slate-700">
           {{ text.grade }}
-          <select v-model.number="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="reportSelectedYear <= 0" @change="onGradeChange">
+          <select v-model.number="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" :disabled="reportSelectedYear <= 0" @change="onGradeChange">
             <option :value="0">{{ text.allGrades }}</option>
             <option v-for="row in grades" :key="`attendance-grade-${row.grade_id}`" :value="row.grade_id">{{ row.grade }}</option>
           </select>
         </label>
-        <label v-if="isPrincipal" class="block text-sm text-slate-700">
+        <label v-if="isPrincipal" class="block min-w-0 text-[11px] text-slate-700">
           {{ text.class }}
           <select
             v-model.number="reportFilters.class_id"
-            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]"
             :disabled="reportSelectedYear <= 0 || reportFilters.grade_id <= 0"
             @change="onClassChange"
           >
@@ -89,38 +89,38 @@
             <option v-for="row in classes" :key="`attendance-class-${row.class_id}`" :value="row.class_id">{{ row.class }}</option>
           </select>
         </label>
-        <label v-if="isPrincipal" class="block text-sm text-slate-700">
+        <label v-if="isPrincipal" class="block min-w-0 text-[11px] text-slate-700">
           {{ text.gender }}
-          <select v-model.number="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onGenderChange">
+          <select v-model.number="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onGenderChange">
             <option v-for="row in genderOptions" :key="`attendance-gender-${row.id}`" :value="row.id">{{ row.label }}</option>
           </select>
         </label>
-        <label class="block min-w-0 text-sm text-slate-700">
+        <label :class="isReportViewer ? 'block min-w-0 text-[11px] text-slate-700' : 'block min-w-0 text-sm text-slate-700'">
           {{ text.search }}
           <input
             v-model="search"
             type="text"
-            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            :class="[ 'mt-1 w-full rounded-lg border border-slate-300', isReportViewer ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-sm' ]"
             :placeholder="text.searchPlaceholder"
             @keydown.enter.prevent="isReportViewer ? submitAttendanceReportSearch() : null"
           />
         </label>
         <button
-          class="self-end rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          :class="[ 'self-end rounded-xl border border-slate-300 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50', isReportViewer ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-sm' ]"
           :disabled="loading"
           @click="resetFilters"
         >
           {{ text.reset }}
         </button>
         <button
-          class="self-end rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          :class="[ 'self-end rounded-xl border border-slate-300 bg-white font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50', isReportViewer ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-sm' ]"
           :disabled="loading"
           @click="isReportViewer ? submitAttendanceReportSearch() : loadAttendance()"
         >
           {{ loading ? text.loading : (isReportViewer ? text.searchAction : text.refresh) }}
         </button>
         <button
-          class="self-end rounded-xl bg-teal-500 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-600"
+          :class="[ 'self-end rounded-xl bg-teal-500 font-semibold text-white hover:bg-teal-600', isReportViewer ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-sm' ]"
           @click="isReportViewer ? exportAttendanceExcel() : printAttendance()"
         >
           {{ isReportViewer ? text.exportExcel : text.print }}
@@ -464,17 +464,19 @@ const text = useLocalizedText({
     attendanceRecorded: 'Attendance recorded.',
     attendanceCleared: 'Attendance cleared.',
     unableToLoad: 'Unable to load daily attendance.',
+    selectGradeBeforeSearch: 'Select a grade before searching attendance.',
+    selectGradeBeforeExport: 'Select a grade before exporting attendance.',
     unableToToggle: 'Unable to update attendance.',
     notAssigned: 'No class assignment found for this class teacher.',
     attendanceReadOnlyToday: 'Attendance can only be marked for today.',
     notAvailable: 'N/A',
     year: 'Academic Year',
     grade: 'Grade',
-    allGrades: 'All Grades',
+    allGrades: 'Select Grade',
     class: 'Class',
-    allClasses: 'All Classes',
+    allClasses: 'Select Class',
     gender: 'Gender',
-    allGenders: 'All Genders',
+    allGenders: 'Select Gender',
     male: 'Male',
     female: 'Female',
     wholeSchool: 'Whole School',
@@ -519,17 +521,19 @@ const text = useLocalizedText({
     attendanceRecorded: 'පැමිණීම සටහන් කරන ලදී.',
     attendanceCleared: 'පැමිණීම ඉවත් කරන ලදී.',
     unableToLoad: 'දෛනික පැමිණීම පූරණය කළ නොහැක.',
+    selectGradeBeforeSearch: 'පැමිණීම සෙවීමට පෙර ශ්‍රේණියක් තෝරන්න.',
+    selectGradeBeforeExport: 'පැමිණීම අපනයනය කිරීමට පෙර ශ්‍රේණියක් තෝරන්න.',
     unableToToggle: 'පැමිණීම යාවත්කාලීන කළ නොහැක.',
     notAssigned: 'මෙම පන්ති ගුරුවරයාට පන්තියක් නියම කර නොමැත.',
     attendanceReadOnlyToday: 'පැමිණීම සටහන් කළ හැක්කේ අද දිනය සඳහා පමණි.',
     notAvailable: 'නොමැත',
     year: 'අධ්‍යයන වර්ෂය',
     grade: 'ශ්‍රේණිය',
-    allGrades: 'සියලු ශ්‍රේණි',
+    allGrades: 'ශ්‍රේණිය තෝරන්න',
     class: 'පන්තිය',
-    allClasses: 'සියලු පන්ති',
+    allClasses: 'පන්තිය තෝරන්න',
     gender: 'ස්ත්‍රී/පුරුෂ භාවය',
-    allGenders: 'සියලුම',
+    allGenders: 'ස්ත්‍රී/පුරුෂ භාවය තෝරන්න',
     male: 'පිරිමි',
     female: 'ගැහැණු',
     wholeSchool: 'මුළු පාසල',
@@ -574,17 +578,19 @@ const text = useLocalizedText({
     attendanceRecorded: 'வருகை பதிவு செய்யப்பட்டது.',
     attendanceCleared: 'வருகை நீக்கப்பட்டது.',
     unableToLoad: 'தினசரி வருகையை ஏற்ற முடியவில்லை.',
+    selectGradeBeforeSearch: 'வருகையை தேடுவதற்கு முன் ஒரு தரத்தைத் தேர்ந்தெடுக்கவும்.',
+    selectGradeBeforeExport: 'வருகையை ஏற்றுமதி செய்வதற்கு முன் ஒரு தரத்தைத் தேர்ந்தெடுக்கவும்.',
     unableToToggle: 'வருகையை புதுப்பிக்க முடியவில்லை.',
     notAssigned: 'இந்த வகுப்பு ஆசிரியருக்கு வகுப்பு ஒதுக்கப்படவில்லை.',
     attendanceReadOnlyToday: 'வருகையை இன்று தேதிக்காக மட்டும் பதிவு செய்யலாம்.',
     notAvailable: 'கிடைக்கவில்லை',
     year: 'கல்வி ஆண்டு',
     grade: 'தரம்',
-    allGrades: 'அனைத்து தரங்கள்',
+    allGrades: 'தரத்தைத் தேர்ந்தெடுக்கவும்',
     class: 'வகுப்பு',
-    allClasses: 'அனைத்து வகுப்புகள்',
+    allClasses: 'வகுப்பைத் தேர்ந்தெடுக்கவும்',
     gender: 'பால்',
-    allGenders: 'அனைத்தும்',
+    allGenders: 'பாலினத்தைத் தேர்ந்தெடுக்கவும்',
     male: 'ஆண்',
     female: 'பெண்',
     wholeSchool: 'முழு பள்ளி',
@@ -911,6 +917,18 @@ const loadClasses = async (gradeId: number, year: number): Promise<void> => {
 }
 
 const loadAttendance = async (): Promise<void> => {
+  if (isReportViewer.value && isPrincipal.value && reportFilters.grade_id <= 0) {
+    students.value = []
+    classInfo.value = null
+    attendanceEditWindow.value = null
+    reportDateHeaders.value = []
+    syncSummary()
+    syncPagination()
+    pageError.value = text.value.selectGradeBeforeSearch
+    pageMessage.value = ''
+    return
+  }
+
   loading.value = true
   pageError.value = ''
 
@@ -1089,6 +1107,11 @@ const goToPrincipalPage = async (page: number): Promise<void> => {
 
 const exportAttendanceExcel = async (): Promise<void> => {
   pageError.value = ''
+
+  if (isReportViewer.value && isPrincipal.value && reportFilters.grade_id <= 0) {
+    pageError.value = text.value.selectGradeBeforeExport
+    return
+  }
 
   try {
     const params: Record<string, number | string> = {}

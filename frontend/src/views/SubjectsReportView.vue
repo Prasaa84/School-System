@@ -6,7 +6,7 @@
     </header>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div class="grid gap-4 md:grid-cols-4">
+      <div class="grid gap-2 md:grid-cols-4">
         <label v-if="isAdmin" class="text-sm text-slate-700 md:col-span-4">
           {{ text.school }}
           <select v-model.number="selectedSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onSchoolChange">
@@ -15,30 +15,30 @@
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label class="text-xs text-slate-700 md:text-sm">
           {{ text.year }}
-          <select v-model.number="selectedYear" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <select v-model.number="selectedYear" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs md:px-3 md:py-2 md:text-sm">
             <option :value="0">{{ text.selectYear }}</option>
             <option v-for="year in yearOptions" :key="`subject-report-year-${year}`" :value="year">{{ year }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label class="text-xs text-slate-700 md:text-sm">
           {{ text.grade }}
-          <select v-model.number="selectedGradeId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <select v-model.number="selectedGradeId" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs md:px-3 md:py-2 md:text-sm">
             <option :value="0">{{ text.selectGrade }}</option>
             <option v-for="row in grades" :key="`subject-report-grade-${row.grade_id}`" :value="row.grade_id">{{ row.label }}</option>
           </select>
         </label>
 
         <div class="flex items-end">
-          <button class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" :disabled="loadingRows" @click="resetFilters">
+          <button class="w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:px-4 md:py-2 md:text-sm" :disabled="loadingRows" @click="resetFilters">
             {{ text.reset }}
           </button>
         </div>
 
         <div class="flex items-end">
-          <button class="w-full rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loadingRows" @click="searchReport">
+          <button class="w-full rounded-xl bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60 md:px-4 md:py-2 md:text-sm" :disabled="loadingRows" @click="searchReport">
             {{ loadingRows ? text.loading : text.search }}
           </button>
         </div>

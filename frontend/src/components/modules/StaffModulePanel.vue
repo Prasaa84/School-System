@@ -87,152 +87,152 @@
         <p class="text-sm text-slate-500">{{ text.staffReportHelp }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="$emit('reset-report-filters')">
+        <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @click="$emit('reset-report-filters')">
           {{ text.reset }}
         </button>
-        <button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white" @click="$emit('load-report')">
+        <button class="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white" @click="$emit('load-report')">
           {{ text.view }}
         </button>
       </div>
     </div>
 
-    <div class="grid gap-3" :class="isSdsUser ? 'md:grid-cols-3' : 'md:grid-cols-2 xl:grid-cols-4'">
-      <label v-if="isAdmin && !isSdsUser" class="text-sm text-slate-700">
+    <div class="grid gap-2 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+      <label v-if="isAdmin && !isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.school }}
-        <select :value="reportFilters.school_census_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('school_census_id', $event)">
+        <select :value="reportFilters.school_census_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('school_census_id', $event)">
           <option :value="0">{{ text.allSchools }}</option>
           <option v-for="row in staffSchools" :key="`report-school-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label class="min-w-0 text-[11px] text-slate-700">
         {{ text.search }}
-        <input :value="reportFilters.q" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :placeholder="text.searchPlaceholder" @input="onReportTextChange('q', $event)" />
+        <input :value="reportFilters.q" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" :placeholder="text.searchPlaceholder" @input="onReportTextChange('q', $event)" />
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label class="min-w-0 text-[11px] text-slate-700">
         {{ text.grade }}
-        <select :value="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('grade_id', $event)">
+        <select :value="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('grade_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in reportGrades" :key="`report-grade-filter-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label class="text-sm text-slate-700">
+      <label class="min-w-0 text-[11px] text-slate-700">
         {{ text.class }}
-        <select :value="reportFilters.class_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('class_id', $event)">
+        <select :value="reportFilters.class_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('class_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in filteredReportClasses" :key="`report-class-filter-${row.grade_id}-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.gender }}
-        <select :value="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('gender_id', $event)">
+        <select :value="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('gender_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in genders" :key="`report-gender-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.religion }}
-        <select :value="reportFilters.religion_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('religion_id', $event)">
+        <select :value="reportFilters.religion_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('religion_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in religions" :key="`report-religion-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.civilStatus }}
-        <select :value="reportFilters.civil_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('civil_status_id', $event)">
+        <select :value="reportFilters.civil_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('civil_status_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in civilStatuses" :key="`report-civil-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.ethnicGroup }}
-        <select :value="reportFilters.ethnic_group_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('ethnic_group_id', $event)">
+        <select :value="reportFilters.ethnic_group_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('ethnic_group_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in ethnicGroups" :key="`report-ethnic-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.educationLevel }}
-        <select :value="reportFilters.edu_q_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('edu_q_id', $event)">
+        <select :value="reportFilters.edu_q_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('edu_q_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in educationLevels" :key="`report-edu-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.professionalLevel }}
-        <select :value="reportFilters.prof_q_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('prof_q_id', $event)">
+        <select :value="reportFilters.prof_q_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('prof_q_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in professionalLevels" :key="`report-prof-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.designation }}
-        <select :value="reportFilters.desig_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('desig_id', $event)">
+        <select :value="reportFilters.desig_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('desig_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in designations" :key="`report-desig-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.staffType }}
-        <select :value="reportFilters.stf_type_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('stf_type_id', $event)">
+        <select :value="reportFilters.stf_type_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('stf_type_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in staffTypes" :key="`report-type-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.staffStatus }}
-        <select :value="reportFilters.stf_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('stf_status_id', $event)">
+        <select :value="reportFilters.stf_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('stf_status_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in staffStatuses" :key="`report-status-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.serviceGrade }}
-        <select :value="reportFilters.serv_grd_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('serv_grd_id', $event)">
+        <select :value="reportFilters.serv_grd_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('serv_grd_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in serviceGrades" :key="`report-grade-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.serviceStatus }}
-        <select :value="reportFilters.service_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('service_status_id', $event)">
+        <select :value="reportFilters.service_status_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('service_status_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in serviceStatuses" :key="`report-service-status-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.section }}
-        <select :value="reportFilters.sec_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('sec_id', $event)">
+        <select :value="reportFilters.sec_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('sec_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in sections" :key="`report-section-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.sectionRole }}
-        <select :value="reportFilters.sec_role_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('sec_role_id', $event)">
+        <select :value="reportFilters.sec_role_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('sec_role_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in sectionRoles" :key="`report-section-role-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>
       </label>
 
-      <label v-if="!isSdsUser" class="text-sm text-slate-700">
+      <label v-if="!isSdsUser" class="min-w-0 text-[11px] text-slate-700">
         {{ text.subjectMedium }}
-        <select :value="reportFilters.subj_med_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportNumberChange('subj_med_id', $event)">
+        <select :value="reportFilters.subj_med_id" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[11px]" @change="onReportNumberChange('subj_med_id', $event)">
           <option :value="0">{{ text.all }}</option>
           <option v-for="row in subjectMediums" :key="`report-medium-${row.id}`" :value="row.id">{{ row.label }}</option>
         </select>

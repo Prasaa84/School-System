@@ -24,63 +24,103 @@
         </div>
       </div>
 
-      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <label v-if="isAdmin" class="text-sm text-slate-700">
+      <div class="grid gap-2 md:grid-cols-2 lg:grid-cols-7">
+        <label v-if="isAdmin" :class="[
+          'min-w-0 text-[11px] text-slate-700 xl:col-span-1',
+        ]">
           {{ text.school }}
-          <select :value="reportFilters.school_census_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onReportSchoolChange">
+          <select :value="reportFilters.school_census_id" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" @change="onReportSchoolChange">
             <option :value="0">{{ text.allSchools }}</option>
             <option v-for="row in schools" :key="`report-school-${row.id}`" :value="row.id">{{ row.label }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label :class="[
+          'min-w-0 text-[11px] text-slate-700',
+        ]">
           {{ text.search }}
-          <input v-model="reportFilters.q" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :placeholder="text.searchPlaceholder" @keyup.enter="loadStudentReport" />
+          <input v-model="reportFilters.q" type="text" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" :placeholder="text.searchPlaceholder" @keyup.enter="loadStudentReport" />
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label :class="[
+          'min-w-0 text-[11px] text-slate-700',
+        ]">
           {{ text.gender }}
-          <select v-model.number="reportFilters.gender_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="loadStudentReport">
+          <select v-model.number="reportFilters.gender_id" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" @change="loadStudentReport">
             <option :value="0">{{ text.all }}</option>
             <option v-for="row in genderOptions" :key="`report-gender-${row.id}`" :value="row.id">{{ row.label }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label :class="[
+          'min-w-0 text-[11px] text-slate-700',
+        ]">
           {{ text.ethnicGroup }}
-          <select v-model.number="reportFilters.ethnic_group_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="loadStudentReport">
+          <select v-model.number="reportFilters.ethnic_group_id" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" @change="loadStudentReport">
             <option :value="0">{{ text.all }}</option>
             <option v-for="row in ethnicGroups" :key="`report-ethnic-${row.id}`" :value="row.id">{{ row.label }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label :class="[
+          'min-w-0 text-[11px] text-slate-700',
+        ]">
           {{ text.religion }}
-          <select v-model.number="reportFilters.religion_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="loadStudentReport">
+          <select v-model.number="reportFilters.religion_id" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" @change="loadStudentReport">
             <option :value="0">{{ text.all }}</option>
             <option v-for="row in religions" :key="`report-religion-${row.id}`" :value="row.id">{{ row.label }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label :class="[
+          'min-w-0 text-[11px] text-slate-700',
+        ]">
           {{ text.academicYear }}
-          <select v-model.number="reportFilters.year" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="isClassTeacher || (isAdmin && reportFilters.school_census_id <= 0)">
+          <select v-model.number="reportFilters.year" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" :disabled="isClassTeacher || (isAdmin && reportFilters.school_census_id <= 0)">
             <option v-if="!isClassTeacher" :value="0">{{ text.allYears }}</option>
             <option v-for="year in reportAcademicYears" :key="`report-year-${year}`" :value="year">{{ year }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label :class="[
+          'min-w-0 text-[11px] text-slate-700',
+        ]">
           {{ text.grade }}
-          <select v-model.number="reportFilters.grade_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="isClassTeacher || reportFilters.year <= 0">
+          <select v-model.number="reportFilters.grade_id" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" :disabled="isClassTeacher || reportFilters.year <= 0">
             <option v-if="!isClassTeacher" :value="0">{{ text.allGrades }}</option>
             <option v-for="row in reportGrades" :key="`report-grade-${row.grade_id}`" :value="row.grade_id">{{ row.grade }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label :class="[
+          'min-w-0 text-[11px] text-slate-700',
+        ]">
           {{ text.classLabel }}
-          <select v-model.number="reportFilters.class_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="reportFilters.year <= 0 || reportFilters.grade_id <= 0" @change="loadStudentReport">
+          <select v-model.number="reportFilters.class_id" :class="[
+            'mt-1 w-full rounded-lg border border-slate-300',
+            'px-2 py-1.5 text-[11px]',
+          ]" :disabled="reportFilters.year <= 0 || reportFilters.grade_id <= 0" @change="loadStudentReport">
             <option :value="0">{{ text.allClasses }}</option>
             <option v-for="row in reportClasses" :key="`report-class-${row.class_id}`" :value="row.class_id">{{ row.class }}</option>
           </select>

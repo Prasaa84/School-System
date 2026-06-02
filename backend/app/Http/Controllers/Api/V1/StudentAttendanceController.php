@@ -114,6 +114,9 @@ class StudentAttendanceController extends Controller
         }
 
         $filters = $this->validatePrincipalFilters($request);
+        if ($this->isPrincipal($user) && $filters['grade_id'] <= 0) {
+            return response()->json(['message' => 'Select a grade before searching attendance.'], 422);
+        }
         ['data' => $students, 'summary' => $summary, 'pagination' => $pagination, 'date_headers' => $dateHeaders] = $this->loadAttendanceStudentsForPrincipal($user, $filters);
 
         return response()->json([
@@ -228,6 +231,9 @@ class StudentAttendanceController extends Controller
             $rows = $this->buildClassTeacherAttendanceExportRows($assignment, $filters, $dateHeaders);
             $classInfo = $this->loadAttendanceClassInfo($assignment['sch_grd_cls_id']);
         } elseif ($this->isPrincipal($user)) {
+            if ($filters['grade_id'] <= 0) {
+                return response()->json(['message' => 'Select a grade before exporting attendance.'], 422);
+            }
             $rows = $this->buildPrincipalAttendanceExportRows($user, $filters, $dateHeaders);
         } else {
             return response()->json(['message' => 'Only principals and class teachers can export attendance reports.'], 403);
