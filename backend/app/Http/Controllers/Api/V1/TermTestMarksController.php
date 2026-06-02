@@ -11,12 +11,14 @@ use App\Models\TermTestMark;
 use App\Models\TermTestMarksConfirm;
 use App\Models\TermTestResult;
 use App\Models\User;
+use App\Services\ExcelReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TermTestMarksController extends Controller
 {
@@ -541,6 +543,164 @@ class TermTestMarksController extends Controller
         ));
 
         return response()->json(['message' => 'Term test marks saved successfully.']);
+    }
+
+    public function download(Request $request, ExcelReportService $excelReportService): StreamedResponse|JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canViewMarks($user)) {
+            Log::warning('Term test marks export forbidden.', $this->marksLogContext($user));
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $validated = Validator::make($request->all(), [
+            'year' => ['required', 'integer', 'between:2000,2100'],
+            'term' => ['required', 'integer', 'in:1,2,3'],
+            'grade_id' => ['required', 'integer', 'min:1'],
+            'class_id' => ['required', 'integer', 'min:1'],
+        ])->validate();
+
+        Log::info('Term test marks export requested.', array_merge(
+            $this->marksLogContext($user),
+            ['filters' => $validated]
+        ));
+
+        $censusId = $this->resolveMarksTargetSchoolCensusId($user);
+        if ($censusId === null) {
+            Log::warning('Term test marks export blocked: school context missing.', $this->marksLogContext($user));
+            return response()->json(['message' => $this->schoolContextRequiredMessage($user)], 422);
+        }
+
+        $scope = $this->resolveMarksScope($user, $censusId, (int) $validated['year']);
+        $selectionError = $this->validateMarksSelectionAgainstScope($scope, (int) $validated['grade_id'], (int) $validated['class_id']);
+        if ($selectionError !== null) {
+            Log::warning('Term test marks export blocked by scope.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'scope' => $scope,
+                    'selection_error' => $selectionError,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => $selectionError], 403);
+        }
+
+        $classRow = $this->loadClassRow($censusId, (int) $validated['year'], (int) $validated['grade_id'], (int) $validated['class_id']);
+        if ($classRow === null) {
+            Log::warning('Term test marks export failed: class row not found.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'Class not found for the selected year.'], 404);
+        }
+
+        $subjects = $this->loadMarksSubjects($censusId, (int) $validated['year'], (int) $validated['grade_id']);
+        if ($subjects === []) {
+            Log::warning('Term test marks export failed: no subjects configured.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'No subjects configured for the selected grade and year.'], 422);
+        }
+
+        $students = $this->loadMarksRoster((int) $classRow->sch_grd_cls_id);
+        if ($this->isStudentMarksViewer($user)) {
+            $studentIndexNo = $this->resolveStudentIndexNoForUser($user);
+            $students = array_values(array_filter(
+                $students,
+                fn (array $row): bool => $studentIndexNo !== null && $row['index_no'] === $studentIndexNo
+            ));
+        }
+
+        $indexNumbers = array_values(array_map(fn (array $row): string => $row['index_no'], $students));
+        $subjectIds = array_values(array_map(fn (array $row): int => (int) $row['subject_id'], $subjects));
+        $markMap = $this->loadExistingMarkMap($censusId, (int) $validated['year'], (int) $validated['term'], $indexNumbers, $subjectIds);
+        $absentMap = $this->loadExistingAbsentMap($censusId, (int) $validated['year'], (int) $validated['term'], $indexNumbers, $subjectIds);
+        $resultMap = $this->loadExistingResultMap($censusId, (int) $validated['year'], (int) $validated['term'], $indexNumbers);
+
+        $headers = ['Index No', 'Student'];
+        foreach ($subjects as $subject) {
+            $headers[] = (string) $subject['subject'];
+        }
+        $headers[] = 'Total';
+        $headers[] = 'Average';
+
+        $excelRows = array_map(function (array $student) use ($subjects, $markMap, $absentMap, $resultMap): array {
+            $row = [
+                ['value' => $student['index_no'], 'type' => 'string'],
+                ['value' => $student['name_with_initials'], 'type' => 'string'],
+            ];
+
+            foreach ($subjects as $subject) {
+                $subjectId = (int) $subject['subject_id'];
+                $cellKey = "{$student['index_no']}:{$subjectId}";
+                $cellValue = isset($absentMap[$cellKey])
+                    ? 'AB'
+                    : (isset($markMap[$cellKey]) ? (string) $markMap[$cellKey] : '');
+
+                $row[] = ['value' => $cellValue, 'type' => 'string'];
+            }
+
+            $result = $resultMap[$student['index_no']] ?? ['total' => '', 'average' => ''];
+            $row[] = ['value' => (string) $result['total'], 'type' => 'string'];
+            $row[] = ['value' => $result['average'] === '' ? '' : number_format((float) $result['average'], 2, '.', ''), 'type' => 'string'];
+
+            return $row;
+        }, $students);
+
+        $schoolName = $this->loadSchoolName($censusId);
+        $mainHeading = trim($schoolName) !== '' ? ($schoolName . ' - Term Test Marks') : 'Term Test Marks';
+        $subHeading = sprintf(
+            '%s %d - %s %s',
+            $this->termLabel((int) $validated['term']),
+            (int) $validated['year'],
+            (string) $classRow->grade,
+            (string) $classRow->class_name
+        );
+        $fileSuffix = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim(sprintf('%s-%s-%s-%s', $validated['year'], $validated['term'], $classRow->grade, $classRow->class_name))) ?: 'marks-sheet';
+        $filename = 'marks-' . strtolower($fileSuffix) . '.xlsx';
+        $printedBy = trim((string) ($user->username ?? ''));
+        $printedByRole = trim((string) ($user->role_name ?? $user->role?->role_name ?? ''));
+        $printedByLabel = trim($printedBy . ($printedByRole !== '' ? ' - ' . $printedByRole : ''));
+
+        Log::info('Term test marks export completed.', array_merge(
+            $this->marksLogContext($user),
+            [
+                'resolved_school_census_id' => $censusId,
+                'filters' => $validated,
+                'class_row_id' => (int) $classRow->sch_grd_cls_id,
+                'subject_count' => count($subjects),
+                'student_count' => count($students),
+                'mark_count' => count($markMap),
+                'absent_count' => count($absentMap),
+                'result_count' => count($resultMap),
+                'filename' => $filename,
+            ]
+        ));
+
+        return $excelReportService->streamTableReport(
+            $filename,
+            'Marks',
+            $mainHeading,
+            $subHeading,
+            $headers,
+            $excelRows,
+            null,
+            [
+                'Printed By: ' . $printedByLabel . ' | Printed At: ' . now()->format('Y-m-d H:i:s'),
+            ]
+        );
     }
 
     public function clear(Request $request): JsonResponse
@@ -1453,6 +1613,32 @@ class TermTestMarksController extends Controller
     private function censusValues(string $censusId): array
     {
         return array_values(array_unique($this->censusCandidates($censusId)));
+    }
+
+    private function loadSchoolName(string $censusId): string
+    {
+        if (!Schema::hasTable('school_details_tbl')) {
+            return '';
+        }
+
+        $query = DB::table('school_details_tbl')
+            ->whereIn('census_id', $this->censusValues($censusId));
+
+        if (Schema::hasColumn('school_details_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        return trim((string) ($query->value('sch_name') ?? ''));
+    }
+
+    private function termLabel(int $term): string
+    {
+        return match ($term) {
+            1 => 'Term Test 1',
+            2 => 'Term Test 2',
+            3 => 'Term Test 3',
+            default => 'Term Test',
+        };
     }
 
     private function marksLogContext(?User $user): array

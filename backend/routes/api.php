@@ -61,6 +61,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/marks/options', [TermTestMarksController::class, 'options']);
         Route::get('/marks', [TermTestMarksController::class, 'index']);
+        Route::get('/marks/export', [TermTestMarksController::class, 'download']);
         Route::post('/marks', [TermTestMarksController::class, 'save']);
         Route::delete('/marks', [TermTestMarksController::class, 'clear']);
 

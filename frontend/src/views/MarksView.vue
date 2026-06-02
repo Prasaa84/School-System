@@ -52,6 +52,12 @@
             {{ loadingMarks ? text.loading : text.show }}
           </button>
         </div>
+
+        <div class="flex items-end">
+          <button class="w-full rounded-xl border border-cyan-300 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60" :disabled="exportingMarks || loadingOptions" @click="exportMarks">
+            {{ exportingMarks ? text.exporting : text.exportExcel }}
+          </button>
+        </div>
       </div>
 
     </section>
@@ -237,6 +243,8 @@ const text = {
   marksSheet: 'Marks Sheet',
   save: 'Save',
   saving: 'Saving...',
+  exportExcel: 'Export Excel',
+  exporting: 'Exporting...',
   delete: 'Delete Marks',
   confirmDelete: 'Delete',
   deleting: 'Deleting...',
@@ -257,6 +265,7 @@ const text = {
   loadMarksError: 'Unable to load term test marks.',
   saveMarksError: 'Unable to save term test marks.',
   deleteMarksError: 'Unable to delete term test marks.',
+  exportMarksError: 'Unable to export term test marks.',
   deleteDialogTitle: 'Delete Marks',
   deleteDialogMessage: 'Do you want to delete all marks for the selected year, term, grade, and class?',
 }
@@ -279,6 +288,7 @@ const lockedClassId = ref<number | null>(null)
 const loadingOptions = ref(false)
 const loadingMarks = ref(false)
 const savingMarks = ref(false)
+const exportingMarks = ref(false)
 const deletingMarks = ref(false)
 const showDeleteDialog = ref(false)
 const canManageLoaded = ref(false)
@@ -449,6 +459,53 @@ const saveMarks = async (): Promise<void> => {
     await scrollMessage(errorMessageRef)
   } finally {
     savingMarks.value = false
+  }
+}
+
+const exportMarks = async (): Promise<void> => {
+  message.value = ''
+  errorMessage.value = ''
+
+  if (isAdmin.value && selectedSchoolCensusId.value <= 0) {
+    errorMessage.value = text.selectSchoolFirst
+    await scrollMessage(errorMessageRef)
+    return
+  }
+
+  if (selectedYear.value <= 0 || selectedTerm.value <= 0 || selectedGradeId.value <= 0 || selectedClassId.value <= 0) {
+    errorMessage.value = text.selectFiltersFirst
+    await scrollMessage(errorMessageRef)
+    return
+  }
+
+  exportingMarks.value = true
+
+  try {
+    const response = await api.get('/marks/export', {
+      params: {
+        year: selectedYear.value,
+        term: selectedTerm.value,
+        grade_id: selectedGradeId.value,
+        class_id: selectedClassId.value,
+      },
+      responseType: 'blob',
+    })
+
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const fileNameMatch = /filename="?([^"]+)"?/i.exec(String(response.headers['content-disposition'] ?? ''))
+    link.download = fileNameMatch?.[1] || 'marks-sheet.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message ?? text.exportMarksError
+    await scrollMessage(errorMessageRef)
+  } finally {
+    exportingMarks.value = false
   }
 }
 
