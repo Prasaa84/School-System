@@ -352,7 +352,7 @@ class StudentAttendanceController extends Controller
     {
         $rosterQuery = $this->buildPrincipalRosterQuery($user, $filters);
         $summaryQuery = $this->buildPrincipalAttendanceSummaryQuery($user, $filters);
-        $total = (int) (clone $rosterQuery)->count();
+        $total = $this->countRosterRows($rosterQuery);
         $presentStudents = (int) (clone $summaryQuery)->where('sda.status', 1)->count();
         $absentStudents = (int) (clone $summaryQuery)->where('sda.status', 0)->count();
         $page = max($filters['page'], 1);
@@ -856,7 +856,7 @@ class StudentAttendanceController extends Controller
     {
         $rosterQuery = $this->buildClassTeacherRosterQuery($assignment, $filters);
         $summaryQuery = $this->buildClassTeacherAttendanceSummaryQuery($assignment, $filters);
-        $total = (int) (clone $rosterQuery)->count();
+        $total = $this->countRosterRows($rosterQuery);
         $presentStudents = (int) (clone $summaryQuery)->where('sda.status', 1)->count();
         $absentStudents = (int) (clone $summaryQuery)->where('sda.status', 0)->count();
         $page = max($filters['page'], 1);
@@ -1080,6 +1080,13 @@ class StudentAttendanceController extends Controller
         }
 
         return $query;
+    }
+
+    private function countRosterRows(Builder $query): int
+    {
+        return (int) DB::query()
+            ->fromSub($query, 'attendance_roster')
+            ->count();
     }
 
     private function excelColumnName(int $index): string
