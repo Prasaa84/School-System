@@ -11,6 +11,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -38,6 +39,7 @@ class StudentAttendanceController extends Controller
                 'date' => $this->resolveAttendanceDate($request),
                 'class_info' => null,
                 'summary' => $this->emptyAttendanceSummary(),
+                'attendance_edit_window' => $this->buildAttendanceEditWindow($user, null, $this->resolveAttendanceDate($request)),
                 'filters' => null,
                 'data' => [],
                 'message' => 'No class assignment found for this class teacher.',
@@ -55,6 +57,7 @@ class StudentAttendanceController extends Controller
                     'date' => $this->resolveAttendanceDate($request),
                     'class_info' => null,
                     'summary' => $this->emptyAttendanceSummary(),
+                    'attendance_edit_window' => $this->buildAttendanceEditWindow($user, null, $this->resolveAttendanceDate($request)),
                     'filters' => null,
                     'data' => [],
                     'message' => 'No class assignment found for this class teacher.',
@@ -69,6 +72,7 @@ class StudentAttendanceController extends Controller
                     'date' => $filters['date'],
                     'class_info' => $this->loadAttendanceClassInfo($assignment['sch_grd_cls_id']),
                     'summary' => $summary,
+                    'attendance_edit_window' => $this->buildAttendanceEditWindow($user, $assignment, $filters['date']),
                     'filters' => [
                         'date_from' => $filters['date_from'],
                         'date_to' => $filters['date_to'],
@@ -95,6 +99,7 @@ class StudentAttendanceController extends Controller
                 'date' => $date,
                 'class_info' => $classInfo,
                 'summary' => $this->buildAttendanceSummary($students),
+                'attendance_edit_window' => $this->buildAttendanceEditWindow($user, $assignment, $date),
                 'filters' => [
                     'date_from' => $date,
                     'date_to' => $date,
@@ -115,6 +120,7 @@ class StudentAttendanceController extends Controller
             'date' => $filters['date'],
             'class_info' => null,
             'summary' => $summary,
+            'attendance_edit_window' => null,
             'filters' => $filters,
             'pagination' => $pagination,
             'date_headers' => $dateHeaders,
@@ -153,6 +159,13 @@ class StudentAttendanceController extends Controller
 
         $studentId = (int) $validated['student_id'];
         $date = isset($validated['date']) ? (string) $validated['date'] : $this->resolveAttendanceDate($request);
+
+        ['can_edit' => $canEdit, 'reason' => $editReason] = $this->buildAttendanceEditWindow($user, $assignment, $date);
+        if (!$canEdit) {
+            return response()->json([
+                'message' => $editReason ?: 'Attendance can only be marked for today before the cutoff time.',
+            ], 422);
+        }
 
         if (!$this->studentBelongsToAssignedClass($studentId, $assignment['sch_grd_cls_id'])) {
             return response()->json(['message' => 'This student does not belong to the assigned class.'], 403);
@@ -303,6 +316,185 @@ class StudentAttendanceController extends Controller
         ])->validate();
 
         return isset($validated['date']) ? (string) $validated['date'] : now()->toDateString();
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}|null  $assignment
+     * @return array{can_edit:bool, cutoff_time:string|null, reason:string|null}
+     */
+    private function buildAttendanceEditWindow(?User $user, ?array $assignment, string $date): array
+    {
+        if (!$this->isClassTeacher($user)) {
+            return [
+                'can_edit' => false,
+                'cutoff_time' => null,
+                'reason' => null,
+            ];
+        }
+
+        if ($assignment !== null && $this->hasAttendanceOverrideForDate($assignment['sch_grd_cls_id'], $date)) {
+            Log::info('Attendance edit allowed via override.', [
+                'user_id' => $user?->user_id ?? null,
+                'username' => $user?->username ?? null,
+                'sch_grd_cls_id' => $assignment['sch_grd_cls_id'],
+                'date' => $date,
+            ]);
+
+            return [
+                'can_edit' => true,
+                'cutoff_time' => $this->resolveAttendanceCutoffTime($assignment['census_id'] ?? $this->resolveUserCensusId($user)),
+                'reason' => 'Principal temporarily enabled attendance editing for this date.',
+            ];
+        }
+
+        $cutoffTime = $this->resolveAttendanceCutoffTime($assignment['census_id'] ?? $this->resolveUserCensusId($user));
+        $today = now()->toDateString();
+        if ($date !== $today) {
+            Log::info('Attendance edit denied: date is not today and no override matched.', [
+                'user_id' => $user?->user_id ?? null,
+                'username' => $user?->username ?? null,
+                'sch_grd_cls_id' => $assignment['sch_grd_cls_id'] ?? null,
+                'requested_date' => $date,
+                'today' => $today,
+            ]);
+
+            return [
+                'can_edit' => false,
+                'cutoff_time' => $cutoffTime,
+                'reason' => 'Attendance can only be marked for today.',
+            ];
+        }
+
+        $currentTime = now()->format('H:i');
+        if ($currentTime > $cutoffTime) {
+            Log::info('Attendance edit denied: cutoff passed and no override matched.', [
+                'user_id' => $user?->user_id ?? null,
+                'username' => $user?->username ?? null,
+                'sch_grd_cls_id' => $assignment['sch_grd_cls_id'] ?? null,
+                'date' => $date,
+                'current_time' => $currentTime,
+                'cutoff_time' => $cutoffTime,
+            ]);
+
+            return [
+                'can_edit' => false,
+                'cutoff_time' => $cutoffTime,
+                'reason' => sprintf('Attendance marking closed at %s.', $this->formatCutoffTimeLabel($cutoffTime)),
+            ];
+        }
+
+        return [
+            'can_edit' => true,
+            'cutoff_time' => $cutoffTime,
+            'reason' => null,
+        ];
+    }
+
+    private function resolveAttendanceCutoffTime(?string $schoolCensusId): string
+    {
+        $default = '09:30';
+        $schoolTable = 'school_details_tbl';
+
+        if ($schoolCensusId === null || !Schema::hasTable($schoolTable) || !Schema::hasColumn($schoolTable, 'attendance_cutoff_time')) {
+            return $default;
+        }
+
+        $value = DB::table($schoolTable)
+            ->whereIn('census_id', $this->censusCandidates($schoolCensusId))
+            ->value('attendance_cutoff_time');
+
+        $normalized = $this->normalizeAttendanceCutoffTime($value);
+
+        return $normalized ?? $default;
+    }
+
+    private function normalizeAttendanceCutoffTime(mixed $value): ?string
+    {
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{2}:\d{2}:\d{2}$/', $raw) === 1) {
+            $raw = substr($raw, 0, 5);
+        }
+
+        if (preg_match('/^\d{2}:\d{2}$/', $raw) !== 1) {
+            return null;
+        }
+
+        [$hour, $minute] = array_map('intval', explode(':', $raw));
+        if ($hour < 0 || $hour > 23 || $minute < 0 || $minute > 59) {
+            return null;
+        }
+
+        return sprintf('%02d:%02d', $hour, $minute);
+    }
+
+    private function formatCutoffTimeLabel(string $time): string
+    {
+        $normalized = $this->normalizeAttendanceCutoffTime($time) ?? '09:30';
+        [$hour, $minute] = array_map('intval', explode(':', $normalized));
+        $period = $hour >= 12 ? 'PM' : 'AM';
+        $displayHour = $hour % 12;
+        if ($displayHour === 0) {
+            $displayHour = 12;
+        }
+
+        return sprintf('%d:%02d %s', $displayHour, $minute, $period);
+    }
+
+    private function hasAttendanceOverrideForDate(int $schoolGradeClassId, string $date): bool
+    {
+        if ($schoolGradeClassId <= 0 || !Schema::hasTable('school_grade_class_tbl')) {
+            Log::info('Attendance override lookup skipped: invalid class row or missing table.', [
+                'sch_grd_cls_id' => $schoolGradeClassId,
+                'date' => $date,
+            ]);
+
+            return false;
+        }
+
+        if (
+            !Schema::hasColumn('school_grade_class_tbl', 'attendance_override_enabled')
+            || !Schema::hasColumn('school_grade_class_tbl', 'attendance_override_date')
+        ) {
+            Log::info('Attendance override lookup skipped: required columns missing.', [
+                'sch_grd_cls_id' => $schoolGradeClassId,
+                'date' => $date,
+            ]);
+
+            return false;
+        }
+
+        $query = DB::table('school_grade_class_tbl')
+            ->where('sch_grd_cls_id', $schoolGradeClassId)
+            ->where('attendance_override_enabled', 1)
+            ->where('attendance_override_date', $date);
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        $matched = $query->exists();
+
+        $currentRow = DB::table('school_grade_class_tbl')
+            ->where('sch_grd_cls_id', $schoolGradeClassId)
+            ->first([
+                'sch_grd_cls_id',
+                'attendance_override_enabled',
+                'attendance_override_date',
+                'is_deleted',
+            ]);
+
+        Log::info('Attendance override lookup result.', [
+            'sch_grd_cls_id' => $schoolGradeClassId,
+            'date' => $date,
+            'matched' => $matched,
+            'row' => $currentRow,
+        ]);
+
+        return $matched;
     }
 
     /**

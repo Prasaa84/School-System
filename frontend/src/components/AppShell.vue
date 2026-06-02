@@ -479,7 +479,14 @@ const userLabel = computed(() => {
     return shellText.value.authenticatedUser
   }
 
-  return currentUser.value.role_name ? `${currentUser.value.username} (${currentUser.value.role_name})` : currentUser.value.username
+  const baseLabel = currentUser.value.role_name ? `${currentUser.value.username} (${currentUser.value.role_name})` : currentUser.value.username
+  const assignedClass = String(currentUser.value.class_teacher_assignment_status?.grade_class ?? '').trim()
+
+  if (isClassTeacher.value && assignedClass !== '') {
+    return `${baseLabel} - ${assignedClass}`
+  }
+
+  return baseLabel
 })
 
 const refreshCurrentUser = async (): Promise<void> => {

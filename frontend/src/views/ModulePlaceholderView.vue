@@ -63,6 +63,7 @@
       @quick-add-class="quickAddClass"
       @save-class="saveClass"
       @delete-class="deleteClass"
+      @open-attendance-override="openAttendanceOverrideDialog"
       @load-report="loadClassReport"
     />
 
@@ -111,6 +112,47 @@
       :message="text.queuedModuleMessage"
     />
   </ModuleShell>
+
+  <div v-if="showAttendanceOverrideDialog" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeAttendanceOverrideDialog">
+    <section class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="font-display text-xl font-bold text-slate-900">{{ text.attendanceOverrideDialogTitle }}</h2>
+          <p class="mt-1 text-sm text-slate-500">{{ selectedAttendanceOverrideClassLabel }}</p>
+        </div>
+        <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" @click="closeAttendanceOverrideDialog">{{ text.close }}</button>
+      </div>
+
+      <div class="space-y-4">
+        <p v-if="attendanceOverrideError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {{ attendanceOverrideError }}
+        </p>
+
+        <label class="flex items-center gap-3 text-sm text-slate-700">
+          <input v-model="attendanceOverrideForm.enabled" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500" />
+          <span>{{ text.enableAttendanceOverride }}</span>
+        </label>
+
+        <label class="block text-sm text-slate-700">
+          {{ text.attendanceOverrideDate }}
+          <input v-model="attendanceOverrideForm.date" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" :disabled="!attendanceOverrideForm.enabled" />
+        </label>
+
+        <p class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          {{ text.attendanceOverrideHint }}
+        </p>
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" :disabled="savingAttendanceOverride" @click="closeAttendanceOverrideDialog">
+          {{ text.cancel }}
+        </button>
+        <button class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="savingAttendanceOverride" @click="saveAttendanceOverride">
+          {{ savingAttendanceOverride ? text.saving : text.saveAttendanceOverride }}
+        </button>
+      </div>
+    </section>
+  </div>
 
   <div v-if="showStaffCredentialsDialog" class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4" @click.self="closeStaffCredentialsDialog">
     <section class="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
@@ -623,7 +665,7 @@ type TabKey = 'view' | 'reports'
 
 interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; grade_head: string | null; date_updated: string | null }
 interface GradeReportRow { grade_id: number; grade: string; year: number; student_count: number }
-interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null }
+interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null; attendance_override_enabled?: number | null; attendance_override_date?: string | null }
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
 interface StaffRow { stf_id: number; census_id: string | null; name_with_ini: string; nic_no: string | null; gender: string | null; phone_mobile1: string | null; designation: string | null; school_name: string | null; can_edit?: boolean }
 interface StaffMeta { current_page: number; per_page: number; total: number; last_page: number }
@@ -817,6 +859,14 @@ const createClassGradeId = ref(0)
 const createClassId = ref(0)
 const createApprovedCount = ref(35)
 const createClassOptions = ref<ClassOption[]>([])
+const showAttendanceOverrideDialog = ref(false)
+const savingAttendanceOverride = ref(false)
+const selectedAttendanceOverrideClassRowId = ref<number | null>(null)
+const attendanceOverrideError = ref('')
+const attendanceOverrideForm = reactive({
+  enabled: false,
+  date: '',
+})
 const reportYear = ref(props.moduleKey === 'grades' || props.moduleKey === 'classes' ? currentCalendarYear : 0)
 const staffSearch = ref('')
 const selectedStaffSchoolCensusId = ref(getSchoolContextCensusId() ?? 0)
@@ -950,6 +1000,17 @@ const secondTaskSubjects = computed(() => (
     ? subjects.value.filter((row) => Number(row.section_id ?? 0) === Number(staffForm.second_task_section_id))
     : subjects.value
 ))
+const selectedAttendanceOverrideClass = computed(() => (
+  classes.value.find((item) => item.sch_grd_cls_id === selectedAttendanceOverrideClassRowId.value) ?? null
+))
+const selectedAttendanceOverrideClassLabel = computed(() => {
+  const row = selectedAttendanceOverrideClass.value
+  if (!row) {
+    return ''
+  }
+
+  return [row.year, row.grade, row.class].filter((value) => String(value ?? '').trim() !== '').join(' / ')
+})
 const text = useLocalizedText({
   en: {
     moduleFallbackTitle: 'Module',
@@ -984,6 +1045,13 @@ const text = useLocalizedText({
     classAdded: 'Class added successfully.',
     classDeleted: 'Class row deleted.',
     updateClassError: 'Unable to update class row.',
+    attendanceOverrideDialogTitle: 'Attendance Override',
+    enableAttendanceOverride: 'Allow the class teacher to edit attendance for a selected date.',
+    attendanceOverrideDate: 'Override Date',
+    attendanceOverrideHint: 'Enable this only when principal or admin needs to temporarily reopen attendance editing for this class.',
+    saveAttendanceOverride: 'Save Override',
+    attendanceOverrideSaved: 'Attendance override saved.',
+    attendanceOverrideSaveError: 'Unable to save attendance override.',
     addClassError: 'Unable to add class row.',
     addNextClassError: 'No more classes available for this grade.',
     deleteClassConfirm: 'Delete this class row?',
@@ -1123,6 +1191,13 @@ const text = useLocalizedText({
     classAdded: 'පන්තිය සාර්ථකව එක් කරන ලදී.',
     classDeleted: 'පන්ති පේළිය මකා දමන ලදී.',
     updateClassError: 'පන්ති පේළිය යාවත්කාලීන කළ නොහැක.',
+    attendanceOverrideDialogTitle: 'පැමිණීම Override',
+    enableAttendanceOverride: 'තෝරාගත් දිනය සඳහා මෙම පන්තියේ පැමිණීම සංස්කරණය කිරීමට පන්ති ගුරුවරයාට ඉඩ දෙන්න.',
+    attendanceOverrideDate: 'Override දිනය',
+    attendanceOverrideHint: 'මෙම පන්තිය සඳහා පැමිණීම තාවකාලිකව නැවත විවෘත කළ යුතු අවස්ථාවල පමණක් මෙය සක්‍රිය කරන්න.',
+    saveAttendanceOverride: 'Override සුරකින්න',
+    attendanceOverrideSaved: 'Attendance override සුරකින ලදී.',
+    attendanceOverrideSaveError: 'Attendance override සුරැකිය නොහැක.',
     addClassError: 'පන්ති පේළිය එක් කළ නොහැක.',
     addNextClassError: 'මෙම ශ්‍රේණිය සඳහා තවත් පන්ති නොමැත.',
     deleteClassConfirm: 'මෙම පන්ති පේළිය මකන්නද?',
@@ -1262,6 +1337,13 @@ const text = useLocalizedText({
     classAdded: 'வகுப்பு வெற்றிகரமாக சேர்க்கப்பட்டது.',
     classDeleted: 'வகுப்பு வரிசை நீக்கப்பட்டது.',
     updateClassError: 'வகுப்பு வரிசையை புதுப்பிக்க முடியவில்லை.',
+    attendanceOverrideDialogTitle: 'வருகை Override',
+    enableAttendanceOverride: 'தேர்ந்தெடுத்த தேதிக்காக இந்த வகுப்பு ஆசிரியருக்கு வருகையை திருத்த அனுமதி வழங்கவும்.',
+    attendanceOverrideDate: 'Override தேதி',
+    attendanceOverrideHint: 'இந்த வகுப்புக்கான வருகை திருத்தத்தை தற்காலிகமாக மீண்டும் திறக்க வேண்டியபோது மட்டும் இதை இயக்கவும்.',
+    saveAttendanceOverride: 'Override சேமி',
+    attendanceOverrideSaved: 'Attendance override சேமிக்கப்பட்டது.',
+    attendanceOverrideSaveError: 'Attendance override சேமிக்க முடியவில்லை.',
     addClassError: 'வகுப்பு வரிசையை சேர்க்க முடியவில்லை.',
     addNextClassError: 'இந்த தரத்திற்காக மேலும் வகுப்புகள் இல்லை.',
     deleteClassConfirm: 'இந்த வகுப்பு வரிசையை நீக்கவா?',
@@ -1781,6 +1863,56 @@ const saveClass = async (classRowId: number): Promise<void> => {
     await loadClassesView()
   } catch (e: any) {
     error.value = e?.response?.data?.message ?? text.value.updateClassError
+  }
+}
+
+const openAttendanceOverrideDialog = (classRowId: number): void => {
+  const row = classes.value.find((item) => item.sch_grd_cls_id === classRowId)
+  if (!row) {
+    return
+  }
+
+  selectedAttendanceOverrideClassRowId.value = classRowId
+  attendanceOverrideError.value = ''
+  attendanceOverrideForm.enabled = Number(row.attendance_override_enabled ?? 0) === 1
+  attendanceOverrideForm.date = String(row.attendance_override_date ?? '')
+  showAttendanceOverrideDialog.value = true
+}
+
+const closeAttendanceOverrideDialog = (): void => {
+  showAttendanceOverrideDialog.value = false
+  selectedAttendanceOverrideClassRowId.value = null
+  attendanceOverrideError.value = ''
+  attendanceOverrideForm.enabled = false
+  attendanceOverrideForm.date = ''
+}
+
+const saveAttendanceOverride = async (): Promise<void> => {
+  const classRowId = selectedAttendanceOverrideClassRowId.value
+  if (!classRowId) {
+    return
+  }
+
+  message.value = ''
+  error.value = ''
+  attendanceOverrideError.value = ''
+  savingAttendanceOverride.value = true
+
+  try {
+    const shouldEnableOverride = attendanceOverrideForm.enabled
+    const { data } = await api.put<{ message?: string; data?: { attendance_override_enabled?: number; attendance_override_date?: string | null } }>(`/classes/${classRowId}/attendance-override`, {
+      attendance_override_enabled: shouldEnableOverride,
+      attendance_override_date: shouldEnableOverride ? attendanceOverrideForm.date : null,
+    })
+    message.value = typeof data?.message === 'string' && data.message.trim() !== ''
+      ? data.message
+      : text.value.attendanceOverrideSaved
+    await loadClassesView()
+    closeAttendanceOverrideDialog()
+  } catch (e: any) {
+    attendanceOverrideError.value = e?.response?.data?.message ?? text.value.attendanceOverrideSaveError
+  } finally {
+    savingAttendanceOverride.value = false
   }
 }
 

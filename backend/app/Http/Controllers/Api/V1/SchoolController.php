@@ -222,6 +222,7 @@ class SchoolController extends Controller
             'contact_no' => ['sometimes', 'nullable', 'string', 'max:50'],
             'email' => ['sometimes', 'nullable', 'email', 'max:150'],
             'web_address' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'attendance_cutoff_time' => ['sometimes', 'nullable', 'date_format:H:i'],
             'crest_image' => ['sometimes', 'nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'remove_crest' => ['sometimes', 'boolean'],
             'pro_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
@@ -261,6 +262,10 @@ class SchoolController extends Controller
 
             $value = trim((string) ($validated[$field] ?? ''));
             $updates[$field] = $value === '' ? null : $value;
+        }
+
+        if (array_key_exists('attendance_cutoff_time', $validated) && Schema::hasColumn((new SchoolDetail())->getTable(), 'attendance_cutoff_time')) {
+            $updates['attendance_cutoff_time'] = $this->toNullableTimeValue($validated['attendance_cutoff_time'] ?? null);
         }
 
         foreach (['pro_id', 'dis_id', 'zone_id', 'div_id', 'div_sec_id', 'gs_div_id', 'sch_type_id', 'belongs_to_id', 'grd_span_id'] as $field) {
@@ -351,6 +356,7 @@ class SchoolController extends Controller
             'contact_no' => ['sometimes', 'nullable', 'string', 'max:50'],
             'email' => ['sometimes', 'nullable', 'email', 'max:150'],
             'web_address' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'attendance_cutoff_time' => ['sometimes', 'nullable', 'date_format:H:i'],
             'crest_image' => ['sometimes', 'nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'pro_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'dis_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
@@ -408,6 +414,10 @@ class SchoolController extends Controller
             'belongs_to_id' => $this->toIntOrZero($validated['belongs_to_id'] ?? null),
             'grd_span_id' => $this->toIntOrZero($validated['grd_span_id'] ?? null),
         ];
+
+        if (Schema::hasColumn($schoolTable, 'attendance_cutoff_time')) {
+            $insert['attendance_cutoff_time'] = $this->toNullableTimeValue($validated['attendance_cutoff_time'] ?? null);
+        }
 
         $errors = $this->validateDropdownValues($insert);
         if ($errors !== []) {
@@ -621,6 +631,9 @@ class SchoolController extends Controller
             'contact_no' => $this->toNullableString($row->contact_no ?? null),
             'email' => $this->toNullableString($row->email ?? null),
             'web_address' => $this->toNullableString($row->web_address ?? null),
+            'attendance_cutoff_time' => Schema::hasColumn($schoolTable, 'attendance_cutoff_time')
+                ? $this->normalizeTimeValue($row->attendance_cutoff_time ?? null)
+                : null,
             'crest_url' => $this->resolveSchoolCrestUrl((string) ($row->census_id ?? '')),
             'pro_id' => $this->toIntOrZero($row->pro_id ?? null),
             'dis_id' => $this->toIntOrZero($row->dis_id ?? null),
@@ -645,6 +658,36 @@ class SchoolController extends Controller
         $school['grade_span_name'] = $this->resolveOptionLabel('grade_span_tbl', 'grd_span_id', $school['grd_span_id'], ['grd_span_en', 'grd_span_si', 'grd_span_ta', 'grd_span']);
 
         return $school;
+    }
+
+    private function toNullableTimeValue(mixed $value): ?string
+    {
+        $normalized = $this->normalizeTimeValue($value);
+
+        return $normalized !== null ? ($normalized . ':00') : null;
+    }
+
+    private function normalizeTimeValue(mixed $value): ?string
+    {
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{2}:\d{2}:\d{2}$/', $raw) === 1) {
+            $raw = substr($raw, 0, 5);
+        }
+
+        if (preg_match('/^\d{2}:\d{2}$/', $raw) !== 1) {
+            return null;
+        }
+
+        [$hour, $minute] = array_map('intval', explode(':', $raw));
+        if ($hour < 0 || $hour > 23 || $minute < 0 || $minute > 59) {
+            return null;
+        }
+
+        return sprintf('%02d:%02d', $hour, $minute);
     }
 
     private function storeSchoolCrest(mixed $photo, string $censusId): void

@@ -332,7 +332,7 @@ trait AppliesSchoolScope
     }
 
     /**
-     * @return array{is_assigned:bool, year:int, message:string, grade_id?:int|null, class_id?:int|null}|null
+     * @return array{is_assigned:bool, year:int, message:string, grade_id?:int|null, class_id?:int|null, grade_class?:string|null}|null
      */
     protected function resolveClassTeacherAssignmentStatus(?User $user): ?array
     {
@@ -349,6 +349,7 @@ trait AppliesSchoolScope
                 'message' => '',
                 'grade_id' => $assignment['grade_id'],
                 'class_id' => $assignment['class_id'],
+                'grade_class' => $this->resolveClassTeacherAssignmentLabel($assignment),
             ];
         }
 
@@ -358,7 +359,78 @@ trait AppliesSchoolScope
             'message' => sprintf('No class assigned for academic year %d.', $year),
             'grade_id' => null,
             'class_id' => null,
+            'grade_class' => null,
         ];
+    }
+
+    /**
+     * @param  array{sch_grd_cls_id:int, grade_id:int, class_id:int, year:int, census_id:string, stf_id:int}  $assignment
+     */
+    protected function resolveClassTeacherAssignmentLabel(array $assignment): ?string
+    {
+        if (
+            !Schema::hasTable('school_grade_class_tbl')
+            || !Schema::hasTable('grade_tbl')
+            || !Schema::hasTable('class_tbl')
+        ) {
+            return null;
+        }
+
+        $gradeColumns = Schema::getColumnListing('grade_tbl');
+        $classColumns = Schema::getColumnListing('class_tbl');
+        $gradeLabelColumn = null;
+        foreach (['grade_en', 'grade_si', 'grade_ta', 'grade'] as $candidate) {
+            if (in_array($candidate, $gradeColumns, true)) {
+                $gradeLabelColumn = $candidate;
+                break;
+            }
+        }
+
+        $classLabelColumn = null;
+        foreach (['class_en', 'class_si', 'class_ta', 'class'] as $candidate) {
+            if (in_array($candidate, $classColumns, true)) {
+                $classLabelColumn = $candidate;
+                break;
+            }
+        }
+
+        $query = DB::table('school_grade_class_tbl as sgct')
+            ->leftJoin('grade_tbl as gt', 'sgct.grade_id', '=', 'gt.grade_id')
+            ->leftJoin('class_tbl as ct', 'sgct.class_id', '=', 'ct.class_id')
+            ->where('sgct.sch_grd_cls_id', $assignment['sch_grd_cls_id'])
+            ->select(['sgct.grade_id', 'sgct.class_id']);
+
+        if ($gradeLabelColumn !== null) {
+            $query->addSelect(DB::raw("gt.{$gradeLabelColumn} as grade"));
+        }
+
+        if ($classLabelColumn !== null) {
+            $query->addSelect(DB::raw("ct.{$classLabelColumn} as class"));
+        }
+
+        if (Schema::hasColumn('school_grade_class_tbl', 'is_deleted')) {
+            $query->where('sgct.is_deleted', 0);
+        }
+
+        $row = $query->first();
+        if ($row === null) {
+            return null;
+        }
+
+        $grade = trim((string) ($row->grade ?? ''));
+        $className = trim((string) ($row->class ?? ''));
+        $label = trim("{$grade} {$className}");
+
+        if ($label !== '') {
+            return $label;
+        }
+
+        $gradeId = is_numeric($row->grade_id ?? null) ? (int) $row->grade_id : 0;
+        $classId = is_numeric($row->class_id ?? null) ? (int) $row->class_id : 0;
+
+        return $gradeId > 0 || $classId > 0
+            ? trim("Grade {$gradeId} Class {$classId}")
+            : null;
     }
 
     private function resolveRequestedSchoolCensusIdFromRequest(): ?string

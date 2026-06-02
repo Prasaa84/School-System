@@ -68,6 +68,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/classes/options', [ClassController::class, 'options']);
         Route::post('/classes', [ClassController::class, 'store']);
         Route::put('/classes/{classRowId}', [ClassController::class, 'update'])->whereNumber('classRowId');
+        Route::put('/classes/{classRowId}/attendance-override', [ClassController::class, 'updateAttendanceOverride'])->whereNumber('classRowId');
         Route::delete('/classes/{classRowId}', [ClassController::class, 'destroy'])->whereNumber('classRowId');
         Route::get('/classes/by-grade/{gradeId}', [ClassLookupController::class, 'byGrade'])
             ->whereNumber('gradeId');

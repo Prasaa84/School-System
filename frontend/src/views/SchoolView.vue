@@ -134,6 +134,16 @@
               <input v-model="schoolForm.web_address" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" />
             </label>
 
+            <label class="text-sm text-slate-700">
+              {{ text.attendanceCutoffTime }}
+              <div class="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <input v-model.number="attendanceCutoffHour" type="number" min="0" max="23" step="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" />
+                <span class="text-base font-semibold text-slate-500">:</span>
+                <input v-model.number="attendanceCutoffMinute" type="number" min="0" max="59" step="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" />
+              </div>
+              <span class="mt-1 block text-xs text-slate-500">{{ text.attendanceCutoffHint }}</span>
+            </label>
+
             <div class="text-sm text-slate-700 md:col-span-2">
               <span class="font-medium">{{ text.schoolCrest }}</span>
               <div class="mt-2 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-start">
@@ -259,6 +269,7 @@
           <p><strong>{{ text.contactNumber }}:</strong> {{ school.contact_no || text.notAvailable }}</p>
           <p><strong>{{ text.email }}:</strong> {{ school.email || text.notAvailable }}</p>
           <p class="md:col-span-2"><strong>{{ text.website }}:</strong> {{ school.web_address || text.notAvailable }}</p>
+          <p><strong>{{ text.attendanceCutoffTime }}:</strong> {{ school.attendance_cutoff_time || text.notAvailable }}</p>
           <p><strong>{{ text.province }}:</strong> {{ school.province_name || text.notAvailable }}</p>
           <p><strong>{{ text.district }}:</strong> {{ school.district_name || text.notAvailable }}</p>
           <p><strong>{{ text.educationZone }}:</strong> {{ school.education_zone_name || text.notAvailable }}</p>
@@ -329,6 +340,16 @@
             <label class="text-sm text-slate-700 md:col-span-2">
               {{ text.website }}
               <input v-model="schoolForm.web_address" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" />
+            </label>
+
+            <label class="text-sm text-slate-700">
+              {{ text.attendanceCutoffTime }}
+              <div class="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <input v-model.number="attendanceCutoffHour" type="number" min="0" max="23" step="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" />
+                <span class="text-base font-semibold text-slate-500">:</span>
+                <input v-model.number="attendanceCutoffMinute" type="number" min="0" max="59" step="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-cyan-500 focus:ring-2" />
+              </div>
+              <span class="mt-1 block text-xs text-slate-500">{{ text.attendanceCutoffHint }}</span>
             </label>
 
             <label v-if="isEditDialog && canToggleStatus" class="text-sm text-slate-700 md:col-span-2">
@@ -460,6 +481,7 @@ interface SchoolDetails {
   contact_no: string | null
   email: string | null
   web_address: string | null
+  attendance_cutoff_time: string | null
   crest_url?: string | null
   pro_id: number
   dis_id: number
@@ -518,6 +540,7 @@ interface SchoolForm {
   contact_no: string
   email: string
   web_address: string
+  attendance_cutoff_time: string
   pro_id: number
   dis_id: number
   zone_id: number
@@ -563,6 +586,8 @@ const text = computed(() => {
       contactNumber: 'සම්බන්ධතා අංකය',
       email: 'විද්‍යුත් තැපෑල',
       website: 'වෙබ් අඩවිය',
+      attendanceCutoffTime: 'පැමිණීම සටහන් කිරීමේ අවසාන වේලාව',
+      attendanceCutoffHint: 'පන්ති ගුරුවරුන්ට අද දිනයේ පැමිණීම සටහන් කළ හැක්කේ මෙම වේලාව දක්වා පමණි.',
       schoolStatus: 'පාසල් තත්ත්වය',
       schoolCrest: 'පාසල් ලාංඡනය',
       schoolCrestHint: 'JPG, PNG හෝ WebP ගොනුවක් තෝරන්න. උපරිම ප්‍රමාණය 2MB.',
@@ -643,6 +668,8 @@ const text = computed(() => {
       contactNumber: 'தொடர்பு எண்',
       email: 'மின்னஞ்சல்',
       website: 'இணையதளம்',
+      attendanceCutoffTime: 'வருகை நிறுத்த நேரம்',
+      attendanceCutoffHint: 'வகுப்பு ஆசிரியர்கள் இன்றைய வருகையை இந்த நேரம் வரை மட்டுமே பதிவு செய்யலாம்.',
       schoolStatus: 'பள்ளி நிலை',
       schoolCrest: 'பள்ளி சின்னம்',
       schoolCrestHint: 'JPG, PNG அல்லது WebP கோப்பை தேர்ந்தெடுக்கவும். அதிகபட்சம் 2MB.',
@@ -720,6 +747,8 @@ const text = computed(() => {
     contactNumber: 'Contact Number',
     email: 'Email',
     website: 'Website',
+    attendanceCutoffTime: 'Attendance Cutoff Time',
+    attendanceCutoffHint: 'Class teachers can mark only today\'s attendance until this time.',
     schoolStatus: 'School Status',
     schoolCrest: 'School Crest',
     schoolCrestHint: 'Choose a JPG, PNG, or WebP file. Maximum size 2MB.',
@@ -810,6 +839,7 @@ const schoolForm = reactive<SchoolForm>({
   contact_no: '',
   email: '',
   web_address: '',
+  attendance_cutoff_time: '09:30',
   pro_id: 0,
   dis_id: 0,
   zone_id: 0,
@@ -831,6 +861,46 @@ const schoolOptions = reactive({
   school_types: [] as OptionRow[],
   school_belongs_to: [] as OptionRow[],
   grade_spans: [] as OptionRow[],
+})
+
+const clampTimePart = (value: number, min: number, max: number): number => {
+  if (!Number.isFinite(value)) {
+    return min
+  }
+
+  return Math.min(Math.max(Math.trunc(value), min), max)
+}
+
+const parseAttendanceCutoffTime = (value: string): { hour: number; minute: number } => {
+  const match = String(value ?? '').match(/^(\d{2}):(\d{2})$/)
+  if (!match) {
+    return { hour: 9, minute: 30 }
+  }
+
+  return {
+    hour: clampTimePart(Number(match[1]), 0, 23),
+    minute: clampTimePart(Number(match[2]), 0, 59),
+  }
+}
+
+const setAttendanceCutoffTimePart = (part: 'hour' | 'minute', nextValue: number): void => {
+  const current = parseAttendanceCutoffTime(schoolForm.attendance_cutoff_time)
+  const next = {
+    hour: part === 'hour' ? clampTimePart(nextValue, 0, 23) : current.hour,
+    minute: part === 'minute' ? clampTimePart(nextValue, 0, 59) : current.minute,
+  }
+
+  schoolForm.attendance_cutoff_time = `${String(next.hour).padStart(2, '0')}:${String(next.minute).padStart(2, '0')}`
+}
+
+const attendanceCutoffHour = computed({
+  get: () => parseAttendanceCutoffTime(schoolForm.attendance_cutoff_time).hour,
+  set: (value: number) => setAttendanceCutoffTimePart('hour', value),
+})
+
+const attendanceCutoffMinute = computed({
+  get: () => parseAttendanceCutoffTime(schoolForm.attendance_cutoff_time).minute,
+  set: (value: number) => setAttendanceCutoffTimePart('minute', value),
 })
 
 const filteredSchools = computed(() => {
@@ -986,6 +1056,7 @@ const resetSchoolForm = (): void => {
   schoolForm.contact_no = ''
   schoolForm.email = ''
   schoolForm.web_address = ''
+  schoolForm.attendance_cutoff_time = '09:30'
   schoolForm.pro_id = 0
   schoolForm.dis_id = 0
   schoolForm.zone_id = 0
@@ -1009,6 +1080,7 @@ const applySchoolToForm = (details: SchoolDetails): void => {
   schoolForm.contact_no = details.contact_no ?? ''
   schoolForm.email = details.email ?? ''
   schoolForm.web_address = details.web_address ?? ''
+  schoolForm.attendance_cutoff_time = details.attendance_cutoff_time ?? '09:30'
   schoolForm.pro_id = Number(details.pro_id ?? 0)
   schoolForm.dis_id = Number(details.dis_id ?? 0)
   schoolForm.zone_id = Number(details.zone_id ?? 0)
@@ -1232,6 +1304,7 @@ const createSchool = async (): Promise<void> => {
       contact_no: schoolForm.contact_no,
       email: schoolForm.email,
       web_address: schoolForm.web_address,
+      attendance_cutoff_time: schoolForm.attendance_cutoff_time,
       pro_id: schoolForm.pro_id,
       dis_id: schoolForm.dis_id,
       zone_id: schoolForm.zone_id,
@@ -1383,6 +1456,7 @@ const saveSchoolDetails = async (useDialogError: boolean = false, closeDialogAft
     payload.append('contact_no', schoolForm.contact_no)
     payload.append('email', schoolForm.email)
     payload.append('web_address', schoolForm.web_address)
+    payload.append('attendance_cutoff_time', schoolForm.attendance_cutoff_time)
     payload.append('pro_id', String(schoolForm.pro_id))
     payload.append('dis_id', String(schoolForm.dis_id))
     payload.append('zone_id', String(schoolForm.zone_id))
@@ -1444,13 +1518,6 @@ onMounted(async () => {
   await loadSchoolDetails()
 })
 </script>
-
-
-
-
-
-
-
 
 
 

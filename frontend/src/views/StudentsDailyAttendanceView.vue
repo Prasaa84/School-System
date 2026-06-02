@@ -8,6 +8,9 @@
     <p v-if="assignmentWarning" class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 print:hidden">
       {{ assignmentWarning }}
     </p>
+    <p v-if="attendanceEditNotice" class="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 print:hidden">
+      {{ attendanceEditNotice }}
+    </p>
 
     <div v-if="isClassTeacher" class="flex gap-2 print:hidden">
       <button
@@ -322,11 +325,18 @@ interface AttendanceResponse {
   date: string
   class_info: AttendanceClassInfo | null
   summary?: AttendanceSummary
+  attendance_edit_window?: AttendanceEditWindow | null
   filters?: AttendanceFilters | null
   pagination?: AttendancePagination | null
   date_headers?: string[]
   data: AttendanceStudent[]
   message?: string
+}
+
+interface AttendanceEditWindow {
+  can_edit: boolean
+  cutoff_time?: string | null
+  reason?: string | null
 }
 
 interface GradeRow {
@@ -373,6 +383,7 @@ const reportDateTo = ref('')
 const students = ref<AttendanceStudent[]>([])
 const reportDateHeaders = ref<string[]>([])
 const classInfo = ref<AttendanceClassInfo | null>(null)
+const attendanceEditWindow = ref<AttendanceEditWindow | null>(null)
 const academicYears = ref<number[]>([])
 const grades = ref<GradeRow[]>([])
 const classes = ref<ClassRow[]>([])
@@ -400,7 +411,7 @@ const isClassTeacher = computed(() => ['class teacher', 'class_teacher', 'classt
 const isPrincipal = computed(() => (currentUser.value?.role_id ?? 0) === 2 || roleName.value === 'principal')
 const isReportViewer = computed(() => isPrincipal.value || (isClassTeacher.value && classTeacherViewMode.value === 'report'))
 const isDailyMarkingMode = computed(() => isClassTeacher.value && classTeacherViewMode.value === 'marking')
-const canEditAttendance = computed(() => isClassTeacher.value)
+const canEditAttendance = computed(() => isDailyMarkingMode.value && attendanceEditWindow.value?.can_edit === true)
 const assignmentWarning = computed(() => {
   if (!isClassTeacher.value) return ''
 
@@ -411,6 +422,10 @@ const assignmentWarning = computed(() => {
 
   const message = currentUser.value?.class_teacher_assignment_message
   return typeof message === 'string' ? message : ''
+})
+const attendanceEditNotice = computed(() => {
+  if (!isDailyMarkingMode.value) return ''
+  return typeof attendanceEditWindow.value?.reason === 'string' ? attendanceEditWindow.value.reason : ''
 })
 
 const text = useLocalizedText({
@@ -451,6 +466,7 @@ const text = useLocalizedText({
     unableToLoad: 'Unable to load daily attendance.',
     unableToToggle: 'Unable to update attendance.',
     notAssigned: 'No class assignment found for this class teacher.',
+    attendanceReadOnlyToday: 'Attendance can only be marked for today.',
     notAvailable: 'N/A',
     year: 'Academic Year',
     grade: 'Grade',
@@ -505,6 +521,7 @@ const text = useLocalizedText({
     unableToLoad: 'දෛනික පැමිණීම පූරණය කළ නොහැක.',
     unableToToggle: 'පැමිණීම යාවත්කාලීන කළ නොහැක.',
     notAssigned: 'මෙම පන්ති ගුරුවරයාට පන්තියක් නියම කර නොමැත.',
+    attendanceReadOnlyToday: 'පැමිණීම සටහන් කළ හැක්කේ අද දිනය සඳහා පමණි.',
     notAvailable: 'නොමැත',
     year: 'අධ්‍යයන වර්ෂය',
     grade: 'ශ්‍රේණිය',
@@ -559,6 +576,7 @@ const text = useLocalizedText({
     unableToLoad: 'தினசரி வருகையை ஏற்ற முடியவில்லை.',
     unableToToggle: 'வருகையை புதுப்பிக்க முடியவில்லை.',
     notAssigned: 'இந்த வகுப்பு ஆசிரியருக்கு வகுப்பு ஒதுக்கப்படவில்லை.',
+    attendanceReadOnlyToday: 'வருகையை இன்று தேதிக்காக மட்டும் பதிவு செய்யலாம்.',
     notAvailable: 'கிடைக்கவில்லை',
     year: 'கல்வி ஆண்டு',
     grade: 'தரம்',
@@ -810,6 +828,7 @@ const clearReportResults = (): void => {
   reportDateHeaders.value = []
   resetSort()
   classInfo.value = null
+  attendanceEditWindow.value = null
   attendanceDate.value = ''
   pageMessage.value = ''
   pageError.value = ''
@@ -922,6 +941,7 @@ const loadAttendance = async (): Promise<void> => {
       reportDateHeaders.value = []
     }
     classInfo.value = data.class_info ?? null
+    attendanceEditWindow.value = data.attendance_edit_window ?? null
     students.value = Array.isArray(data.data) ? data.data : []
     syncSummary(data.summary)
     syncPagination(data.pagination)
@@ -939,6 +959,7 @@ const loadAttendance = async (): Promise<void> => {
   } catch (error) {
     students.value = []
     classInfo.value = null
+    attendanceEditWindow.value = null
     syncSummary()
     syncPagination()
     pageError.value = extractApiMessage(error) || text.value.unableToLoad
@@ -949,6 +970,7 @@ const loadAttendance = async (): Promise<void> => {
 
 const toggleAttendance = async (student: AttendanceStudent): Promise<void> => {
   if (!canEditAttendance.value) {
+    pageError.value = attendanceEditNotice.value || text.value.attendanceReadOnlyToday
     return
   }
 

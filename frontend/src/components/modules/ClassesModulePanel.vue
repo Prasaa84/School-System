@@ -78,10 +78,22 @@
               <template v-else>{{ item.class_teacher || '-' }}</template>
             </td>
             <td v-if="canManage" class="px-3 py-2">
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
                 <button v-if="item.sch_grd_cls_id" class="rounded bg-cyan-600 px-3 py-1 text-xs font-semibold text-white" @click="$emit('save-class', item.sch_grd_cls_id)">{{ text.save }}</button>
                 <button v-if="item.sch_grd_cls_id" class="rounded bg-rose-600 px-3 py-1 text-xs font-semibold text-white" @click="$emit('delete-class', item.sch_grd_cls_id)">{{ text.delete }}</button>
                 <button v-if="item.sch_grd_cls_id" class="rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white" @click="$emit('quick-add-class', item.sch_grd_cls_id)">{{ text.addNext }}</button>
+                <button
+                  v-if="item.sch_grd_cls_id"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded text-white"
+                  :class="Number(item.attendance_override_enabled ?? 0) === 1 ? 'bg-amber-600' : 'bg-slate-600'"
+                  :title="Number(item.attendance_override_enabled ?? 0) === 1 ? text.overrideOn : text.attendanceOverride"
+                  :aria-label="Number(item.attendance_override_enabled ?? 0) === 1 ? text.overrideOn : text.attendanceOverride"
+                  @click="$emit('open-attendance-override', item.sch_grd_cls_id)"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                    <path d="M10 2a1 1 0 0 1 1 1v1.07a6.002 6.002 0 0 1 4.93 4.93H17a1 1 0 1 1 0 2h-1.07a6.002 6.002 0 0 1-4.93 4.93V17a1 1 0 1 1-2 0v-1.07a6.002 6.002 0 0 1-4.93-4.93H3a1 1 0 1 1 0-2h1.07A6.002 6.002 0 0 1 9 4.07V3a1 1 0 0 1 1-1Zm0 4a4 4 0 1 0 0 8a4 4 0 0 0 0-8Zm0 1.5a.75.75 0 0 1 .75.75v1.94l1.37.79a.75.75 0 0 1-.74 1.3l-1.75-1A.75.75 0 0 1 9.25 10V8.25A.75.75 0 0 1 10 7.5Z" />
+                  </svg>
+                </button>
               </div>
             </td>
           </tr>
@@ -117,7 +129,7 @@
 import { computed } from 'vue'
 import { useLocalizedText } from '../../utils/uiText'
 
-interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null }
+interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null; attendance_override_enabled?: number | null; attendance_override_date?: string | null }
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
 interface ClassGradeOption { grade_id: number; grade: string }
@@ -157,6 +169,7 @@ const emit = defineEmits<{
   (e: 'quick-add-class', classRowId: number): void
   (e: 'save-class', classRowId: number): void
   (e: 'delete-class', classRowId: number): void
+  (e: 'open-attendance-override', classRowId: number): void
   (e: 'load-report'): void
 }>()
 
@@ -180,6 +193,8 @@ const text = useLocalizedText({
     addNext: '+ Class',
     save: 'Save',
     delete: 'Delete',
+    attendanceOverride: 'Attendance Override',
+    overrideOn: 'Override On',
     classReports: 'Class Reports',
     view: 'View',
     studentCount: 'Student Count',
@@ -204,6 +219,8 @@ const text = useLocalizedText({
     addNext: '+ පන්තිය',
     save: 'සුරකින්න',
     delete: 'මකන්න',
+    attendanceOverride: 'පැමිණීම Override',
+    overrideOn: 'Override On',
     classReports: 'පන්ති වාර්තා',
     view: 'දර්ශනය',
     studentCount: 'සිසුන් ගණන',
@@ -228,6 +245,8 @@ const text = useLocalizedText({
     addNext: '+ வகுப்பு',
     save: 'சேமி',
     delete: 'நீக்கு',
+    attendanceOverride: 'வருகை Override',
+    overrideOn: 'Override On',
     classReports: 'வகுப்பு அறிக்கைகள்',
     view: 'பார்வை',
     studentCount: 'மாணவர் எண்ணிக்கை',

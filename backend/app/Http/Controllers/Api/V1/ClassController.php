@@ -132,6 +132,14 @@ class ClassController extends Controller
             $query->addSelect('sgct.stf_id');
         }
 
+        if (in_array('attendance_override_enabled', $gradeClassColumns, true)) {
+            $query->addSelect('sgct.attendance_override_enabled');
+        }
+
+        if (in_array('attendance_override_date', $gradeClassColumns, true)) {
+            $query->addSelect('sgct.attendance_override_date');
+        }
+
         if ($schoolColumn !== null) {
             $query->addSelect(DB::raw("sgct.{$schoolColumn} as census_id"));
             $query->orderBy("sgct.{$schoolColumn}");
@@ -179,6 +187,10 @@ class ClassController extends Controller
                 'approved_std_count' => isset($row->approved_std_count) ? (int) $row->approved_std_count : null,
                 'std_count' => isset($row->std_count) ? (int) $row->std_count : null,
                 'class_teacher' => $row->class_teacher ?? null,
+                'attendance_override_enabled' => isset($row->attendance_override_enabled) ? (int) $row->attendance_override_enabled : 0,
+                'attendance_override_date' => isset($row->attendance_override_date) && trim((string) $row->attendance_override_date) !== ''
+                    ? (string) $row->attendance_override_date
+                    : null,
             ];
         })->all();
 
@@ -671,5 +683,122 @@ class ClassController extends Controller
         ]);
 
         return response()->json(['message' => 'Class row deleted.']);
+    }
+
+    public function updateAttendanceOverride(Request $request, int $classRowId): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!in_array((int) $user->role_id, [1, 2], true)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $gradeClassTable = (new SchoolGradeClass())->getTable();
+        $columns = Schema::getColumnListing($gradeClassTable);
+        $schoolColumn = $this->resolveSchoolColumn($columns);
+
+        $query = DB::table("{$gradeClassTable} as sgct")->where('sgct.sch_grd_cls_id', $classRowId);
+        if (in_array('is_deleted', $columns, true)) {
+            $query->where('sgct.is_deleted', 0);
+        }
+        $this->applySchoolScope($query, $user, 'sgct', $schoolColumn);
+
+        $row = $query->first();
+        if ($row === null) {
+            Log::warning('Attendance override update blocked: class row not found.', [
+                'user_id' => $user->user_id ?? null,
+                'role_id' => $user->role_id ?? null,
+                'sch_grd_cls_id' => $classRowId,
+            ]);
+
+            return response()->json(['message' => 'Class row not found.'], 404);
+        }
+
+        if (!in_array('attendance_override_enabled', $columns, true) || !in_array('attendance_override_date', $columns, true)) {
+            Log::warning('Attendance override update blocked: required columns missing.', [
+                'user_id' => $user->user_id ?? null,
+                'role_id' => $user->role_id ?? null,
+                'sch_grd_cls_id' => $classRowId,
+                'columns' => $columns,
+            ]);
+
+            return response()->json(['message' => 'Attendance override is not available for classes.'], 422);
+        }
+
+        $validated = $request->validate([
+            'attendance_override_enabled' => ['required', 'boolean'],
+            'attendance_override_date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $enabled = filter_var($validated['attendance_override_enabled'] ?? false, FILTER_VALIDATE_BOOL);
+        $overrideDate = isset($validated['attendance_override_date']) ? (string) $validated['attendance_override_date'] : null;
+
+        Log::info('Attendance override update requested.', [
+            'user_id' => $user->user_id ?? null,
+            'role_id' => $user->role_id ?? null,
+            'sch_grd_cls_id' => $classRowId,
+            'census_id' => $row->{$schoolColumn} ?? null,
+            'request_payload' => $request->all(),
+            'validated' => $validated,
+            'resolved_enabled' => $enabled,
+            'resolved_date' => $overrideDate,
+        ]);
+
+        if ($enabled && ($overrideDate === null || trim($overrideDate) === '')) {
+            Log::warning('Attendance override update blocked: date missing while enabled.', [
+                'user_id' => $user->user_id ?? null,
+                'sch_grd_cls_id' => $classRowId,
+                'validated' => $validated,
+            ]);
+
+            return response()->json(['message' => 'Select an override date first.'], 422);
+        }
+
+        $updates = [
+            'attendance_override_enabled' => $enabled ? 1 : 0,
+            'attendance_override_date' => $enabled ? $overrideDate : null,
+        ];
+
+        if (in_array('date_updated', $columns, true)) {
+            $updates['date_updated'] = now();
+        }
+        if (in_array('updated_dt', $columns, true)) {
+            $updates['updated_dt'] = now();
+        }
+
+        $affected = SchoolGradeClass::query()->where('sch_grd_cls_id', $classRowId)->update($updates);
+
+        $updatedRow = DB::table($gradeClassTable)
+            ->where('sch_grd_cls_id', $classRowId)
+            ->first([
+                'sch_grd_cls_id',
+                'attendance_override_enabled',
+                'attendance_override_date',
+            ]);
+
+        Log::info('Attendance override update applied.', [
+            'user_id' => $user->user_id ?? null,
+            'role_id' => $user->role_id ?? null,
+            'sch_grd_cls_id' => $classRowId,
+            'affected_rows' => $affected,
+            'updates' => $updates,
+            'updated_row' => $updatedRow,
+        ]);
+
+        return response()->json([
+            'message' => $enabled
+                ? 'Attendance override enabled for the selected date.'
+                : 'Attendance override disabled.',
+            'data' => [
+                'sch_grd_cls_id' => $classRowId,
+                'attendance_override_enabled' => (int) ($updatedRow->attendance_override_enabled ?? 0),
+                'attendance_override_date' => isset($updatedRow->attendance_override_date) && trim((string) $updatedRow->attendance_override_date) !== ''
+                    ? (string) $updatedRow->attendance_override_date
+                    : null,
+            ],
+        ]);
     }
 }

@@ -10,6 +10,7 @@ export interface AuthUser {
     message: string
     grade_id?: number | null
     class_id?: number | null
+    grade_class?: string | null
   } | null
   class_teacher_assignment_message?: string | null
   feature_permissions?: Record<string, boolean> | null
