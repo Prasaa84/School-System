@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TermTestMarksController extends Controller
@@ -820,6 +822,349 @@ class TermTestMarksController extends Controller
         ));
 
         return response()->json(['message' => 'Term test marks deleted successfully.']);
+    }
+
+    public function downloadTemplate(Request $request): StreamedResponse|JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canViewMarks($user)) {
+            Log::warning('Term test marks template export forbidden.', $this->marksLogContext($user));
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $validated = Validator::make($request->all(), [
+            'year' => ['required', 'integer', 'between:2000,2100'],
+            'term' => ['required', 'integer', 'in:1,2,3'],
+            'grade_id' => ['required', 'integer', 'min:1'],
+            'class_id' => ['required', 'integer', 'min:1'],
+        ])->validate();
+
+        $censusId = $this->resolveMarksTargetSchoolCensusId($user);
+        if ($censusId === null) {
+            Log::warning('Term test marks template export blocked: school context missing.', $this->marksLogContext($user));
+            return response()->json(['message' => $this->schoolContextRequiredMessage($user)], 422);
+        }
+
+        $scope = $this->resolveMarksScope($user, $censusId, (int) $validated['year']);
+        $selectionError = $this->validateMarksSelectionAgainstScope($scope, (int) $validated['grade_id'], (int) $validated['class_id']);
+        if ($selectionError !== null) {
+            Log::warning('Term test marks template export blocked by scope.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'scope' => $scope,
+                    'selection_error' => $selectionError,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => $selectionError], 403);
+        }
+
+        $classRow = $this->loadClassRow($censusId, (int) $validated['year'], (int) $validated['grade_id'], (int) $validated['class_id']);
+        if ($classRow === null) {
+            Log::warning('Term test marks template export failed: class row not found.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'Class not found for the selected year.'], 404);
+        }
+
+        $subjects = $this->loadMarksSubjects($censusId, (int) $validated['year'], (int) $validated['grade_id']);
+        if ($subjects === []) {
+            Log::warning('Term test marks template export failed: no subjects configured.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'No subjects configured for the selected grade and year.'], 422);
+        }
+
+        $students = $this->loadMarksRoster((int) $classRow->sch_grd_cls_id);
+        $filenameSuffix = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim(sprintf('%s-%s-%s-%s-template', $validated['year'], $validated['term'], $classRow->grade, $classRow->class_name))) ?: 'marks-template';
+        $filename = 'marks-' . strtolower($filenameSuffix) . '.xlsx';
+
+        Log::info('Term test marks template export completed.', array_merge(
+            $this->marksLogContext($user),
+            [
+                'resolved_school_census_id' => $censusId,
+                'filters' => $validated,
+                'class_row_id' => (int) $classRow->sch_grd_cls_id,
+                'subject_count' => count($subjects),
+                'student_count' => count($students),
+                'filename' => $filename,
+            ]
+        ));
+
+        return response()->streamDownload(function () use ($students, $subjects): void {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Marks Template');
+
+            $headers = ['Index No', 'Student'];
+            foreach ($subjects as $subject) {
+                $headers[] = (string) $subject['subject'];
+            }
+            $headers[] = 'Total';
+            $headers[] = 'Average';
+
+            foreach ($headers as $index => $header) {
+                $sheet->setCellValue($this->excelColumnName($index + 1) . '1', $header);
+            }
+            $lastColumn = $this->excelColumnName(count($headers));
+            $sheet->getStyle("A1:{$lastColumn}1")->getFont()->setBold(true);
+
+            foreach (array_values($students) as $rowIndex => $student) {
+                $excelRow = $rowIndex + 2;
+                $sheet->setCellValueExplicit("A{$excelRow}", (string) $student['index_no'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValue("B{$excelRow}", (string) $student['name_with_initials']);
+                for ($subjectIndex = 0; $subjectIndex < count($subjects); $subjectIndex++) {
+                    $sheet->setCellValue($this->excelColumnName($subjectIndex + 3) . $excelRow, '');
+                }
+                $sheet->setCellValue($this->excelColumnName(count($subjects) + 3) . $excelRow, '');
+                $sheet->setCellValue($this->excelColumnName(count($subjects) + 4) . $excelRow, '');
+            }
+
+            for ($index = 1; $index <= count($headers); $index++) {
+                $sheet->getColumnDimension($this->excelColumnName($index))->setAutoSize(true);
+            }
+
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        $user = $this->authUser();
+        if ($user === null) {
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
+
+        if (!$this->canManageMarks($user)) {
+            Log::warning('Term test marks import forbidden.', $this->marksLogContext($user));
+            return response()->json(['message' => 'Only class teachers can import term test marks.'], 403);
+        }
+
+        $validated = Validator::make($request->all(), [
+            'year' => ['required', 'integer', 'between:2000,2100'],
+            'term' => ['required', 'integer', 'in:1,2,3'],
+            'grade_id' => ['required', 'integer', 'min:1'],
+            'class_id' => ['required', 'integer', 'min:1'],
+            'file' => ['required', 'file', 'mimes:xlsx,xls'],
+        ])->validate();
+
+        Log::info('Term test marks import requested.', array_merge(
+            $this->marksLogContext($user),
+            [
+                'filters' => [
+                    'year' => (int) $validated['year'],
+                    'term' => (int) $validated['term'],
+                    'grade_id' => (int) $validated['grade_id'],
+                    'class_id' => (int) $validated['class_id'],
+                ],
+                'uploaded_file_name' => $request->file('file')?->getClientOriginalName(),
+            ]
+        ));
+
+        $censusId = $this->resolveMarksTargetSchoolCensusId($user);
+        if ($censusId === null) {
+            Log::warning('Term test marks import blocked: school context missing.', $this->marksLogContext($user));
+            return response()->json(['message' => $this->schoolContextRequiredMessage($user)], 422);
+        }
+
+        if (!$this->canManageMarksForSelection($user, $censusId, (int) $validated['year'], (int) $validated['grade_id'], (int) $validated['class_id'])) {
+            Log::warning('Term test marks import blocked by class scope.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'You can only import marks for your assigned class.'], 403);
+        }
+
+        $classRow = $this->loadClassRow($censusId, (int) $validated['year'], (int) $validated['grade_id'], (int) $validated['class_id']);
+        if ($classRow === null) {
+            Log::warning('Term test marks import failed: class row not found.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'Class not found for the selected year.'], 404);
+        }
+
+        $subjects = $this->loadMarksSubjects($censusId, (int) $validated['year'], (int) $validated['grade_id']);
+        if ($subjects === []) {
+            Log::warning('Term test marks import failed: no subjects configured.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'No subjects configured for the selected grade and year.'], 422);
+        }
+
+        $roster = $this->loadMarksRoster((int) $classRow->sch_grd_cls_id);
+        if ($roster === []) {
+            Log::warning('Term test marks import failed: empty roster.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'class_row_id' => (int) $classRow->sch_grd_cls_id,
+                    'filters' => $validated,
+                ]
+            ));
+            return response()->json(['message' => 'No students found in the selected class.'], 422);
+        }
+
+        try {
+            $spreadsheet = IOFactory::load((string) $request->file('file')?->getRealPath());
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray(null, true, true, false);
+        } catch (\Throwable $exception) {
+            Log::warning('Term test marks import failed: invalid spreadsheet file.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'error' => $exception->getMessage(),
+                ]
+            ));
+            return response()->json(['message' => 'Invalid spreadsheet file.'], 422);
+        }
+
+        if (!is_array($rows) || count($rows) < 2) {
+            Log::warning('Term test marks import failed: empty sheet.', array_merge(
+                $this->marksLogContext($user),
+                ['resolved_school_census_id' => $censusId]
+            ));
+            return response()->json(['message' => 'The uploaded sheet is empty.'], 422);
+        }
+
+        $headerRow = array_map(fn ($value): string => trim((string) $value), array_values($rows[0] ?? []));
+        $expectedHeaders = ['Index No', 'Student'];
+        foreach ($subjects as $subject) {
+            $expectedHeaders[] = trim((string) $subject['subject']);
+        }
+        $expectedHeaders[] = 'Total';
+        $expectedHeaders[] = 'Average';
+
+        if (count($headerRow) < count($expectedHeaders)) {
+            Log::warning('Term test marks import failed: invalid header count.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'expected_header_count' => count($expectedHeaders),
+                    'actual_header_count' => count($headerRow),
+                ]
+            ));
+            return response()->json(['message' => 'The uploaded file does not match the marks template.'], 422);
+        }
+
+        foreach ($expectedHeaders as $index => $expectedHeader) {
+            $actualHeader = trim((string) ($headerRow[$index] ?? ''));
+            if ($actualHeader !== $expectedHeader) {
+                Log::warning('Term test marks import failed: header mismatch.', array_merge(
+                    $this->marksLogContext($user),
+                    [
+                        'resolved_school_census_id' => $censusId,
+                        'column_index' => $index,
+                        'expected_header' => $expectedHeader,
+                        'actual_header' => $actualHeader,
+                    ]
+                ));
+                return response()->json(['message' => 'The uploaded file does not match the marks template.'], 422);
+            }
+        }
+
+        $validIndexes = array_fill_keys(array_map(fn (array $row): string => $row['index_no'], $roster), true);
+        $entryLookup = [];
+        $cellErrors = [];
+        $importedRowCount = 0;
+
+        foreach (array_slice($rows, 1) as $row) {
+            $cells = array_values($row);
+            $indexNo = trim((string) ($cells[0] ?? ''));
+            if ($indexNo === '') {
+                continue;
+            }
+            if (!isset($validIndexes[$indexNo])) {
+                continue;
+            }
+
+            $importedRowCount++;
+            $entryLookup[$indexNo] = [];
+            foreach ($subjects as $subjectIndex => $subject) {
+                $value = $cells[$subjectIndex + 2] ?? '';
+                $normalized = $this->normalizeMarkCellValue($value);
+                if ($normalized === null) {
+                    $cellErrors[] = sprintf('Invalid mark for student %s and subject %s. Use 0-100 or AB.', $indexNo, (string) $subject['subject']);
+                    continue;
+                }
+                $entryLookup[$indexNo][(int) $subject['subject_id']] = $normalized;
+            }
+        }
+
+        if ($cellErrors !== []) {
+            Log::warning('Term test marks import failed validation.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'class_row_id' => (int) $classRow->sch_grd_cls_id,
+                    'first_error' => $cellErrors[0],
+                    'imported_row_count' => $importedRowCount,
+                ]
+            ));
+            return response()->json(['message' => $cellErrors[0]], 422);
+        }
+
+        [$filledCells, $absentCells, $numericCells] = $this->countEntryCells($entryLookup);
+        $this->persistMarksEntries(
+            $censusId,
+            (int) $validated['year'],
+            (int) $validated['term'],
+            (int) $validated['grade_id'],
+            (int) $validated['class_id'],
+            $roster,
+            $subjects,
+            $entryLookup
+        );
+
+        Log::info('Term test marks import completed.', array_merge(
+            $this->marksLogContext($user),
+            [
+                'resolved_school_census_id' => $censusId,
+                'class_row_id' => (int) $classRow->sch_grd_cls_id,
+                'filters' => [
+                    'year' => (int) $validated['year'],
+                    'term' => (int) $validated['term'],
+                    'grade_id' => (int) $validated['grade_id'],
+                    'class_id' => (int) $validated['class_id'],
+                ],
+                'roster_count' => count($roster),
+                'subject_count' => count($subjects),
+                'imported_row_count' => $importedRowCount,
+                'filled_cell_count' => $filledCells,
+                'absent_cell_count' => $absentCells,
+                'numeric_cell_count' => $numericCells,
+            ]
+        ));
+
+        return response()->json(['message' => 'Term test marks uploaded successfully.']);
     }
 
     private function canViewMarks(?User $user): bool
@@ -1651,5 +1996,130 @@ class TermTestMarksController extends Controller
             'requested_school_census_id' => $this->resolveRequestedSchoolCensusId($user),
             'resolved_user_census_id' => $this->resolveUserCensusId($user),
         ];
+    }
+
+    private function excelColumnName(int $index): string
+    {
+        $name = '';
+        while ($index > 0) {
+            $index--;
+            $name = chr(65 + ($index % 26)) . $name;
+            $index = intdiv($index, 26);
+        }
+
+        return $name;
+    }
+
+    /**
+     * @param  array<string, array<int, string|int>>  $entryLookup
+     * @return array{0:int,1:int,2:int}
+     */
+    private function countEntryCells(array $entryLookup): array
+    {
+        $filledCells = 0;
+        $absentCells = 0;
+        $numericCells = 0;
+
+        foreach ($entryLookup as $studentMarks) {
+            foreach ($studentMarks as $cell) {
+                if ($cell === '') {
+                    continue;
+                }
+                $filledCells++;
+                if ($cell === 'AB') {
+                    $absentCells++;
+                } else {
+                    $numericCells++;
+                }
+            }
+        }
+
+        return [$filledCells, $absentCells, $numericCells];
+    }
+
+    /**
+     * @param  array<int, array{std_id:int,index_no:string,name_with_initials:string}>  $roster
+     * @param  array<int, array{subject_id:int,subject:string,order_id:int}>  $subjects
+     * @param  array<string, array<int, string|int>>  $entryLookup
+     */
+    private function persistMarksEntries(string $censusId, int $year, int $term, int $gradeId, int $classId, array $roster, array $subjects, array $entryLookup): void
+    {
+        DB::transaction(function () use ($censusId, $year, $term, $gradeId, $classId, $roster, $subjects, $entryLookup): void {
+            foreach ($roster as $student) {
+                $indexNo = $student['index_no'];
+                $studentMarks = $entryLookup[$indexNo] ?? [];
+
+                foreach ($subjects as $subject) {
+                    $subjectId = (int) $subject['subject_id'];
+                    $cell = $studentMarks[$subjectId] ?? '';
+
+                    if ($cell === '') {
+                        TermTestMark::query()
+                            ->where('census_id', $censusId)
+                            ->where('index_no', $indexNo)
+                            ->where('year', $year)
+                            ->where('term', $term)
+                            ->where('subj_id', $subjectId)
+                            ->delete();
+
+                        TermTestAbsentee::query()
+                            ->where('census_id', $censusId)
+                            ->where('index_no', $indexNo)
+                            ->where('year', $year)
+                            ->where('term', $term)
+                            ->where('subj_id', $subjectId)
+                            ->delete();
+
+                        continue;
+                    }
+
+                    if ($cell === 'AB') {
+                        TermTestAbsentee::query()->updateOrCreate(
+                            [
+                                'census_id' => $censusId,
+                                'index_no' => $indexNo,
+                                'year' => $year,
+                                'term' => $term,
+                                'subj_id' => $subjectId,
+                            ],
+                            []
+                        );
+
+                        TermTestMark::query()
+                            ->where('census_id', $censusId)
+                            ->where('index_no', $indexNo)
+                            ->where('year', $year)
+                            ->where('term', $term)
+                            ->where('subj_id', $subjectId)
+                            ->delete();
+
+                        continue;
+                    }
+
+                    TermTestMark::query()->updateOrCreate(
+                        [
+                            'census_id' => $censusId,
+                            'index_no' => $indexNo,
+                            'year' => $year,
+                            'term' => $term,
+                            'subj_id' => $subjectId,
+                        ],
+                        [
+                            'marks' => (int) $cell,
+                        ]
+                    );
+
+                    TermTestAbsentee::query()
+                        ->where('census_id', $censusId)
+                        ->where('index_no', $indexNo)
+                        ->where('year', $year)
+                        ->where('term', $term)
+                        ->where('subj_id', $subjectId)
+                        ->delete();
+                }
+            }
+
+            $this->rebuildResultsAndConfirmation($censusId, $year, $term, $gradeId, $classId, $roster, $subjects);
+        });
     }
 }

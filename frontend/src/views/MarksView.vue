@@ -6,7 +6,7 @@
     </header>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div class="grid gap-4 md:grid-cols-5">
+      <div class="grid gap-4 md:grid-cols-6">
         <label v-if="isAdmin" class="text-sm text-slate-700 md:col-span-5">
           {{ text.school }}
           <select v-model.number="selectedSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onSchoolChange">
@@ -53,13 +53,47 @@
           </button>
         </div>
 
-        <div class="flex items-end">
-          <button class="w-full rounded-xl border border-cyan-300 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60" :disabled="exportingMarks || loadingOptions" @click="exportMarks">
-            {{ exportingMarks ? text.exporting : text.exportExcel }}
-          </button>
+        <div class="md:col-span-6">
+          <div class="flex flex-nowrap items-end gap-2 overflow-x-auto pb-1">
+            <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60" :disabled="exportingMarks || loadingOptions" @click="exportMarks">
+              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M10 2a1 1 0 0 1 1 1v7.59l2.3-2.29a1 1 0 1 1 1.4 1.41l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.41L9 10.59V3a1 1 0 0 1 1-1Z" />
+                <path d="M4 14a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
+              </svg>
+              {{ exportingMarks ? text.exporting : text.export }}
+            </button>
+
+            <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="downloadingTemplate || loadingOptions" @click="downloadImportTemplate">
+              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M5 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.41A2 2 0 0 0 16.41 6L13 2.59A2 2 0 0 0 11.59 2H5Zm6 1.5V7a1 1 0 0 0 1 1h3.5V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6Z" />
+                <path d="M8 10a1 1 0 0 1 1 1v1h2v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
+              </svg>
+              {{ downloadingTemplate ? text.downloadingTemplate : text.template }}
+            </button>
+
+            <template v-if="canManageMarksUi">
+              <input ref="marksFileInputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="onMarksFileSelected" />
+              <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="openMarksFilePicker">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path d="M10 3a1 1 0 0 1 1 1v6.59l1.3-1.29a1 1 0 1 1 1.4 1.41l-3 3a1 1 0 0 1-1.4 0l-3-3a1 1 0 1 1 1.4-1.41L9 10.59V4a1 1 0 0 1 1-1Z" />
+                  <path d="M4 13a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
+                </svg>
+                {{ text.file }}
+              </button>
+
+              <span class="my-auto min-w-0 shrink text-sm text-slate-600">{{ selectedMarksFileName || text.noFileSelected }}</span>
+
+              <button class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="uploadingMarks || !selectedMarksFile" @click="uploadMarksFile">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path d="M10 17a1 1 0 0 1-1-1V9.41L7.7 10.7a1 1 0 1 1-1.4-1.41l3-3a1 1 0 0 1 1.4 0l3 3a1 1 0 0 1-1.4 1.41L11 9.41V16a1 1 0 0 1-1 1Z" />
+                  <path d="M4 14a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
+                </svg>
+                {{ uploadingMarks ? text.uploading : text.upload }}
+              </button>
+            </template>
+          </div>
         </div>
       </div>
-
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -245,6 +279,16 @@ const text = {
   saving: 'Saving...',
   exportExcel: 'Export Excel',
   exporting: 'Exporting...',
+  importTemplate: 'Import Template',
+  downloadingTemplate: 'Downloading...',
+  chooseFile: 'Choose File',
+  noFileSelected: 'No file selected.',
+  uploadExcel: 'Upload Excel',
+  uploading: 'Uploading...',
+  export: 'Export',
+  template: 'Template',
+  file: 'File',
+  upload: 'Upload',
   delete: 'Delete Marks',
   confirmDelete: 'Delete',
   deleting: 'Deleting...',
@@ -266,6 +310,8 @@ const text = {
   saveMarksError: 'Unable to save term test marks.',
   deleteMarksError: 'Unable to delete term test marks.',
   exportMarksError: 'Unable to export term test marks.',
+  templateMarksError: 'Unable to download marks import template.',
+  uploadMarksError: 'Unable to upload term test marks.',
   deleteDialogTitle: 'Delete Marks',
   deleteDialogMessage: 'Do you want to delete all marks for the selected year, term, grade, and class?',
 }
@@ -289,9 +335,13 @@ const loadingOptions = ref(false)
 const loadingMarks = ref(false)
 const savingMarks = ref(false)
 const exportingMarks = ref(false)
+const downloadingTemplate = ref(false)
+const uploadingMarks = ref(false)
 const deletingMarks = ref(false)
 const showDeleteDialog = ref(false)
 const canManageLoaded = ref(false)
+const marksFileInputRef = ref<HTMLInputElement | null>(null)
+const selectedMarksFile = ref<File | null>(null)
 const searchQuery = ref('')
 const loadedTitle = ref('')
 const message = ref('')
@@ -299,6 +349,8 @@ const errorMessage = ref('')
 const messageRef = ref<HTMLElement | null>(null)
 const errorMessageRef = ref<HTMLElement | null>(null)
 const confirmation = ref({ is_completed: false })
+const canManageMarksUi = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName))
+const selectedMarksFileName = computed(() => selectedMarksFile.value?.name ?? '')
 
 const scopeLabel = computed(() => {
   if (roleName === 'class teacher') return 'Class teacher view'
@@ -383,8 +435,10 @@ const loadOptions = async (): Promise<void> => {
   }
 }
 
-const loadMarks = async (): Promise<void> => {
-  message.value = ''
+const loadMarks = async (options: { preserveMessage?: boolean } = {}): Promise<void> => {
+  if (!options.preserveMessage) {
+    message.value = ''
+  }
   errorMessage.value = ''
 
   if (isAdmin.value && selectedSchoolCensusId.value <= 0) {
@@ -450,9 +504,9 @@ const saveMarks = async (): Promise<void> => {
       })),
     }
 
-    const { data } = await api.post<{ message?: string }>('/marks', payload)
-    message.value = data.message ?? 'Term test marks saved successfully.'
-    await loadMarks()
+    const successMessage = data.message ?? 'Term test marks saved successfully.'
+    await loadMarks({ preserveMessage: true })
+    message.value = successMessage
     await scrollMessage(messageRef)
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message ?? text.saveMarksError
@@ -509,6 +563,96 @@ const exportMarks = async (): Promise<void> => {
   }
 }
 
+const downloadImportTemplate = async (): Promise<void> => {
+  message.value = ''
+  errorMessage.value = ''
+
+  if (isAdmin.value && selectedSchoolCensusId.value <= 0) {
+    errorMessage.value = text.selectSchoolFirst
+    await scrollMessage(errorMessageRef)
+    return
+  }
+
+  if (selectedYear.value <= 0 || selectedTerm.value <= 0 || selectedGradeId.value <= 0 || selectedClassId.value <= 0) {
+    errorMessage.value = text.selectFiltersFirst
+    await scrollMessage(errorMessageRef)
+    return
+  }
+
+  downloadingTemplate.value = true
+
+  try {
+    const response = await api.get('/marks/template', {
+      params: {
+        year: selectedYear.value,
+        term: selectedTerm.value,
+        grade_id: selectedGradeId.value,
+        class_id: selectedClassId.value,
+      },
+      responseType: 'blob',
+    })
+
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const fileNameMatch = /filename="?([^"]+)"?/i.exec(String(response.headers['content-disposition'] ?? ''))
+    link.download = fileNameMatch?.[1] || 'marks-template.xlsx'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message ?? text.templateMarksError
+    await scrollMessage(errorMessageRef)
+  } finally {
+    downloadingTemplate.value = false
+  }
+}
+
+const openMarksFilePicker = (): void => {
+  marksFileInputRef.value?.click()
+}
+
+const onMarksFileSelected = (event: Event): void => {
+  const input = event.target as HTMLInputElement | null
+  selectedMarksFile.value = input?.files?.[0] ?? null
+}
+
+const uploadMarksFile = async (): Promise<void> => {
+  if (!selectedMarksFile.value) {
+    return
+  }
+
+  message.value = ''
+  errorMessage.value = ''
+  uploadingMarks.value = true
+
+  try {
+    const formData = new FormData()
+    formData.append('year', String(selectedYear.value))
+    formData.append('term', String(selectedTerm.value))
+    formData.append('grade_id', String(selectedGradeId.value))
+    formData.append('class_id', String(selectedClassId.value))
+    formData.append('file', selectedMarksFile.value)
+
+    const { data } = await api.post<{ message?: string }>('/marks/import', formData)
+    const successMessage = data.message ?? 'Term test marks uploaded successfully.'
+    selectedMarksFile.value = null
+    if (marksFileInputRef.value) {
+      marksFileInputRef.value.value = ''
+    }
+    await loadMarks({ preserveMessage: true })
+    message.value = successMessage
+    await scrollMessage(messageRef)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message ?? text.uploadMarksError
+    await scrollMessage(errorMessageRef)
+  } finally {
+    uploadingMarks.value = false
+  }
+}
+
 const clearMarks = async (): Promise<void> => {
   deletingMarks.value = true
   message.value = ''
@@ -524,9 +668,10 @@ const clearMarks = async (): Promise<void> => {
       },
     })
 
-    message.value = data.message ?? 'Term test marks deleted successfully.'
+    const successMessage = data.message ?? 'Term test marks deleted successfully.'
     showDeleteDialog.value = false
-    await loadMarks()
+    await loadMarks({ preserveMessage: true })
+    message.value = successMessage
     await scrollMessage(messageRef)
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message ?? text.deleteMarksError
