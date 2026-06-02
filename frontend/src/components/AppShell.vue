@@ -193,55 +193,25 @@
       </main>
     </div>
 
-    <div v-if="showLogoutDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 print:hidden" @click="closeLogoutDialog">
-      <div class="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" @click.stop>
-        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-700">
-              <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
-                <path d="M12.5 3.5h-5A1.5 1.5 0 0 0 6 5v10a1.5 1.5 0 0 0 1.5 1.5h5a1.5 1.5 0 0 0 1.5-1.5v-2a.75.75 0 0 0-1.5 0v2h-5V5h5v2a.75.75 0 0 0 1.5 0V5a1.5 1.5 0 0 0-1.5-1.5Z" />
-                <path d="M10.72 10.75H3.75a.75.75 0 0 1 0-1.5h6.97L9.24 7.78a.75.75 0 1 1 1.06-1.06l2.75 2.75a.75.75 0 0 1 0 1.06l-2.75 2.75a.75.75 0 1 1-1.06-1.06l1.48-1.47Z" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="font-display text-lg font-bold text-slate-900">{{ shellText.logoutConfirmTitle }}</h3>
-            </div>
-          </div>
-          <button
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
-            :title="shellText.close"
-            :aria-label="shellText.close"
-            :disabled="logoutBusy"
-            @click="closeLogoutDialog"
-          >
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
-              <path d="M5 5l10 10M15 5 5 15" stroke-linecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        <div class="px-5 py-4">
-          <p class="text-sm leading-6 text-slate-600">{{ shellText.logoutConfirmMessage }}</p>
-        </div>
-
-        <div class="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
-          <button
-            class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="logoutBusy"
-            @click="closeLogoutDialog"
-          >
-            {{ shellText.cancel }}
-          </button>
-          <button
-            class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
-            :disabled="logoutBusy"
-            @click="confirmLogout"
-          >
-            {{ logoutBusy ? shellText.loggingOut : shellText.logout }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      :open="showLogoutDialog"
+      :title="shellText.logoutConfirmTitle"
+      :message="shellText.logoutConfirmMessage"
+      :confirm-label="shellText.logout"
+      :busy-confirm-label="shellText.loggingOut"
+      :cancel-label="shellText.cancel"
+      :close-label="shellText.close"
+      :busy="logoutBusy"
+      @close="closeLogoutDialog"
+      @confirm="confirmLogout"
+    >
+      <template #icon>
+        <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+          <path d="M12.5 3.5h-5A1.5 1.5 0 0 0 6 5v10a1.5 1.5 0 0 0 1.5 1.5h5a1.5 1.5 0 0 0 1.5-1.5v-2a.75.75 0 0 0-1.5 0v2h-5V5h5v2a.75.75 0 0 0 1.5 0V5a1.5 1.5 0 0 0-1.5-1.5Z" />
+          <path d="M10.72 10.75H3.75a.75.75 0 0 1 0-1.5h6.97L9.24 7.78a.75.75 0 1 1 1.06-1.06l2.75 2.75a.75.75 0 0 1 0 1.06l-2.75 2.75a.75.75 0 1 1-1.06-1.06l1.48-1.47Z" />
+        </svg>
+      </template>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -249,6 +219,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../services/api'
+import ConfirmDialog from './ConfirmDialog.vue'
 import { clearAuthSession, getToken, getUser, setAuthSession, type AuthUser } from '../services/auth'
 import { loadModuleCatalog, resolveModulePath } from '../services/modules'
 import { useUiStore, type UiLanguage } from '../stores/ui'
