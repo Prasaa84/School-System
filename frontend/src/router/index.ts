@@ -9,6 +9,7 @@ import StudentProfileView from '../views/StudentProfileView.vue'
 import StudentsDailyAttendanceView from '../views/StudentsDailyAttendanceView.vue'
 import StudentsInClassesView from '../views/StudentsInClassesView.vue'
 import StudentsView from '../views/StudentsView.vue'
+import MarksView from '../views/MarksView.vue'
 import SubjectsReportView from '../views/SubjectsReportView.vue'
 import SubjectsView from '../views/SubjectsView.vue'
 import { getUser, isAuthenticated } from '../services/auth'
@@ -82,6 +83,12 @@ const router = createRouter({
     {
       path: '/students/class-assignment',
       redirect: '/students/in-classes',
+    },
+    {
+      path: '/module/marks',
+      name: 'marks',
+      component: MarksView,
+      meta: { requiresAuth: true },
     },
     {
       path: '/module/payments',

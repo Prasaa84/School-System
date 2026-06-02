@@ -76,6 +76,11 @@
                   <path d="M6 6h8M6 9h8M6 12h5" stroke="white" stroke-width="1.6" stroke-linecap="round" />
                   <circle cx="13.5" cy="12.2" r="1.8" fill="white" />
                 </svg>
+                <svg v-else-if="item.key === 'marks'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+                  <rect x="2.5" y="3" width="15" height="14" rx="2" />
+                  <path d="M5.5 13.5h2v-3h-2v3Zm3.5 0h2V7.5h-2v6Zm3.5 0h2V9.5h-2v4Z" fill="white" />
+                  <path d="M5.5 6.5h9" stroke="white" stroke-width="1.4" stroke-linecap="round" />
+                </svg>
                 <svg v-else-if="item.key === 'account'" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
                   <circle cx="10" cy="6" r="3" />
                   <path d="M4 17c0-2.8 2.7-4.5 6-4.5s6 1.7 6 4.5" />
@@ -385,6 +390,7 @@ const localizedMenu = computed(() => {
           classes: 'Classes',
           staff: 'Staff',
           attendance: 'Daily Attendance',
+          marks: 'Marks',
           payments: 'Payments',
           subjects: 'Subjects',
           'payments-history': 'Payments History',
@@ -400,6 +406,7 @@ const localizedMenu = computed(() => {
           classes: 'පන්ති',
           staff: 'කාර්ය මණ්ඩලය',
           attendance: 'දෛනික පැමිණීම',
+          marks: 'ලකුණු',
           payments: 'ගෙවීම්',
           subjects: 'විෂයයන්',
           'payments-history': 'ගෙවීම් ඉතිහාසය',
@@ -415,6 +422,7 @@ const localizedMenu = computed(() => {
           classes: 'வகுப்புகள்',
           staff: 'பணியாளர்கள்',
           attendance: 'தினசரி வருகை',
+          marks: 'மதிப்பெண்கள்',
           payments: 'கட்டணங்கள்',
           subjects: 'பாடங்கள்',
           'payments-history': 'கட்டண வரலாறு',
@@ -565,7 +573,7 @@ const loadMenu = async (): Promise<void> => {
     .filter((item) => !['school', 'school-details', 'school_detail'].includes(item.key))
     .filter((item) => !(isClassTeacher.value && ['grades', 'reports'].includes(item.key)))
     .filter((item) => !(isSdsUser.value && item.key === 'students'))
-    .filter((item) => !isStudent.value || ['payments-history'].includes(item.key))
+    .filter((item) => !isStudent.value || ['marks', 'payments-history'].includes(item.key))
 
   if (isClassTeacher.value || isPrincipal.value) {
     const staffIndex = mappedModules.findIndex((item) => item.key === 'staff')

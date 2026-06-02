@@ -15,6 +15,7 @@ const fallbackModules: ModuleCatalogItem[] = [
   { key: 'grades', label: 'Grades' },
   { key: 'classes', label: 'Classes' },
   { key: 'staff', label: 'Teachers' },
+  { key: 'marks', label: 'Marks', path: '/module/marks' },
   { key: 'payments', label: 'SDS Payments' },
   { key: 'subjects', label: 'Subjects' },
   { key: 'reports', label: 'Reports' },
@@ -28,6 +29,8 @@ const keyAliases: Record<string, string> = {
   teacher: 'staff',
   teachers: 'staff',
   staff: 'staff',
+  marks: 'marks',
+  mark: 'marks',
   payments: 'payments',
   payment: 'payments',
   subjects: 'subjects',
@@ -42,6 +45,7 @@ const requiredModules: ModuleCatalogItem[] = [
   { key: 'grades', label: 'Grades' },
   { key: 'classes', label: 'Classes' },
   { key: 'staff', label: 'Staff' },
+  { key: 'marks', label: 'Marks', path: '/module/marks' },
 ]
 
 const routeSafePath = (key: string, rawPath: string | null): string | null => {

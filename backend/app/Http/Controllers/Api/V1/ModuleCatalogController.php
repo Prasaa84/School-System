@@ -95,8 +95,17 @@ class ModuleCatalogController extends Controller
             $roleName = strtolower(trim((string) ($user?->role?->role_name ?? '')));
             if (in_array($roleName, ['class teacher', 'class_teacher', 'classteacher'], true)) {
                 $normalizedModules = $normalizedModules
-                    ->filter(fn (array $module): bool => in_array($module['key'], ['students', 'classes', 'staff', 'payments', 'subjects'], true))
+                    ->filter(fn (array $module): bool => in_array($module['key'], ['students', 'classes', 'staff', 'marks', 'payments', 'subjects'], true))
                     ->values();
+            }
+
+            if ($this->shouldAppendMarksModule($user) && !$normalizedModules->contains(fn (array $module): bool => $module['key'] === 'marks')) {
+                $normalizedModules->push([
+                    'key' => 'marks',
+                    'label' => 'Marks',
+                    'path' => '/module/marks',
+                    'sort' => PHP_INT_MAX - 10,
+                ]);
             }
 
             return $normalizedModules
@@ -189,6 +198,7 @@ class ModuleCatalogController extends Controller
             'classes' => ['key' => 'classes', 'label' => 'Classes'],
             'staff' => ['key' => 'staff', 'label' => 'Staff'],
             'students' => ['key' => 'students', 'label' => 'Students', 'path' => '/students'],
+            'marks' => ['key' => 'marks', 'label' => 'Marks', 'path' => '/module/marks'],
             'payments' => ['key' => 'payments', 'label' => 'SDS Payments'],
             'subjects' => ['key' => 'subjects', 'label' => 'Subjects'],
             'reports' => ['key' => 'reports', 'label' => 'Reports'],
@@ -198,7 +208,7 @@ class ModuleCatalogController extends Controller
         $roleName = strtolower(trim((string) ($user?->role?->role_name ?? '')));
 
         if (in_array($roleName, ['class teacher', 'class_teacher', 'classteacher'], true)) {
-            $keys = ['students', 'classes', 'staff', 'payments', 'subjects'];
+            $keys = ['students', 'classes', 'staff', 'marks', 'payments', 'subjects'];
 
             return collect($keys)
                 ->map(fn (string $key): ?array => $catalog->get($key))
@@ -207,21 +217,29 @@ class ModuleCatalogController extends Controller
         }
 
         $roleMap = [
-            1 => ['grades', 'classes', 'students', 'staff', 'payments', 'subjects', 'reports'],
-            2 => ['grades', 'classes', 'students', 'staff', 'payments', 'subjects', 'reports'],
-            3 => ['grades', 'classes', 'students', 'staff', 'reports'],
+            1 => ['grades', 'classes', 'students', 'staff', 'marks', 'payments', 'subjects', 'reports'],
+            2 => ['grades', 'classes', 'students', 'staff', 'marks', 'payments', 'subjects', 'reports'],
+            3 => ['grades', 'classes', 'students', 'staff', 'marks', 'reports'],
             4 => ['payments', 'students', 'grades', 'classes'],
-            5 => ['students', 'grades', 'classes', 'subjects'],
-            6 => ['students', 'grades', 'classes', 'subjects'],
-            7 => ['students', 'payments']
+            5 => ['students', 'grades', 'classes', 'marks', 'subjects'],
+            6 => ['students', 'grades', 'classes', 'marks', 'subjects'],
+            7 => ['students', 'marks', 'payments'],
+            8 => ['grades', 'classes', 'students', 'staff', 'marks', 'reports'],
         ];
 
-        $keys = $roleMap[$roleId ?? -1] ?? ['grades', 'grades', 'classes', 'staff', 'payments', 'subjects', 'reports'];
+        $keys = $roleMap[$roleId ?? -1] ?? ['grades', 'grades', 'classes', 'staff', 'marks', 'payments', 'subjects', 'reports'];
 
         return collect($keys)
             ->map(fn (string $key): ?array => $catalog->get($key))
             ->filter()
             ->values();
+    }
+
+    private function shouldAppendMarksModule(?User $user): bool
+    {
+        $roleId = (int) ($user?->role_id ?? 0);
+
+        return in_array($roleId, [1, 2, 3, 5, 6, 7, 8], true);
     }
 
     /**

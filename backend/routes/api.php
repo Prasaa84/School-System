@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\SchoolController;
 use App\Http\Controllers\Api\V1\StaffController;
 use App\Http\Controllers\Api\V1\StudentAttendanceController;
 use App\Http\Controllers\Api\V1\StudentController;
+use App\Http\Controllers\Api\V1\TermTestMarksController;
 use App\Http\Controllers\Api\V1\SubjectsController;
 use Illuminate\Support\Facades\Route;
 
@@ -57,6 +58,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/subjects/report', [SubjectsController::class, 'report']);
         Route::get('/subjects/report/export', [SubjectsController::class, 'downloadReport']);
         Route::post('/subjects/grade-subjects', [SubjectsController::class, 'saveSubjects']);
+
+        Route::get('/marks/options', [TermTestMarksController::class, 'options']);
+        Route::get('/marks', [TermTestMarksController::class, 'index']);
+        Route::post('/marks', [TermTestMarksController::class, 'save']);
+        Route::delete('/marks', [TermTestMarksController::class, 'clear']);
 
         Route::get('/grades', GradeController::class);
         Route::post('/grades/initialize-year', [GradeController::class, 'initializeYear']);
