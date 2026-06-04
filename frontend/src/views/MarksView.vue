@@ -63,7 +63,7 @@
               {{ exportingMarks ? text.exporting : text.export }}
             </button>
 
-            <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="downloadingTemplate || loadingOptions" @click="downloadImportTemplate">
+            <button v-if="canDownloadTemplate" class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="downloadingTemplate || loadingOptions" @click="downloadImportTemplate">
               <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path d="M5 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.41A2 2 0 0 0 16.41 6L13 2.59A2 2 0 0 0 11.59 2H5Zm6 1.5V7a1 1 0 0 0 1 1h3.5V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6Z" />
                 <path d="M8 10a1 1 0 0 1 1 1v1h2v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
@@ -571,6 +571,7 @@ const lockedDialogMessage = ref('')
 const confirmation = ref({ is_completed: false })
 const canManageMarksUi = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName))
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
+const canDownloadTemplate = computed(() => isAdmin.value || canManageMarksUi.value || isPrincipal.value)
 const canEditLoaded = computed(() => canManageLoaded.value && !confirmation.value.is_completed)
 const selectedMarksFileName = computed(() => selectedMarksFile.value?.name ?? '')
 const entryRuleHint = computed(() => (
@@ -1126,6 +1127,10 @@ const exportMarks = async (): Promise<void> => {
 const downloadImportTemplate = async (): Promise<void> => {
   message.value = ''
   clearErrorState()
+
+  if (!canDownloadTemplate.value) {
+    return
+  }
 
   if (isAdmin.value && selectedSchoolCensusId.value <= 0) {
     setErrorMessagesState([text.value.selectSchoolFirst], text.value.selectSchoolFirst)
