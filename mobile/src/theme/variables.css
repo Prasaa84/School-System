@@ -1,0 +1,17 @@
+:root {
+  --ion-color-primary: #1a6e5c;
+  --ion-color-primary-rgb: 26, 110, 92;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #175f51;
+  --ion-color-primary-tint: #317d6c;
+
+  --ion-color-secondary: #b57929;
+  --ion-color-secondary-rgb: 181, 121, 41;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #9f6a24;
+  --ion-color-secondary-tint: #bd8740;
+
+  --ion-font-family: "Segoe UI", "Noto Sans", sans-serif;
+}
