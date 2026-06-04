@@ -1612,6 +1612,38 @@ const extractApiMessage = (errorValue: unknown): string => {
   return ''
 }
 
+const hasOptionId = (rows: OptionRow[], value: unknown): boolean => {
+  const numericValue = Number(value ?? 0)
+  return numericValue > 0 && rows.some((row) => row.id === numericValue)
+}
+
+const sanitizeOptionId = (rows: OptionRow[], value: unknown): number => {
+  const numericValue = Number(value ?? 0)
+  return hasOptionId(rows, numericValue) ? numericValue : 0
+}
+
+const sanitizeTaskSelection = (
+  taskId: unknown,
+  sectionId: unknown,
+  subjectId: unknown,
+): { taskId: number; sectionId: number; subjectId: number } => {
+  const resolvedTaskId = sanitizeOptionId(involvedTasks.value, taskId)
+  const resolvedSectionId = sanitizeOptionId(sections.value, sectionId)
+  const numericSubjectId = Number(subjectId ?? 0)
+  const resolvedSubjectId = (
+    numericSubjectId > 0
+      && subjects.value.some((row) => row.id === numericSubjectId && Number(row.section_id ?? 0) === resolvedSectionId)
+  )
+    ? numericSubjectId
+    : 0
+
+  return {
+    taskId: resolvedTaskId,
+    sectionId: resolvedSectionId,
+    subjectId: resolvedSubjectId,
+  }
+}
+
 const scrollToStaffError = async (): Promise<void> => {
   await nextTick()
   if (staffErrorRef.value) {
@@ -1673,26 +1705,33 @@ const applyStaffDetailToForm = (detail: StaffDetailResponse['data']): void => {
   staffForm.prof_q_id = Number(detail.prof_q_id ?? 0)
   staffForm.desig_id = Number(detail.desig_id ?? 0)
   staffForm.serv_grd_id = Number(detail.serv_grd_id ?? 0)
-  staffForm.sec_id = Number(detail.sec_id ?? 0)
-  staffForm.sec_role_id = Number(detail.sec_role_id ?? 0)
-  staffForm.stf_type_id = Number(detail.stf_type_id ?? 0)
-  staffForm.stf_status_id = Number(detail.stf_status_id ?? 0)
-  staffForm.service_status_id = Number(detail.service_status_id ?? 0)
-  staffForm.subj_med_id = Number(detail.subj_med_id ?? 0)
-  staffForm.app_type_id = Number(detail.app_type_id ?? 0)
-  staffForm.app_subj_id = Number(detail.app_subj_id ?? 0)
+  staffForm.sec_id = sanitizeOptionId(sections.value, detail.sec_id)
+  staffForm.sec_role_id = sanitizeOptionId(sectionRoles.value, detail.sec_role_id)
+  staffForm.stf_type_id = sanitizeOptionId(staffTypes.value, detail.stf_type_id)
+  staffForm.stf_status_id = sanitizeOptionId(staffStatuses.value, detail.stf_status_id)
+  staffForm.service_status_id = sanitizeOptionId(serviceStatuses.value, detail.service_status_id)
+  staffForm.subj_med_id = sanitizeOptionId(subjectMediums.value, detail.subj_med_id)
+  staffForm.app_type_id = sanitizeOptionId(appointmentTypes.value, detail.app_type_id)
+  staffForm.app_subj_id = (
+    Number(detail.app_subj_id ?? 0) > 0
+      && appointmentSubjects.value.some((row) => row.id === Number(detail.app_subj_id ?? 0) && Number(row.app_type_id ?? 0) === Number(detail.app_type_id ?? 0))
+  )
+    ? Number(detail.app_subj_id ?? 0)
+    : 0
   staffForm.first_app_dt = String(detail.first_app_dt ?? '')
   staffForm.start_dt_this_sch = String(detail.start_dt_this_sch ?? '')
   staffForm.serv_grd_effective_dt = String(detail.serv_grd_effective_dt ?? '')
   staffForm.sal_incr_dt = String(detail.sal_incr_dt ?? '')
   staffForm.stf_no = detail.stf_no ? String(detail.stf_no) : ''
   staffForm.salary_no = detail.salary_no ? String(detail.salary_no) : ''
-  staffForm.main_task_id = Number(detail.main_task_id ?? 0)
-  staffForm.main_task_section_id = Number(detail.main_task_section_id ?? 0)
-  staffForm.main_task_subject_id = Number(detail.main_task_subject_id ?? 0)
-  staffForm.second_task_id = Number(detail.second_task_id ?? 0)
-  staffForm.second_task_section_id = Number(detail.second_task_section_id ?? 0)
-  staffForm.second_task_subject_id = Number(detail.second_task_subject_id ?? 0)
+  const mainTask = sanitizeTaskSelection(detail.main_task_id, detail.main_task_section_id, detail.main_task_subject_id)
+  staffForm.main_task_id = mainTask.taskId
+  staffForm.main_task_section_id = mainTask.sectionId
+  staffForm.main_task_subject_id = mainTask.subjectId
+  const secondTask = sanitizeTaskSelection(detail.second_task_id, detail.second_task_section_id, detail.second_task_subject_id)
+  staffForm.second_task_id = secondTask.taskId
+  staffForm.second_task_section_id = secondTask.sectionId
+  staffForm.second_task_subject_id = secondTask.subjectId
   staffForm.service_status_custom_institute = String(detail.service_status_custom_institute ?? '')
   staffForm.service_status_effective_date = String(detail.service_status_effective_date ?? '')
   staffForm.service_status_period = String(detail.service_status_period ?? '')

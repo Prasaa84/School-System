@@ -1398,9 +1398,9 @@ class StaffController extends Controller
         $errors = [];
 
         foreach ([
-            'main_task' => 'Main task',
-            'second_task' => 'Second task',
-        ] as $prefix => $label) {
+            'main_task',
+            'second_task',
+        ] as $prefix) {
             $taskId = $this->toIntOrNull($validated["{$prefix}_id"] ?? null);
             $sectionId = $this->toIntOrNull($validated["{$prefix}_section_id"] ?? null);
             $subjectId = $this->toIntOrNull($validated["{$prefix}_subject_id"] ?? null);
@@ -1409,48 +1409,8 @@ class StaffController extends Controller
                 continue;
             }
 
-            if ($taskId === null) {
-                $errors["{$prefix}_id"] = ["{$label} is required."];
-            }
-            if ($sectionId === null) {
-                $errors["{$prefix}_section_id"] = ["{$label} section is required."];
-            }
-            if ($subjectId === null) {
-                $errors["{$prefix}_subject_id"] = ["{$label} subject is required."];
-            }
-
             if ($sectionId !== null && $subjectId !== null && !$this->subjectBelongsToSection($subjectId, $sectionId)) {
                 $errors["{$prefix}_subject_id"] = ['Selected subject does not belong to the selected section.'];
-            }
-        }
-
-        $serviceStatusId = $this->toIntOrNull($validated['service_status_id'] ?? null);
-        $serviceStatusInstitute = $this->resolveServiceStatusInstitute($validated);
-        $serviceStatusEffectiveDate = $this->toNullableString($validated['service_status_effective_date'] ?? null);
-        $serviceStatusPeriod = $this->toNullableString($validated['service_status_period'] ?? null);
-
-        $hasServiceStatusDetails = $serviceStatusInstitute !== null || $serviceStatusEffectiveDate !== null || $serviceStatusPeriod !== null;
-        if ($hasServiceStatusDetails && $serviceStatusId === null) {
-            $errors['service_status_id'] = ['Service status is required when status details are filled.'];
-        }
-        if ($hasServiceStatusDetails && $serviceStatusInstitute === null) {
-            $errors['service_status_institute'] = ['Institute is required when status details are filled.'];
-        }
-        if ($hasServiceStatusDetails && $serviceStatusEffectiveDate === null) {
-            $errors['service_status_effective_date'] = ['Effective date is required when status details are filled.'];
-        }
-        if ($hasServiceStatusDetails && $serviceStatusPeriod === null) {
-            $errors['service_status_period'] = ['Period is required when status details are filled.'];
-        }
-
-        $serviceGradeId = $this->toIntOrNull($validated['serv_grd_id'] ?? null);
-        $serviceGradeDate = $this->toNullableString($validated['serv_grd_effective_dt'] ?? null);
-        if (($serviceGradeId !== null || $serviceGradeDate !== null) && ($serviceGradeId === null || $serviceGradeDate === null)) {
-            if ($serviceGradeId === null) {
-                $errors['serv_grd_id'] = ['Service grade is required when effective date is filled.'];
-            }
-            if ($serviceGradeDate === null) {
-                $errors['serv_grd_effective_dt'] = ['Service grade effective date is required when service grade is selected.'];
             }
         }
 
