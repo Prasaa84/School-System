@@ -207,14 +207,9 @@ class TermTestMarksController extends Controller
 
         $subjects = $this->loadMarksSubjects($censusId, (int) $validated['year'], (int) $validated['grade_id']);
         $students = $this->loadMarksRoster((int) $classRow->sch_grd_cls_id);
-
-        if ($this->isStudentMarksViewer($user)) {
-            $studentIndexNo = $this->resolveStudentIndexNoForUser($user);
-            $students = array_values(array_filter(
-                $students,
-                fn (array $row): bool => $studentIndexNo !== null && $row['index_no'] === $studentIndexNo
-            ));
-        }
+        $studentIndexNo = $this->isStudentMarksViewer($user)
+            ? $this->resolveStudentIndexNoForUser($user)
+            : null;
 
         $indexNumbers = array_values(array_map(fn (array $row): string => $row['index_no'], $students));
         $subjectIds = array_values(array_map(fn (array $row): int => (int) $row['subject_id'], $subjects));
@@ -246,6 +241,15 @@ class TermTestMarksController extends Controller
                 'average' => $result['average'],
             ];
         }, $students);
+
+        $rows = $this->appendAveragePositions($rows);
+
+        if ($studentIndexNo !== null) {
+            $rows = array_values(array_filter(
+                $rows,
+                fn (array $row): bool => $row['index_no'] === $studentIndexNo
+            ));
+        }
 
         Log::info('Term test marks list loaded.', array_merge(
             $this->marksLogContext($user),
@@ -856,8 +860,26 @@ class TermTestMarksController extends Controller
         }
         $headers[] = 'Total';
         $headers[] = 'Average';
+        $headers[] = 'Position';
 
-        $excelRows = array_map(function (array $student) use ($subjects, $markMap, $absentMap, $resultMap): array {
+        $rankedRows = $this->appendAveragePositions(array_map(function (array $student) use ($resultMap): array {
+            $result = $resultMap[$student['index_no']] ?? ['total' => null, 'average' => null];
+
+            return [
+                'std_id' => $student['std_id'],
+                'index_no' => $student['index_no'],
+                'name_with_initials' => $student['name_with_initials'],
+                'marks' => [],
+                'total' => $result['total'],
+                'average' => $result['average'],
+            ];
+        }, $students));
+        $positionByIndexNo = [];
+        foreach ($rankedRows as $rankedRow) {
+            $positionByIndexNo[(string) $rankedRow['index_no']] = $rankedRow['position'] ?? null;
+        }
+
+        $excelRows = array_map(function (array $student) use ($subjects, $markMap, $absentMap, $resultMap, $positionByIndexNo): array {
             $row = [
                 ['value' => $student['index_no'], 'type' => 'string'],
                 ['value' => $student['name_with_initials'], 'type' => 'string'],
@@ -876,6 +898,7 @@ class TermTestMarksController extends Controller
             $result = $resultMap[$student['index_no']] ?? ['total' => '', 'average' => ''];
             $row[] = ['value' => (string) $result['total'], 'type' => 'string'];
             $row[] = ['value' => $result['average'] === '' ? '' : number_format((float) $result['average'], 2, '.', ''), 'type' => 'string'];
+            $row[] = ['value' => isset($positionByIndexNo[$student['index_no']]) && $positionByIndexNo[$student['index_no']] !== null ? (string) $positionByIndexNo[$student['index_no']] : '', 'type' => 'string'];
 
             return $row;
         }, $students);
@@ -2199,6 +2222,63 @@ class TermTestMarksController extends Controller
         ['index_no' => $indexNo] = $this->resolveStudentLoginIdentityFromUsername($user->username ?? null);
 
         return $indexNo !== '' ? $indexNo : null;
+    }
+
+    /**
+     * @param  array<int, array{std_id:int,index_no:string,name_with_initials:string,marks:array<string,string>,total:int|null,average:float|int|null}>  $rows
+     * @return array<int, array{std_id:int,index_no:string,name_with_initials:string,marks:array<string,string>,total:int|null,average:float|int|null,position:int|null}>
+     */
+    private function appendAveragePositions(array $rows): array
+    {
+        $rankedRows = $rows;
+
+        usort($rankedRows, function (array $left, array $right): int {
+            $leftAverage = is_numeric($left['average'] ?? null) ? (float) $left['average'] : null;
+            $rightAverage = is_numeric($right['average'] ?? null) ? (float) $right['average'] : null;
+
+            if ($leftAverage === null && $rightAverage === null) {
+                return strcmp((string) $left['index_no'], (string) $right['index_no']);
+            }
+
+            if ($leftAverage === null) {
+                return 1;
+            }
+
+            if ($rightAverage === null) {
+                return -1;
+            }
+
+            if ($leftAverage === $rightAverage) {
+                return strcmp((string) $left['index_no'], (string) $right['index_no']);
+            }
+
+            return $leftAverage > $rightAverage ? -1 : 1;
+        });
+
+        $positionByIndexNo = [];
+        $previousAverage = null;
+        $currentPosition = 0;
+
+        foreach ($rankedRows as $row) {
+            $average = is_numeric($row['average'] ?? null) ? (float) $row['average'] : null;
+
+            if ($average === null) {
+                $positionByIndexNo[(string) $row['index_no']] = null;
+                continue;
+            }
+
+            if ($previousAverage === null || $average < $previousAverage) {
+                $currentPosition++;
+                $previousAverage = $average;
+            }
+
+            $positionByIndexNo[(string) $row['index_no']] = $currentPosition;
+        }
+
+        return array_map(function (array $row) use ($positionByIndexNo): array {
+            $row['position'] = $positionByIndexNo[(string) $row['index_no']] ?? null;
+            return $row;
+        }, $rows);
     }
 
     private function normalizeMarkCellValue(mixed $value): string|int|null

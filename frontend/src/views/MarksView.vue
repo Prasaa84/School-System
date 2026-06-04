@@ -135,11 +135,12 @@
               </th>
               <th class="min-w-[90px] px-3 py-2 text-center font-semibold text-slate-600">{{ text.total }}</th>
               <th class="min-w-[90px] px-3 py-2 text-center font-semibold text-slate-600">{{ text.average }}</th>
+              <th class="min-w-[90px] px-3 py-2 text-center font-semibold text-slate-600">{{ text.position }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
             <tr v-if="!loadingMarks && filteredRows.length === 0">
-              <td :colspan="subjectRows.length + 4" class="px-3 py-8 text-center text-slate-500">{{ text.noRows }}</td>
+              <td :colspan="subjectRows.length + 5" class="px-3 py-8 text-center text-slate-500">{{ text.noRows }}</td>
             </tr>
             <tr v-for="row in filteredRows" :key="`marks-row-${row.index_no}`" class="hover:bg-slate-50">
               <td class="sticky left-0 z-10 bg-white px-3 py-2 font-semibold text-slate-900">{{ row.index_no }}</td>
@@ -167,6 +168,7 @@
               </td>
               <td class="px-3 py-2 text-center text-slate-700">{{ formatNumeric(row.total) }}</td>
               <td class="px-3 py-2 text-center text-slate-700">{{ formatAverage(row.average) }}</td>
+              <td class="px-3 py-2 text-center text-slate-700">{{ formatNumeric(row.position) }}</td>
             </tr>
           </tbody>
         </table>
@@ -274,6 +276,7 @@ interface MarkRow {
   marks: Record<string, string>
   total: number | null
   average: number | null
+  position?: number | null
 }
 
 interface ScopeResponse {
@@ -357,6 +360,7 @@ const text = computed(() => {
       student: 'ශිෂ්‍යයා',
       total: 'එකතුව',
       average: 'සාමාන්‍යය',
+      position: 'ස්ථානය',
       noRows: 'තෝරාගත් පෙරහන් සඳහා ලකුණු හමු නොවීය.',
       enterHint: 'අනुपस्थित නම් 0-100 හෝ AB ඇතුළත් කරන්න.',
       entryRuleHint: "ශිෂ්‍යයා නොපැමිණියේ නම් 'AB' භාවිතා කරන්න.",
@@ -429,6 +433,7 @@ const text = computed(() => {
       student: 'மாணவர்',
       total: 'மொத்தம்',
       average: 'சராசரி',
+      position: 'நிலை',
       noRows: 'தேர்ந்தெடுக்கப்பட்ட வடிகட்டல்களுக்கு மதிப்பெண்கள் கிடைக்கவில்லை.',
       enterHint: 'இல்லாதிருந்தால் 0-100 அல்லது AB உள்ளிடவும்.',
       entryRuleHint: "மாணவர் வராதிருந்தால் 'AB' பயன்படுத்தவும்.",
@@ -500,6 +505,7 @@ const text = computed(() => {
     student: 'Student',
     total: 'Total',
     average: 'Average',
+    position: 'Position',
     noRows: 'No marks found for the selected filters.',
     enterHint: 'Enter 0-100 or AB for absent.',
     entryRuleHint: "Use 'AB' when a student was absent.",
