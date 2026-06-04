@@ -4,9 +4,9 @@
       <div class="login-shell">
         <section class="hero-card">
           <p class="eyebrow">SDS Mobile</p>
-          <h1>Student and teacher access, designed for Android first.</h1>
+          <h1>Student and teacher access in one mobile app.</h1>
           <p class="hero-copy">
-            This mobile app starts with student and class teacher accounts, while keeping the structure ready for more roles later.
+            Sign in to view student information, marks, payments, and class-related tools on mobile.
           </p>
         </section>
 

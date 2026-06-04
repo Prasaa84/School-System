@@ -13,7 +13,7 @@
       <section class="masthead student">
         <p class="kicker">Student account</p>
         <h1>{{ user?.username }}</h1>
-        <p>Marks, payments, and profile access can live here in focused mobile flows.</p>
+        <p>Access your profile, marks, and payment history from one place.</p>
       </section>
 
       <ion-grid fixed>
@@ -21,15 +21,15 @@
           <ion-col size="12">
             <ion-card>
               <ion-card-header>
-                <ion-card-title>Phase 1 mobile scope</ion-card-title>
-                <ion-card-subtitle>Ready for the next build step</ion-card-subtitle>
+                <ion-card-title>Quick Access</ion-card-title>
+                <ion-card-subtitle>Choose what you want to view</ion-card-subtitle>
               </ion-card-header>
               <ion-card-content>
                 <ion-list lines="full">
                   <ion-item button detail @click="openStudentProfile">My profile</ion-item>
                   <ion-item button detail @click="openStudentMarks">My marks</ion-item>
-                  <ion-item button detail @click="showComingSoon('My payments')">My payments</ion-item>
-                  <ion-item button detail @click="showComingSoon('School notices')">School notices later</ion-item>
+                  <ion-item button detail @click="openStudentPayments">My payments</ion-item>
+                  <ion-item button detail @click="showComingSoon('School notices')">School notices</ion-item>
                 </ion-list>
               </ion-card-content>
             </ion-card>
@@ -87,9 +87,13 @@ const openStudentMarks = async (): Promise<void> => {
   await router.push('/student/marks')
 }
 
+const openStudentPayments = async (): Promise<void> => {
+  await router.push('/student/payments')
+}
+
 const showComingSoon = async (featureName: string): Promise<void> => {
   const toast = await toastController.create({
-    message: `${featureName} is the next mobile feature to connect.`,
+    message: `${featureName} will be available soon.`,
     duration: 1800,
     position: 'bottom',
   })

@@ -30,6 +30,11 @@ const router = createRouter({
       meta: { requiresAuth: true, role: 'student' },
     },
     {
+      path: '/student/payments',
+      component: () => import('../views/StudentPaymentsPage.vue'),
+      meta: { requiresAuth: true, role: 'student' },
+    },
+    {
       path: '/teacher',
       component: () => import('../views/TeacherHomePage.vue'),
       meta: { requiresAuth: true, role: 'teacher' },

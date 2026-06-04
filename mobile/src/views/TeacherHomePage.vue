@@ -21,8 +21,8 @@
           <ion-col size="12">
             <ion-card>
               <ion-card-header>
-                <ion-card-title>Phase 1 mobile scope</ion-card-title>
-                <ion-card-subtitle>Teacher-first flows to build next</ion-card-subtitle>
+                <ion-card-title>Teaching Tools</ion-card-title>
+                <ion-card-subtitle>Core areas for your class work</ion-card-subtitle>
               </ion-card-header>
               <ion-card-content>
                 <ion-list lines="full">
