@@ -440,6 +440,25 @@ class TermTestMarksController extends Controller
             return response()->json(['message' => $cellErrors[0]], 422);
         }
 
+        $marksRuleErrors = $this->validateMarksEntryRules((int) $validated['grade_id'], $subjects, $roster, $entryLookup);
+        if ($marksRuleErrors !== []) {
+            Log::warning('Term test marks draft save failed marks rules.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'class_row_id' => (int) $classRow->sch_grd_cls_id,
+                    'subject_count' => count($subjects),
+                    'roster_count' => count($roster),
+                    'rule_error' => $marksRuleErrors[0],
+                    'rule_error_count' => count($marksRuleErrors),
+                ]
+            ));
+            return response()->json([
+                'message' => $marksRuleErrors[0],
+                'errors' => array_values($marksRuleErrors),
+            ], 422);
+        }
+
         [$filledCells, $absentCells, $numericCells] = $this->countEntryCells($entryLookup);
         $this->persistMarksEntries(
             $censusId,
@@ -1164,7 +1183,7 @@ class TermTestMarksController extends Controller
 
             $headers = ['Index No', 'Student'];
             foreach ($subjects as $subject) {
-                $headers[] = (string) $subject['subject'];
+                $headers[] = $this->buildMarksTemplateSubjectHeader($subject);
             }
             $headers[] = 'Total';
             $headers[] = 'Average';
@@ -1322,7 +1341,7 @@ class TermTestMarksController extends Controller
         $headerRow = array_map(fn ($value): string => trim((string) $value), array_values($rows[0] ?? []));
         $expectedHeaders = ['Index No', 'Student'];
         foreach ($subjects as $subject) {
-            $expectedHeaders[] = trim((string) $subject['subject']);
+            $expectedHeaders[] = $this->buildMarksTemplateSubjectHeader($subject);
         }
         $expectedHeaders[] = 'Total';
         $expectedHeaders[] = 'Average';
@@ -1360,13 +1379,19 @@ class TermTestMarksController extends Controller
         $cellErrors = [];
         $importedRowCount = 0;
 
-        foreach (array_slice($rows, 1) as $row) {
+        foreach (array_slice($rows, 1) as $rowOffset => $row) {
             $cells = array_values($row);
             $indexNo = trim((string) ($cells[0] ?? ''));
+            $sheetRowNumber = $rowOffset + 2;
             if ($indexNo === '') {
                 continue;
             }
             if (!isset($validIndexes[$indexNo])) {
+                $cellErrors[] = sprintf('Student index number %s in row %d was not found in the selected class.', $indexNo, $sheetRowNumber);
+                continue;
+            }
+            if (isset($entryLookup[$indexNo])) {
+                $cellErrors[] = sprintf('Student index number %s appears more than once in the uploaded sheet.', $indexNo);
                 continue;
             }
 
@@ -1394,6 +1419,26 @@ class TermTestMarksController extends Controller
                 ]
             ));
             return response()->json(['message' => $cellErrors[0]], 422);
+        }
+
+        $marksRuleErrors = $this->validateMarksEntryRules((int) $validated['grade_id'], $subjects, $roster, $entryLookup);
+        if ($marksRuleErrors !== []) {
+            Log::warning('Term test marks import failed marks rules.', array_merge(
+                $this->marksLogContext($user),
+                [
+                    'resolved_school_census_id' => $censusId,
+                    'class_row_id' => (int) $classRow->sch_grd_cls_id,
+                    'subject_count' => count($subjects),
+                    'roster_count' => count($roster),
+                    'rule_error' => $marksRuleErrors[0],
+                    'rule_error_count' => count($marksRuleErrors),
+                    'imported_row_count' => $importedRowCount,
+                ]
+            ));
+            return response()->json([
+                'message' => $marksRuleErrors[0],
+                'errors' => array_values($marksRuleErrors),
+            ], 422);
         }
 
         [$filledCells, $absentCells, $numericCells] = $this->countEntryCells($entryLookup);
@@ -2360,6 +2405,22 @@ class TermTestMarksController extends Controller
     }
 
     /**
+     * @param  array{subject_id?:int,subject?:string,sub_cat_id?:int}  $subject
+     */
+    private function buildMarksTemplateSubjectHeader(array $subject): string
+    {
+        $subjectName = trim((string) ($subject['subject'] ?? ''));
+        $prefix = match ((int) ($subject['sub_cat_id'] ?? 0)) {
+            2 => 'OP1_',
+            3 => 'OP2_',
+            4 => 'OP3_',
+            default => '',
+        };
+
+        return $prefix . $subjectName;
+    }
+
+    /**
      * @param  array<string, array<int, string|int>>  $entryLookup
      * @return array{0:int,1:int,2:int}
      */
@@ -2394,6 +2455,7 @@ class TermTestMarksController extends Controller
     private function validateMarksEntryRules(int $gradeId, array $subjects, array $roster, array $entryLookup): array
     {
         $errors = [];
+        $religionSubjectIds = [5, 6, 7, 8, 9];
 
         foreach ($roster as $student) {
             $indexNo = $student['index_no'];
@@ -2411,7 +2473,8 @@ class TermTestMarksController extends Controller
                 $cell = $studentMarks[$subjectId] ?? '';
 
                 if ($cell === '') {
-                    if ($gradeId < 12 && $categoryId !== 2 && $categoryId !== 3 && $categoryId !== 4) {
+                    $isReligionSubject = in_array($subjectId, $religionSubjectIds, true);
+                    if ($gradeId < 12 && !$isReligionSubject && $categoryId !== 2 && $categoryId !== 3 && $categoryId !== 4) {
                         $errors[] = sprintf('Student %s must have a mark or AB for %s.', $indexNo, $subjectLabel);
                     }
 
@@ -2471,6 +2534,7 @@ class TermTestMarksController extends Controller
         }
 
         $subjectMap = collect($availableSubjects)->keyBy('subject_id');
+        $religionSubjectIds = [5, 6, 7, 8, 9];
 
         $mainCount = 0;
         $op1Count = 0;
@@ -2496,7 +2560,7 @@ class TermTestMarksController extends Controller
                 $op3Count++;
             }
 
-            if (in_array($subjectId, [5, 6, 7, 8, 9], true)) {
+            if (in_array($subjectId, $religionSubjectIds, true)) {
                 $religionCount++;
             }
 
@@ -2530,6 +2594,10 @@ class TermTestMarksController extends Controller
 
         if ($gradeId >= 6 && $gradeId <= 11 && $religionCount < 1) {
             return 'Please enter marks or AB for at least one religion subject.';
+        }
+
+        if ($gradeId >= 6 && $gradeId <= 11 && $religionCount > 1) {
+            return 'Please enter marks or AB for only one religion subject.';
         }
 
         if ($gradeId >= 6 && $gradeId <= 11 && $requiredMainCount < 5) {

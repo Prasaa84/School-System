@@ -208,6 +208,34 @@
       @confirm="confirmDeleteMarks"
     />
 
+    <div v-if="showUploadErrorsDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 print:hidden" @click="closeUploadErrorsDialog">
+      <div class="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" @click.stop>
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h3 class="font-display text-lg font-bold text-slate-900">{{ text.uploadErrorsDialogTitle }}</h3>
+            <p class="mt-1 text-sm text-slate-600">{{ text.uploadErrorsDialogMessage }}</p>
+          </div>
+          <button class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50" :title="text.close" :aria-label="text.close" @click="closeUploadErrorsDialog">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+              <path d="M5 5l10 10M15 5 5 15" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+        <div class="max-h-[60vh] overflow-auto px-5 py-4">
+          <ul class="space-y-2">
+            <li v-for="(item, index) in uploadErrorMessages" :key="`upload-error-${index}`" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {{ item }}
+            </li>
+          </ul>
+        </div>
+        <div class="flex items-center justify-end border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <button class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700" @click="closeUploadErrorsDialog">
+            {{ text.ok }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showLockedDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 print:hidden" @click="closeLockedDialog">
       <div class="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" @click.stop>
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -380,6 +408,8 @@ const text = computed(() => {
       exportMarksError: 'වාර පරීක්ෂණ ලකුණු පිටත් කිරීමට නොහැකි විය.',
       templateMarksError: 'ලකුණු ආයාත ආකෘතිය බාගත කිරීමට නොහැකි විය.',
       uploadMarksError: 'වාර පරීක්ෂණ ලකුණු කටුපත් උඩුගත කිරීමට නොහැකි විය.',
+      uploadErrorsDialogTitle: 'උඩුගත කිරීමේ දෝෂ',
+      uploadErrorsDialogMessage: 'Excel ගොනුවේ ඇති සියලු දෝෂ නිවැරදි කර නැවත උඩුගත කරන්න.',
       lockedDialogTitle: 'ලකුණු පත්‍රය අගුලු දමා ඇත',
       lockedEditMessage: 'මෙම ලකුණු පත්‍රය දැනටමත් සම්පූර්ණ කර ඇත. සංස්කරණයට පෙර නැවත විවෘත කරන්න.',
       lockedDeleteMessage: 'මෙම ලකුණු පත්‍රය දැනටමත් සම්පූර්ණ කර ඇත. මකා දැමීමට පෙර නැවත විවෘත කරන්න.',
@@ -453,6 +483,8 @@ const text = computed(() => {
       exportMarksError: 'காலாண்டு தேர்வு மதிப்பெண்களை ஏற்றுமதி செய்ய முடியவில்லை.',
       templateMarksError: 'மதிப்பெண் இறக்குமதி வடிவத்தைப் பதிவிறக்க முடியவில்லை.',
       uploadMarksError: 'காலாண்டு தேர்வு மதிப்பெண் வரைவைக் பதிவேற்ற முடியவில்லை.',
+      uploadErrorsDialogTitle: 'பதிவேற்ற பிழைகள்',
+      uploadErrorsDialogMessage: 'Excel கோப்பிலுள்ள அனைத்து பிழைகளையும் சரிசெய்து மீண்டும் பதிவேற்றவும்.',
       lockedDialogTitle: 'மதிப்பெண் தாள் பூட்டப்பட்டுள்ளது',
       lockedEditMessage: 'இந்த மதிப்பெண் தாள் ஏற்கனவே முடிக்கப்பட்டுள்ளது. திருத்துவதற்கு முன் மீண்டும் திறக்கவும்.',
       lockedDeleteMessage: 'இந்த மதிப்பெண் தாள் ஏற்கனவே முடிக்கப்பட்டுள்ளது. நீக்குவதற்கு முன் மீண்டும் திறக்கவும்.',
@@ -525,6 +557,8 @@ const text = computed(() => {
     exportMarksError: 'Unable to export term test marks.',
     templateMarksError: 'Unable to download marks import template.',
     uploadMarksError: 'Unable to upload term test marks draft.',
+    uploadErrorsDialogTitle: 'Upload Errors',
+    uploadErrorsDialogMessage: 'Please correct all errors in the Excel file and upload it again.',
     lockedDialogTitle: 'Marks Sheet Locked',
     lockedEditMessage: 'This marks sheet has already been completed. Reopen it before editing.',
     lockedDeleteMessage: 'This marks sheet has already been completed. Reopen it before deleting.',
@@ -562,6 +596,7 @@ const uploadingMarks = ref(false)
 const deletingMarks = ref(false)
 const updatingConfirmation = ref(false)
 const showDeleteDialog = ref(false)
+const showUploadErrorsDialog = ref(false)
 const showLockedDialog = ref(false)
 const canManageLoaded = ref(false)
 const canConfirmLoaded = ref(false)
@@ -571,6 +606,7 @@ const searchQuery = ref('')
 const loadedTitle = ref('')
 const message = ref('')
 const errorMessage = ref('')
+const uploadErrorMessages = ref<string[]>([])
 const messageRef = ref<HTMLElement | null>(null)
 const errorMessageRef = ref<HTMLElement | null>(null)
 const lockedDialogMessage = ref('')
@@ -633,6 +669,23 @@ const clearValidationHighlights = (): void => {
 
 const clearErrorState = (): void => {
   errorMessage.value = ''
+  uploadErrorMessages.value = []
+}
+
+const setUploadErrorState = (messages: string[], fallbackMessage: string): void => {
+  const normalized = messages
+    .map((item) => String(item ?? '').trim())
+    .filter((item) => item !== '')
+
+  errorMessage.value = normalized[0] ?? fallbackMessage
+  uploadErrorMessages.value = normalized
+}
+
+const resetMarksFileSelection = (): void => {
+  selectedMarksFile.value = null
+  if (marksFileInputRef.value) {
+    marksFileInputRef.value.value = ''
+  }
 }
 
 const setCellError = (indexNo: string, subjectId: number, messageText: string): void => {
@@ -735,6 +788,13 @@ const applyValidationHighlights = (messages: string[]): void => {
 
     const [, indexNo, detail] = studentRuleMatch
     const normalizedDetail = detail.trim()
+    const hasSelectionConflict = messages.some((candidate) => {
+      const candidateText = String(candidate ?? '').trim()
+      return candidateText === `Student ${indexNo} can have only one OP1 subject.`
+        || candidateText === `Student ${indexNo} can have only one OP2 subject.`
+        || candidateText === `Student ${indexNo} can have only one OP3 subject.`
+        || candidateText === `Student ${indexNo}: Please enter marks or AB for only one religion subject.`
+    })
 
     if (/^can have only one OP1 subject\.$/u.test(normalizedDetail)) {
       highlightFilledSubjectsForStudent(indexNo, getSubjectIdsByCategory(2), trimmedMessage)
@@ -752,11 +812,7 @@ const applyValidationHighlights = (messages: string[]): void => {
     }
 
     if (/^must have marks or AB for exactly \d+ subjects\.$/u.test(normalizedDetail)) {
-      highlightEmptySubjectsForStudent(
-        indexNo,
-        subjectRows.value.map((subject) => subject.subject_id),
-        trimmedMessage,
-      )
+      setRowError(indexNo, trimmedMessage)
       return
     }
 
@@ -782,6 +838,11 @@ const applyValidationHighlights = (messages: string[]): void => {
 
     if (/^Please enter marks or AB for at least one religion subject\.$/u.test(normalizedDetail)) {
       highlightEmptySubjectsForStudent(indexNo, RELIGION_SUBJECT_IDS, trimmedMessage)
+      return
+    }
+
+    if (/^Please enter marks or AB for only one religion subject\.$/u.test(normalizedDetail)) {
+      highlightSubjectIdsForStudent(indexNo, RELIGION_SUBJECT_IDS, trimmedMessage)
       return
     }
 
@@ -1032,6 +1093,10 @@ const closeLockedDialog = (): void => {
   showLockedDialog.value = false
 }
 
+const closeUploadErrorsDialog = (): void => {
+  showUploadErrorsDialog.value = false
+}
+
 const handleSaveMarks = async (): Promise<void> => {
   if (confirmation.value.is_completed) {
     openLockedDialog(text.value.lockedEditMessage)
@@ -1219,16 +1284,17 @@ const uploadMarksFile = async (): Promise<void> => {
 
     const { data } = await api.post<{ message?: string }>('/marks/import', formData)
     const successMessage = data.message ?? 'Term test marks draft uploaded successfully.'
-    selectedMarksFile.value = null
-    if (marksFileInputRef.value) {
-      marksFileInputRef.value.value = ''
-    }
+    resetMarksFileSelection()
     await loadMarks({ preserveMessage: true })
     clearValidationHighlights()
     message.value = successMessage
     await scrollMessage(messageRef)
   } catch (error: any) {
-    setErrorMessagesState(extractErrorMessages(error, text.value.uploadMarksError), text.value.uploadMarksError)
+    const messages = extractErrorMessages(error, text.value.uploadMarksError)
+    clearValidationHighlights()
+    setUploadErrorState(messages, text.value.uploadMarksError)
+    showUploadErrorsDialog.value = messages.length > 0
+    resetMarksFileSelection()
     await scrollMessage(errorMessageRef)
   } finally {
     uploadingMarks.value = false
