@@ -367,6 +367,17 @@
         </p>
 
         <form class="grid gap-4 md:grid-cols-3" @submit.prevent="submitAddStudent">
+          <fieldset v-if="isPrincipal" class="md:col-span-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+            <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-emerald-700">{{ text.studentLoginAccess }}</legend>
+            <label class="block text-sm text-slate-700">
+              <span class="flex items-center gap-2">
+                <input v-model="createForm.create_user_login" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                <span class="font-semibold text-slate-900">{{ text.createStudentLogin }}</span>
+              </span>
+              <p class="mt-2 text-xs text-slate-600">{{ text.studentLoginHelp }}</p>
+            </label>
+          </fieldset>
+
           <fieldset class="md:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
             <legend class="px-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-500">{{ text.coreDetails }}</legend>
             <div class="grid gap-3 md:grid-cols-3">
@@ -441,13 +452,6 @@
                 <p v-if="fieldErrors.class_id" class="mt-1 text-xs text-red-600">{{ fieldErrors.class_id }}</p>
               </label>
 
-              <label v-if="isPrincipal" class="text-sm text-slate-700 md:col-span-3">
-                <span class="flex items-center gap-2">
-                  <input v-model="createForm.create_user_login" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                  <span>{{ text.createStudentLogin }}</span>
-                </span>
-                <p class="mt-1 text-xs text-slate-500">{{ text.studentLoginHelp }}</p>
-              </label>
             </div>
           </fieldset>
 
@@ -608,7 +612,17 @@
           <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" @click="closeImportDialog">{{ text.close }}</button>
         </div>
 
-        <p class="text-sm text-slate-600">{{ text.importHelp }}</p>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-sm text-slate-600">{{ text.importHelp }}</p>
+          <button
+            type="button"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="downloadingTemplate"
+            @click="downloadTemplate"
+          >
+            {{ downloadingTemplate ? text.downloadingTemplate : text.downloadTemplate }}
+          </button>
+        </div>
         <label v-if="isAdmin" class="mt-4 block text-sm text-slate-700">
           {{ text.school }} <span class="text-red-600">*</span>
           <select v-model.number="importSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
@@ -1081,6 +1095,7 @@ const text = computed(() => {
       personalDetails: 'පෞද්ගලික තොරතුරු',
       contactDetails: 'සම්බන්ධතා තොරතුරු',
       guardianDetails: 'මව්පිය / භාරකරු තොරතුරු',
+      studentLoginAccess: 'සිසු login ප්‍රවේශය',
       father: 'පියා',
       mother: 'මව',
       guardian: 'භාරකරු',
@@ -1222,6 +1237,7 @@ const text = computed(() => {
       personalDetails: 'தனிப்பட்ட விவரங்கள்',
       contactDetails: 'தொடர்பு விவரங்கள்',
       guardianDetails: 'பெற்றோர் / பாதுகாவலர் விவரங்கள்',
+      studentLoginAccess: 'மாணவர் உள்நுழைவு அணுகல்',
       father: 'தந்தை',
       mother: 'தாய்',
       guardian: 'பாதுகாவலர்',
@@ -1362,6 +1378,7 @@ const text = computed(() => {
     personalDetails: 'Personal Details',
     contactDetails: 'Contact Details',
     guardianDetails: 'Parent / Guardian Details',
+    studentLoginAccess: 'Student Login Access',
     father: 'Father',
     mother: 'Mother',
     guardian: 'Guardian',
@@ -2807,7 +2824,7 @@ const submitImport = async (): Promise<void> => {
 }
 
 const downloadTemplate = async (): Promise<void> => {
-  errorMessage.value = ''
+  importErrorMessage.value = ''
   downloadingTemplate.value = true
 
   try {
@@ -2825,7 +2842,7 @@ const downloadTemplate = async (): Promise<void> => {
     link.remove()
     window.URL.revokeObjectURL(url)
   } catch (error) {
-    errorMessage.value = extractApiMessage(error) || text.value.unableToDownloadTemplate
+    importErrorMessage.value = extractApiMessage(error) || text.value.unableToDownloadTemplate
   } finally {
     downloadingTemplate.value = false
   }
