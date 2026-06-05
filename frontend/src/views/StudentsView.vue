@@ -199,22 +199,22 @@
     </section>
 
     <section v-else class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
-      <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div class="flex w-full flex-col gap-2 md:flex-row md:items-center">
+      <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex w-full flex-col gap-2 lg:flex-row lg:flex-nowrap lg:items-center">
           <input
             v-model="search"
             type="text"
             :placeholder="text.searchPlaceholder"
             :class="[
               'w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none ring-cyan-500 focus:ring-2',
-              isAdmin ? 'md:max-w-[150px] lg:max-w-[180px]' : isClassTeacher ? 'md:max-w-[220px] lg:max-w-[260px]' : 'md:max-w-[220px] lg:max-w-[260px]',
+              isAdmin ? 'lg:w-[180px] lg:flex-none' : isClassTeacher ? 'lg:w-[260px] lg:flex-none' : 'lg:w-[260px] lg:flex-none',
             ]"
             @keyup.enter="loadStudents(1)"
           />
           <select
             v-if="isClassTeacher"
             v-model.number="selectedStudentYear"
-            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 md:w-[180px]"
+            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 lg:w-[180px] lg:flex-none"
             @change="loadStudents(1)"
           >
             <option :value="0">{{ text.selectAcademicYear }}</option>
@@ -223,18 +223,18 @@
           <select
             v-if="isClassTeacher"
             v-model.number="selectedStudentClassId"
-            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 md:w-[180px]"
+            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 lg:w-[180px] lg:flex-none"
             @change="loadStudents(1)"
           >
             <option :value="0">{{ text.selectClass }}</option>
             <option v-for="row in studentClassOptions" :key="`student-class-${row.class_id}`" :value="row.class_id">{{ row.class }}</option>
           </select>
         </div>
-        <div class="flex flex-wrap items-center gap-2 md:justify-end xl:flex-nowrap">
+        <div class="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end">
           <select
             v-if="isAdmin"
             v-model.number="adminSchoolContextCensusId"
-            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 xl:max-w-[220px]"
+            class="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-cyan-500 focus:ring-2 lg:w-[220px] lg:flex-none"
             @change="onAdminSchoolContextChange"
           >
             <option :value="0">{{ text.allSchools }}</option>
