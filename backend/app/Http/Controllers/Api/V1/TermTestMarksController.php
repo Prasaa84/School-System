@@ -207,6 +207,7 @@ class TermTestMarksController extends Controller
 
         $subjects = $this->loadMarksSubjects($censusId, (int) $validated['year'], (int) $validated['grade_id']);
         $students = $this->loadMarksRoster((int) $classRow->sch_grd_cls_id);
+        $requiredSubjectCount = $this->loadRequiredSubjectCount($censusId, (int) $validated['year'], (int) $validated['grade_id']);
         $studentIndexNo = $this->isStudentMarksViewer($user)
             ? $this->resolveStudentIndexNoForUser($user)
             : null;
@@ -285,6 +286,7 @@ class TermTestMarksController extends Controller
             ],
             'subjects' => $subjects,
             'students' => $rows,
+            'required_subject_count' => $requiredSubjectCount,
             'can_manage' => $this->canManageMarksForSelection($user, $censusId, (int) $validated['year'], (int) $validated['grade_id'], (int) $validated['class_id']),
             'can_confirm' => $this->canConfirmMarks($user),
             'scope' => $scope,
@@ -427,7 +429,7 @@ class TermTestMarksController extends Controller
             }
         }
 
-        $marksRuleErrors = $this->validateMarksEntryRules($censusId, (int) $validated['year'], (int) $validated['grade_id'], $subjects, $roster, $entryLookup);
+        $marksRuleErrors = $this->validateDraftMarksEntryRules($censusId, (int) $validated['year'], (int) $validated['grade_id'], $subjects, $roster, $entryLookup);
         $validationErrors = array_values(array_unique(array_merge($cellErrors, $marksRuleErrors)));
         if ($validationErrors !== []) {
             Log::warning('Term test marks draft save failed marks rules.', array_merge(
@@ -1980,6 +1982,7 @@ class TermTestMarksController extends Controller
     {
         $indexNumbers = array_values(array_map(fn (array $row): string => $row['index_no'], $roster));
         $subjectIds = array_values(array_map(fn (array $row): int => (int) $row['subject_id'], $subjects));
+        $requiredSubjectCount = $this->loadRequiredSubjectCount($censusId, $year, $gradeId);
 
         $markRows = TermTestMark::query()
             ->where('census_id', $censusId)
@@ -2018,9 +2021,9 @@ class TermTestMarksController extends Controller
             }
 
             $total = (int) ($marksForStudent?->sum('marks') ?? 0);
-            $subjectCountForAverage = $markCount + $absentCount;
-            $average = $subjectCountForAverage > 0
-                ? round($total / $subjectCountForAverage, 2)
+            $averageDivisor = $requiredSubjectCount ?? ($markCount + $absentCount);
+            $average = $averageDivisor > 0
+                ? round($total / $averageDivisor, 2)
                 : 0.00;
 
             TermTestResult::query()->updateOrCreate(
@@ -2477,6 +2480,85 @@ class TermTestMarksController extends Controller
             $filledCount = count($filledSubjectIds);
             if ($requiredSubjectCount !== null && $filledCount !== $requiredSubjectCount) {
                 $errors[] = sprintf('Student %s must have marks or AB for exactly %d subjects.', $indexNo, $requiredSubjectCount);
+            }
+        }
+
+        return array_values(array_unique($errors));
+    }
+
+    /**
+     * Draft save allows partial data, but still blocks conflicting selections
+     * and totals above the configured subject count.
+     *
+     * @param  array<int, array{subject_id:int,subject:string,order_id:int,sub_cat_id:int}>  $subjects
+     * @param  array<int, array{std_id:int,index_no:string,name_with_initials:string}>  $roster
+     * @param  array<string, array<int, string|int>>  $entryLookup
+     * @return array<int, string>
+     */
+    private function validateDraftMarksEntryRules(string $censusId, int $year, int $gradeId, array $subjects, array $roster, array $entryLookup): array
+    {
+        $errors = [];
+        $requiredSubjectCount = $this->loadRequiredSubjectCount($censusId, $year, $gradeId);
+
+        if ($requiredSubjectCount === null) {
+            return ['Required subject count is not set for this grade. Please contact the principal.'];
+        }
+
+        $religionSubjectIds = [5, 6, 7, 8, 9];
+
+        foreach ($roster as $student) {
+            $indexNo = $student['index_no'];
+            $studentMarks = $entryLookup[$indexNo] ?? [];
+
+            $filledSubjectIds = [];
+            $op1Count = 0;
+            $op2Count = 0;
+            $op3Count = 0;
+            $religionCount = 0;
+
+            foreach ($subjects as $subject) {
+                $subjectId = (int) $subject['subject_id'];
+                $categoryId = (int) ($subject['sub_cat_id'] ?? 0);
+                $cell = $studentMarks[$subjectId] ?? '';
+
+                if ($cell === '') {
+                    continue;
+                }
+
+                $filledSubjectIds[] = $subjectId;
+
+                if (in_array($subjectId, $religionSubjectIds, true)) {
+                    $religionCount++;
+                }
+
+                if ($categoryId === 2) {
+                    $op1Count++;
+                } elseif ($categoryId === 3) {
+                    $op2Count++;
+                } elseif ($categoryId === 4) {
+                    $op3Count++;
+                }
+            }
+
+            if ($religionCount > 1) {
+                $errors[] = sprintf('Student %s: Please enter marks or AB for only one religion subject.', $indexNo);
+            }
+
+            if ($op1Count > 1) {
+                $errors[] = sprintf('Student %s can have only one OP1 subject.', $indexNo);
+            }
+
+            if ($op2Count > 1) {
+                $errors[] = sprintf('Student %s can have only one OP2 subject.', $indexNo);
+            }
+
+            if ($op3Count > 1) {
+                $errors[] = sprintf('Student %s can have only one OP3 subject.', $indexNo);
+            }
+
+            $filledCount = count($filledSubjectIds);
+            if ($filledCount > $requiredSubjectCount) {
+                $errors[] = sprintf('Student %s must have marks or AB for at most %d subjects in draft.', $indexNo, $requiredSubjectCount);
             }
         }
 

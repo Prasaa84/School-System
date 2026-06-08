@@ -136,6 +136,7 @@
                 :title="subject.subject"
                 :class="[
                   'w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600',
+                  subject === subjectRows[0] ? 'pl-3' : '',
                   subjectHeaderClass(subject.sub_cat_id),
                 ]"
               >
@@ -180,6 +181,7 @@
                 :key="`marks-cell-${row.index_no}-${subject.subject_id}`"
                 :class="[
                   'px-1 py-2 text-center',
+                  subject === subjectRows[0] ? 'pl-3' : '',
                   subjectCellClass(subject.sub_cat_id),
                 ]"
               >
@@ -365,6 +367,7 @@ interface MarksResponse {
   }
   subjects?: SubjectRow[]
   students?: MarkRow[]
+  required_subject_count?: number | null
   can_manage?: boolean
   can_confirm?: boolean
   confirmation?: {
@@ -625,6 +628,7 @@ const selectedClassId = ref<number>(0)
 const lockedYear = ref<number | null>(null)
 const lockedGradeId = ref<number | null>(null)
 const lockedClassId = ref<number | null>(null)
+const requiredSubjectCount = ref<number | null>(null)
 const loadingOptions = ref(false)
 const loadingMarks = ref(false)
 const savingDraft = ref(false)
@@ -873,6 +877,11 @@ const applyValidationHighlights = (messages: string[]): void => {
       return
     }
 
+    if (/^must have marks or AB for at most \d+ subjects in draft\.$/u.test(normalizedDetail)) {
+      setRowError(indexNo, trimmedMessage)
+      return
+    }
+
     if (/^Minimum \d+ main subjects needed\.$/u.test(normalizedDetail)) {
       highlightEmptySubjectsForStudent(indexNo, getSubjectIdsByCategory(1), trimmedMessage)
       return
@@ -1054,6 +1063,7 @@ const loadMarks = async (options: { preserveMessage?: boolean } = {}): Promise<v
 
     subjectRows.value = Array.isArray(data.subjects) ? data.subjects : []
     markRows.value = Array.isArray(data.students) ? data.students : []
+    requiredSubjectCount.value = typeof data.required_subject_count === 'number' ? data.required_subject_count : null
     canManageLoaded.value = !!data.can_manage
     canConfirmLoaded.value = isPrincipal.value && !!data.can_confirm
     confirmation.value = {
@@ -1066,6 +1076,7 @@ const loadMarks = async (options: { preserveMessage?: boolean } = {}): Promise<v
   } catch (error: any) {
     subjectRows.value = []
     markRows.value = []
+    requiredSubjectCount.value = null
     canManageLoaded.value = false
     canConfirmLoaded.value = false
     confirmation.value = { is_completed: false }
@@ -1546,7 +1557,7 @@ const formatAverage = (value: number | null): string => {
 
 const recalculateRow = (row: MarkRow): void => {
   let total = 0
-  let divisor = 0
+  let filledCount = 0
 
   Object.values(row.marks).forEach((rawValue) => {
     const value = String(rawValue ?? '').trim().toUpperCase()
@@ -1555,7 +1566,7 @@ const recalculateRow = (row: MarkRow): void => {
     }
 
     if (value === 'AB') {
-      divisor += 1
+      filledCount += 1
       return
     }
 
@@ -1569,11 +1580,13 @@ const recalculateRow = (row: MarkRow): void => {
     }
 
     total += numeric
-    divisor += 1
+    filledCount += 1
   })
 
-  row.total = divisor > 0 ? total : null
-  row.average = divisor > 0 ? Number((total / divisor).toFixed(2)) : null
+  row.total = filledCount > 0 ? total : null
+  row.average = filledCount > 0 && (requiredSubjectCount.value ?? 0) > 0
+    ? Number((total / Number(requiredSubjectCount.value)).toFixed(2))
+    : null
 }
 
 watch(selectedYear, async (next, previous) => {
