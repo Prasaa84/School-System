@@ -15,6 +15,12 @@ class ExcelReportService
      * @param  array<int, array<int, mixed>>  $rows
      * @param  array<int, mixed>|null  $summaryRow
      * @param  array<int, string>  $footerLines
+     * @param  array{
+     *     rotated_header_columns?: array<int, int>,
+     *     rotated_header_height?: float|int,
+     *     fixed_column_widths?: array<int, float|int>,
+     *     footer_start_column?: int
+     * }  $options
      */
     public function streamTableReport(
         string $filename,
@@ -24,9 +30,10 @@ class ExcelReportService
         array $headers,
         array $rows,
         ?array $summaryRow = null,
-        array $footerLines = []
+        array $footerLines = [],
+        array $options = []
     ): StreamedResponse {
-        return response()->streamDownload(function () use ($sheetTitle, $mainHeading, $subHeading, $headers, $rows, $summaryRow, $footerLines): void {
+        return response()->streamDownload(function () use ($sheetTitle, $mainHeading, $subHeading, $headers, $rows, $summaryRow, $footerLines, $options): void {
             $spreadsheet = new Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();
             $sheet->setTitle($sheetTitle);
@@ -45,6 +52,24 @@ class ExcelReportService
             }
             $sheet->getStyle("A4:{$lastColumn}4")->getFont()->setBold(true);
 
+            $rotatedHeaderColumns = array_values(array_filter(
+                array_map('intval', $options['rotated_header_columns'] ?? []),
+                static fn (int $index): bool => $index > 0
+            ));
+            if ($rotatedHeaderColumns !== []) {
+                $rotatedHeaderHeight = (float) ($options['rotated_header_height'] ?? 110);
+                $sheet->getRowDimension(4)->setRowHeight($rotatedHeaderHeight);
+
+                foreach ($rotatedHeaderColumns as $columnIndex) {
+                    $coordinate = $this->excelColumnName($columnIndex) . '4';
+                    $sheet->getStyle($coordinate)->getAlignment()
+                        ->setTextRotation(90)
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                        ->setVertical(Alignment::VERTICAL_BOTTOM)
+                        ->setWrapText(true);
+                }
+            }
+
             foreach (array_values($rows) as $rowIndex => $row) {
                 $excelRow = $rowIndex + 5;
                 foreach (array_values($row) as $columnIndex => $cell) {
@@ -62,15 +87,34 @@ class ExcelReportService
             $footerLines = array_values(array_filter($footerLines, static fn (string $line): bool => trim($line) !== ''));
             if ($footerLines !== []) {
                 $footerStartRow = count($rows) + 6 + ($summaryRow !== null ? 1 : 0);
+                $footerStartColumn = max(1, (int) ($options['footer_start_column'] ?? 1));
+                $footerStartCoordinate = $this->excelColumnName($footerStartColumn);
                 foreach ($footerLines as $index => $line) {
                     $footerRow = $footerStartRow + $index;
-                    $sheet->setCellValue("A{$footerRow}", $line);
-                    $sheet->mergeCells("A{$footerRow}:{$lastColumn}{$footerRow}");
-                    $sheet->getStyle("A{$footerRow}")->getFont()->setItalic(true)->setSize(10);
+                    $sheet->setCellValue("{$footerStartCoordinate}{$footerRow}", $line);
+                    $sheet->mergeCells("{$footerStartCoordinate}{$footerRow}:{$lastColumn}{$footerRow}");
+                    $sheet->getStyle("{$footerStartCoordinate}{$footerRow}")->getFont()->setItalic(true)->setSize(10);
                 }
             }
 
+            $fixedColumnWidths = [];
+            foreach (($options['fixed_column_widths'] ?? []) as $columnIndex => $width) {
+                $columnNumber = (int) $columnIndex;
+                if ($columnNumber <= 0) {
+                    continue;
+                }
+
+                $fixedColumnWidths[$columnNumber] = (float) $width;
+                $sheet->getColumnDimension($this->excelColumnName($columnNumber))
+                    ->setAutoSize(false)
+                    ->setWidth((float) $width);
+            }
+
             for ($index = 1; $index <= count($headers); $index++) {
+                if (array_key_exists($index, $fixedColumnWidths)) {
+                    continue;
+                }
+
                 $sheet->getColumnDimension($this->excelColumnName($index))->setAutoSize(true);
             }
 

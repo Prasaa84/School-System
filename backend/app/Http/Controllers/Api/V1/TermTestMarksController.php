@@ -850,7 +850,7 @@ class TermTestMarksController extends Controller
 
         $headers = ['Index No', 'Student'];
         foreach ($subjects as $subject) {
-            $headers[] = (string) $subject['subject'];
+            $headers[] = $this->buildMarksExportSubjectHeader($subject);
         }
         $headers[] = 'Total';
         $headers[] = 'Average';
@@ -882,17 +882,25 @@ class TermTestMarksController extends Controller
             foreach ($subjects as $subject) {
                 $subjectId = (int) $subject['subject_id'];
                 $cellKey = "{$student['index_no']}:{$subjectId}";
-                $cellValue = isset($absentMap[$cellKey])
-                    ? 'AB'
-                    : (isset($markMap[$cellKey]) ? (string) $markMap[$cellKey] : '');
-
-                $row[] = ['value' => $cellValue, 'type' => 'string'];
+                if (isset($absentMap[$cellKey])) {
+                    $row[] = ['value' => 'AB', 'type' => 'string'];
+                } elseif (isset($markMap[$cellKey]) && is_numeric($markMap[$cellKey])) {
+                    $row[] = ['value' => (int) $markMap[$cellKey]];
+                } else {
+                    $row[] = ['value' => '', 'type' => 'string'];
+                }
             }
 
             $result = $resultMap[$student['index_no']] ?? ['total' => '', 'average' => ''];
-            $row[] = ['value' => (string) $result['total'], 'type' => 'string'];
-            $row[] = ['value' => $result['average'] === '' ? '' : number_format((float) $result['average'], 2, '.', ''), 'type' => 'string'];
-            $row[] = ['value' => isset($positionByIndexNo[$student['index_no']]) && $positionByIndexNo[$student['index_no']] !== null ? (string) $positionByIndexNo[$student['index_no']] : '', 'type' => 'string'];
+            $row[] = is_numeric($result['total'])
+                ? ['value' => (int) $result['total']]
+                : ['value' => '', 'type' => 'string'];
+            $row[] = is_numeric($result['average'])
+                ? ['value' => round((float) $result['average'], 2), 'format' => '0.00']
+                : ['value' => '', 'type' => 'string'];
+            $row[] = isset($positionByIndexNo[$student['index_no']]) && is_numeric($positionByIndexNo[$student['index_no']])
+                ? ['value' => (int) $positionByIndexNo[$student['index_no']]]
+                : ['value' => '', 'type' => 'string'];
 
             return $row;
         }, $students);
@@ -937,6 +945,15 @@ class TermTestMarksController extends Controller
             null,
             [
                 'Printed By: ' . $printedByLabel . ' | Printed At: ' . now()->format('Y-m-d H:i:s'),
+            ],
+            [
+                'rotated_header_columns' => range(3, count($headers)),
+                'rotated_header_height' => 120,
+                'footer_start_column' => 2,
+                'fixed_column_widths' => [
+                    1 => 9,
+                    2 => 29,
+                ] + array_fill_keys(range(3, count($headers)), 7),
             ]
         );
     }
@@ -2371,17 +2388,32 @@ class TermTestMarksController extends Controller
     /**
      * @param  array{subject_id?:int,subject?:string,sub_cat_id?:int}  $subject
      */
+    private function buildMarksExportSubjectHeader(array $subject): string
+    {
+        $subjectName = trim((string) ($subject['subject'] ?? ''));
+
+        return match ((int) ($subject['sub_cat_id'] ?? 0)) {
+            2 => $subjectName . ' - OP1',
+            3 => $subjectName . ' - OP2',
+            4 => $subjectName . ' - OP3',
+            default => $subjectName,
+        };
+    }
+
+    /**
+     * @param  array{subject_id?:int,subject?:string,sub_cat_id?:int}  $subject
+     */
     private function buildMarksTemplateSubjectHeader(array $subject): string
     {
         $subjectName = trim((string) ($subject['subject'] ?? ''));
-        $prefix = match ((int) ($subject['sub_cat_id'] ?? 0)) {
-            2 => 'OP1_',
-            3 => 'OP2_',
-            4 => 'OP3_',
+        $suffix = match ((int) ($subject['sub_cat_id'] ?? 0)) {
+            2 => '_OP1',
+            3 => '_OP2',
+            4 => '_OP3',
             default => '',
         };
 
-        return $prefix . $subjectName;
+        return $subjectName . $suffix;
     }
 
     /**
