@@ -127,7 +127,15 @@
         <table class="min-w-full divide-y divide-slate-200 text-sm">
           <thead class="bg-slate-50">
             <tr>
-              <th class="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600">#</th>
+              <th class="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600">
+                <SortableHeader
+                  label="#"
+                  field="index_no"
+                  :arrow="sortArrow('index_no')"
+                  :active-class="sortArrowClass('index_no')"
+                  @toggle="(field) => toggleSort(field as MarksSortField)"
+                />
+              </th>
               <th class="sticky left-[70px] z-20 min-w-[220px] bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600">{{ text.student }}</th>
               <th
                 v-for="subject in subjectRows"
@@ -139,7 +147,11 @@
                   subjectHeaderClass(subject.sub_cat_id),
                 ]"
               >
-                <span class="inline-flex h-48 items-end justify-center gap-1 text-xs leading-none">
+                <button
+                  type="button"
+                  class="inline-flex h-48 items-end justify-center gap-1 text-xs leading-none transition hover:text-slate-900"
+                  @click="toggleSort(`subject:${subject.subject_id}` as MarksSortField)"
+                >
                   <span class="inline-flex w-5 items-end justify-center whitespace-nowrap [writing-mode:vertical-rl] rotate-180">
                     {{ formatSubjectHeader(subjectHeaderLabel(subject)).line1 }}
                   </span>
@@ -149,22 +161,44 @@
                   >
                     {{ formatSubjectHeader(subjectHeaderLabel(subject)).line2 }}
                   </span>
-                </span>
+                  <span class="text-[10px] leading-none" :class="sortArrowClass(`subject:${subject.subject_id}`)">{{ sortArrow(`subject:${subject.subject_id}`) }}</span>
+                </button>
               </th>
               <th class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600">
-                <span class="inline-flex h-48 w-5 items-end justify-center whitespace-nowrap text-xs leading-none [writing-mode:vertical-rl] rotate-180">
-                  {{ text.total }}
-                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-48 items-end justify-center gap-1 text-xs leading-none transition hover:text-slate-900"
+                  @click="toggleSort('total')"
+                >
+                  <span class="inline-flex w-5 items-end justify-center whitespace-nowrap [writing-mode:vertical-rl] rotate-180">
+                    {{ text.total }}
+                  </span>
+                  <span class="text-[10px] leading-none" :class="sortArrowClass('total')">{{ sortArrow('total') }}</span>
+                </button>
               </th>
               <th class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600">
-                <span class="inline-flex h-48 w-5 items-end justify-center whitespace-nowrap text-xs leading-none [writing-mode:vertical-rl] rotate-180">
-                  {{ text.average }}
-                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-48 items-end justify-center gap-1 text-xs leading-none transition hover:text-slate-900"
+                  @click="toggleSort('average')"
+                >
+                  <span class="inline-flex w-5 items-end justify-center whitespace-nowrap [writing-mode:vertical-rl] rotate-180">
+                    {{ text.average }}
+                  </span>
+                  <span class="text-[10px] leading-none" :class="sortArrowClass('average')">{{ sortArrow('average') }}</span>
+                </button>
               </th>
               <th class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600">
-                <span class="inline-flex h-48 w-5 items-end justify-center whitespace-nowrap text-xs leading-none [writing-mode:vertical-rl] rotate-180">
-                  {{ text.position }}
-                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-48 items-end justify-center gap-1 text-xs leading-none transition hover:text-slate-900"
+                  @click="toggleSort('position')"
+                >
+                  <span class="inline-flex w-5 items-end justify-center whitespace-nowrap [writing-mode:vertical-rl] rotate-180">
+                    {{ text.position }}
+                  </span>
+                  <span class="text-[10px] leading-none" :class="sortArrowClass('position')">{{ sortArrow('position') }}</span>
+                </button>
               </th>
             </tr>
           </thead>
@@ -309,9 +343,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import SortableHeader from '../components/SortableHeader.vue'
 import api from '../services/api'
 import { getSchoolContextCensusId, getUser, setSchoolContextCensusId } from '../services/auth'
 import { useUiStore } from '../stores/ui'
+import { useTableSort } from '../utils/useTableSort'
 
 interface OptionRow {
   id: string
@@ -332,6 +368,8 @@ interface TermOption {
   id: number
   label: string
 }
+
+type MarksSortField = 'index_no' | 'total' | 'average' | 'position' | `subject:${number}`
 
 interface SubjectRow {
   subject_id: number
@@ -391,6 +429,45 @@ const currentUser = getUser()
 const roleName = String(currentUser?.role_name ?? '').trim().toLowerCase()
 const isAdmin = computed(() => (currentUser?.role_id ?? 0) === 1 || roleName === 'admin' || roleName === 'administrator')
 const ui = useUiStore()
+
+const compareText = (left: string, right: string): number => (
+  left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+)
+
+const compareNullableNumber = (left: number | null | undefined, right: number | null | undefined): number => {
+  const normalizedLeft = typeof left === 'number' ? left : Number.NEGATIVE_INFINITY
+  const normalizedRight = typeof right === 'number' ? right : Number.NEGATIVE_INFINITY
+  return normalizedLeft - normalizedRight
+}
+
+const compareMarkValue = (left: string | undefined, right: string | undefined): number => {
+  const normalize = (value: string | undefined): { rank: number; text: string; number: number } => {
+    const trimmed = String(value ?? '').trim()
+    if (trimmed === '') {
+      return { rank: 0, text: '', number: Number.NEGATIVE_INFINITY }
+    }
+    if (trimmed === 'AB') {
+      return { rank: 1, text: 'AB', number: Number.NEGATIVE_INFINITY }
+    }
+    if (/^\d+$/u.test(trimmed)) {
+      return { rank: 2, text: trimmed, number: Number(trimmed) }
+    }
+    return { rank: 3, text: trimmed, number: Number.NEGATIVE_INFINITY }
+  }
+
+  const normalizedLeft = normalize(left)
+  const normalizedRight = normalize(right)
+
+  if (normalizedLeft.rank !== normalizedRight.rank) {
+    return normalizedLeft.rank - normalizedRight.rank
+  }
+
+  if (normalizedLeft.rank === 2) {
+    return normalizedLeft.number - normalizedRight.number
+  }
+
+  return compareText(normalizedLeft.text, normalizedRight.text)
+}
 
 const text = computed(() => {
   if (ui.language === 'si') {
@@ -683,11 +760,40 @@ const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName
 const canDownloadTemplate = computed(() => isAdmin.value || canManageMarksUi.value || isPrincipal.value)
 const canEditLoaded = computed(() => canManageLoaded.value && !confirmation.value.is_completed)
 const selectedMarksFileName = computed(() => selectedMarksFile.value?.name ?? '')
+const {
+  toggleSort,
+  resetSort,
+  sortArrow,
+  sortArrowClass,
+  sortItems,
+} = useTableSort<MarkRow, MarksSortField>({
+  compare: (field, left, right) => {
+    if (field === 'index_no') {
+      return compareText(String(left.index_no ?? ''), String(right.index_no ?? ''))
+    }
+
+    if (field === 'total') {
+      return compareNullableNumber(left.total, right.total)
+    }
+
+    if (field === 'average') {
+      return compareNullableNumber(left.average, right.average)
+    }
+
+    if (field === 'position') {
+      return compareNullableNumber(left.position, right.position)
+    }
+
+    const subjectId = Number(field.slice(8))
+    return compareMarkValue(left.marks[String(subjectId)], right.marks[String(subjectId)])
+  },
+  fallbackCompare: (left, right) => compareText(String(left.index_no ?? ''), String(right.index_no ?? '')),
+})
 const entryRuleHint = computed(() => (
   selectedGradeId.value >= 6
-    ? text.value.optionalEntryRuleHint
-    : text.value.entryRuleHint
-))
+      ? text.value.optionalEntryRuleHint
+      : text.value.entryRuleHint
+  ))
 const deleteDialogMessage = computed(() => {
   const termLabel = terms.value.find((row) => row.id === selectedTerm.value)?.label ?? `Term ${selectedTerm.value || '-'}`
   const gradeLabel = grades.value.find((row) => row.grade_id === selectedGradeId.value)?.label ?? `Grade ${selectedGradeId.value || '-'}`
@@ -718,12 +824,12 @@ const scopeLabel = computed(() => {
 
 const filteredRows = computed(() => {
   const search = searchQuery.value.trim().toLowerCase()
-  if (search === '') return markRows.value
+  if (search === '') return sortItems(markRows.value)
 
-  return markRows.value.filter((row) => (
+  return sortItems(markRows.value.filter((row) => (
     row.index_no.toLowerCase().includes(search)
-    || row.name_with_initials.toLowerCase().includes(search)
-  ))
+      || row.name_with_initials.toLowerCase().includes(search)
+  )))
 })
 
 const RELIGION_SUBJECT_IDS = [5, 6, 7, 8, 9]
@@ -1060,6 +1166,7 @@ const loadMarks = async (options: { preserveMessage?: boolean } = {}): Promise<v
   }
   clearErrorState()
   clearValidationHighlights()
+  resetSort()
 
   if (isAdmin.value && selectedSchoolCensusId.value <= 0) {
     setErrorMessagesState([text.value.selectSchoolFirst], text.value.selectSchoolFirst)
@@ -1100,6 +1207,7 @@ const loadMarks = async (options: { preserveMessage?: boolean } = {}): Promise<v
   } catch (error: any) {
     subjectRows.value = []
     markRows.value = []
+    resetSort()
     requiredSubjectCount.value = null
     canManageLoaded.value = false
     canConfirmLoaded.value = false
@@ -1494,6 +1602,7 @@ const onSchoolChange = async (): Promise<void> => {
   selectedClassId.value = 0
   subjectRows.value = []
   markRows.value = []
+  resetSort()
   clearValidationHighlights()
   await loadOptions()
 }
