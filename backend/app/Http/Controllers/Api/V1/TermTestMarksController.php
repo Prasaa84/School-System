@@ -397,7 +397,7 @@ class TermTestMarksController extends Controller
         }
 
         $validIndexes = array_fill_keys(array_map(fn (array $row): string => $row['index_no'], $roster), true);
-        $subjectLookup = array_fill_keys(array_map(fn (array $row): int => (int) $row['subject_id'], $subjects), true);
+        $subjectLookup = collect($subjects)->keyBy(fn (array $row): int => (int) $row['subject_id']);
         $entryLookup = [];
         $cellErrors = [];
 
@@ -412,13 +412,14 @@ class TermTestMarksController extends Controller
 
             foreach ($marks as $subjectId => $value) {
                 $resolvedSubjectId = is_numeric($subjectId) ? (int) $subjectId : 0;
-                if ($resolvedSubjectId <= 0 || !isset($subjectLookup[$resolvedSubjectId])) {
+                if ($resolvedSubjectId <= 0 || !$subjectLookup->has($resolvedSubjectId)) {
                     continue;
                 }
 
                 $normalized = $this->normalizeMarkCellValue($value);
                 if ($normalized === null) {
-                    $cellErrors[] = sprintf('Invalid mark for student %s and subject %d. Use 0-100 or AB.', $indexNo, $resolvedSubjectId);
+                    $subjectLabel = (string) ($subjectLookup->get($resolvedSubjectId)['subject'] ?? ('Subject ' . $resolvedSubjectId));
+                    $cellErrors[] = sprintf('Invalid mark for student %s and subject %s. Use 0-100 or AB.', $indexNo, $subjectLabel);
                     continue;
                 }
 
@@ -426,22 +427,9 @@ class TermTestMarksController extends Controller
             }
         }
 
-        if ($cellErrors !== []) {
-            Log::warning('Term test marks draft save failed validation.', array_merge(
-                $this->marksLogContext($user),
-                [
-                    'resolved_school_census_id' => $censusId,
-                    'class_row_id' => (int) $classRow->sch_grd_cls_id,
-                    'subject_count' => count($subjects),
-                    'roster_count' => count($roster),
-                    'first_error' => $cellErrors[0],
-                ]
-            ));
-            return response()->json(['message' => $cellErrors[0]], 422);
-        }
-
-        $marksRuleErrors = $this->validateMarksEntryRules((int) $validated['grade_id'], $subjects, $roster, $entryLookup);
-        if ($marksRuleErrors !== []) {
+        $marksRuleErrors = $this->validateMarksEntryRules($censusId, (int) $validated['year'], (int) $validated['grade_id'], $subjects, $roster, $entryLookup);
+        $validationErrors = array_values(array_unique(array_merge($cellErrors, $marksRuleErrors)));
+        if ($validationErrors !== []) {
             Log::warning('Term test marks draft save failed marks rules.', array_merge(
                 $this->marksLogContext($user),
                 [
@@ -449,13 +437,13 @@ class TermTestMarksController extends Controller
                     'class_row_id' => (int) $classRow->sch_grd_cls_id,
                     'subject_count' => count($subjects),
                     'roster_count' => count($roster),
-                    'rule_error' => $marksRuleErrors[0],
-                    'rule_error_count' => count($marksRuleErrors),
+                    'rule_error' => $validationErrors[0],
+                    'rule_error_count' => count($validationErrors),
                 ]
             ));
             return response()->json([
-                'message' => $marksRuleErrors[0],
-                'errors' => array_values($marksRuleErrors),
+                'message' => $validationErrors[0],
+                'errors' => $validationErrors,
             ], 422);
         }
 
@@ -603,7 +591,7 @@ class TermTestMarksController extends Controller
         }
 
         $validIndexes = array_fill_keys(array_map(fn (array $row): string => $row['index_no'], $roster), true);
-        $subjectLookup = array_fill_keys(array_map(fn (array $row): int => (int) $row['subject_id'], $subjects), true);
+        $subjectLookup = collect($subjects)->keyBy(fn (array $row): int => (int) $row['subject_id']);
         $entryLookup = [];
         $cellErrors = [];
 
@@ -618,13 +606,14 @@ class TermTestMarksController extends Controller
 
             foreach ($marks as $subjectId => $value) {
                 $resolvedSubjectId = is_numeric($subjectId) ? (int) $subjectId : 0;
-                if ($resolvedSubjectId <= 0 || !isset($subjectLookup[$resolvedSubjectId])) {
+                if ($resolvedSubjectId <= 0 || !$subjectLookup->has($resolvedSubjectId)) {
                     continue;
                 }
 
                 $normalized = $this->normalizeMarkCellValue($value);
                 if ($normalized === null) {
-                    $cellErrors[] = sprintf('Invalid mark for student %s and subject %d. Use 0-100 or AB.', $indexNo, $resolvedSubjectId);
+                    $subjectLabel = (string) ($subjectLookup->get($resolvedSubjectId)['subject'] ?? ('Subject ' . $resolvedSubjectId));
+                    $cellErrors[] = sprintf('Invalid mark for student %s and subject %s. Use 0-100 or AB.', $indexNo, $subjectLabel);
                     continue;
                 }
 
@@ -632,25 +621,9 @@ class TermTestMarksController extends Controller
             }
         }
 
-        if ($cellErrors !== []) {
-            Log::warning('Term test marks save failed validation.', array_merge(
-                $this->marksLogContext($user),
-                [
-                    'resolved_school_census_id' => $censusId,
-                    'class_row_id' => (int) $classRow->sch_grd_cls_id,
-                    'subject_count' => count($subjects),
-                    'roster_count' => count($roster),
-                    'first_error' => $cellErrors[0],
-                ]
-            ));
-            return response()->json([
-                'message' => $cellErrors[0],
-                'errors' => array_values($cellErrors),
-            ], 422);
-        }
-
-        $marksRuleErrors = $this->validateMarksEntryRules((int) $validated['grade_id'], $subjects, $roster, $entryLookup);
-        if ($marksRuleErrors !== []) {
+        $marksRuleErrors = $this->validateMarksEntryRules($censusId, (int) $validated['year'], (int) $validated['grade_id'], $subjects, $roster, $entryLookup);
+        $validationErrors = array_values(array_unique(array_merge($cellErrors, $marksRuleErrors)));
+        if ($validationErrors !== []) {
             Log::warning('Term test marks save failed marks rules.', array_merge(
                 $this->marksLogContext($user),
                 [
@@ -658,13 +631,13 @@ class TermTestMarksController extends Controller
                     'class_row_id' => (int) $classRow->sch_grd_cls_id,
                     'subject_count' => count($subjects),
                     'roster_count' => count($roster),
-                    'rule_error' => $marksRuleErrors[0],
-                    'rule_error_count' => count($marksRuleErrors),
+                    'rule_error' => $validationErrors[0],
+                    'rule_error_count' => count($validationErrors),
                 ]
             ));
             return response()->json([
-                'message' => $marksRuleErrors[0],
-                'errors' => array_values($marksRuleErrors),
+                'message' => $validationErrors[0],
+                'errors' => $validationErrors,
             ], 422);
         }
 
@@ -1408,21 +1381,9 @@ class TermTestMarksController extends Controller
             }
         }
 
-        if ($cellErrors !== []) {
-            Log::warning('Term test marks import failed validation.', array_merge(
-                $this->marksLogContext($user),
-                [
-                    'resolved_school_census_id' => $censusId,
-                    'class_row_id' => (int) $classRow->sch_grd_cls_id,
-                    'first_error' => $cellErrors[0],
-                    'imported_row_count' => $importedRowCount,
-                ]
-            ));
-            return response()->json(['message' => $cellErrors[0]], 422);
-        }
-
-        $marksRuleErrors = $this->validateMarksEntryRules((int) $validated['grade_id'], $subjects, $roster, $entryLookup);
-        if ($marksRuleErrors !== []) {
+        $marksRuleErrors = $this->validateMarksEntryRules($censusId, (int) $validated['year'], (int) $validated['grade_id'], $subjects, $roster, $entryLookup);
+        $validationErrors = array_values(array_unique(array_merge($cellErrors, $marksRuleErrors)));
+        if ($validationErrors !== []) {
             Log::warning('Term test marks import failed marks rules.', array_merge(
                 $this->marksLogContext($user),
                 [
@@ -1430,14 +1391,14 @@ class TermTestMarksController extends Controller
                     'class_row_id' => (int) $classRow->sch_grd_cls_id,
                     'subject_count' => count($subjects),
                     'roster_count' => count($roster),
-                    'rule_error' => $marksRuleErrors[0],
-                    'rule_error_count' => count($marksRuleErrors),
+                    'rule_error' => $validationErrors[0],
+                    'rule_error_count' => count($validationErrors),
                     'imported_row_count' => $importedRowCount,
                 ]
             ));
             return response()->json([
-                'message' => $marksRuleErrors[0],
-                'errors' => array_values($marksRuleErrors),
+                'message' => $validationErrors[0],
+                'errors' => $validationErrors,
             ], 422);
         }
 
@@ -2452,10 +2413,15 @@ class TermTestMarksController extends Controller
      * @param  array<int, array{std_id:int,index_no:string,name_with_initials:string}>  $roster
      * @param  array<string, array<int, string|int>>  $entryLookup
      */
-    private function validateMarksEntryRules(int $gradeId, array $subjects, array $roster, array $entryLookup): array
+    private function validateMarksEntryRules(string $censusId, int $year, int $gradeId, array $subjects, array $roster, array $entryLookup): array
     {
         $errors = [];
         $religionSubjectIds = [5, 6, 7, 8, 9];
+        $requiredSubjectCount = $this->loadRequiredSubjectCount($censusId, $year, $gradeId);
+
+        if ($requiredSubjectCount === null) {
+            return ['Required subject count is not set for this grade. Please contact the principal.'];
+        }
 
         foreach ($roster as $student) {
             $indexNo = $student['index_no'];
@@ -2509,16 +2475,37 @@ class TermTestMarksController extends Controller
             }
 
             $filledCount = count($filledSubjectIds);
-            if ($gradeId >= 6 && $gradeId <= 9 && $filledCount !== 12) {
-                $errors[] = sprintf('Student %s must have marks or AB for exactly 12 subjects.', $indexNo);
-            }
-
-            if ($gradeId >= 10 && $gradeId <= 11 && $filledCount !== 9) {
-                $errors[] = sprintf('Student %s must have marks or AB for exactly 9 subjects.', $indexNo);
+            if ($requiredSubjectCount !== null && $filledCount !== $requiredSubjectCount) {
+                $errors[] = sprintf('Student %s must have marks or AB for exactly %d subjects.', $indexNo, $requiredSubjectCount);
             }
         }
 
         return array_values(array_unique($errors));
+    }
+
+    private function loadRequiredSubjectCount(string $censusId, int $year, int $gradeId): ?int
+    {
+        if (!Schema::hasTable('school_grade_tbl')) {
+            return null;
+        }
+
+        $query = DB::table('school_grade_tbl')
+            ->whereIn('census_id', $this->censusValues($censusId))
+            ->where('year', $year)
+            ->where('grade_id', $gradeId);
+
+        if (Schema::hasColumn('school_grade_tbl', 'is_deleted')) {
+            $query->where('is_deleted', 0);
+        }
+
+        if (Schema::hasColumn('school_grade_tbl', 'required_subject_count')) {
+            $value = $query->value('required_subject_count');
+            if (is_numeric($value) && (int) $value > 0) {
+                return (int) $value;
+            }
+        }
+
+        return null;
     }
 
     /**

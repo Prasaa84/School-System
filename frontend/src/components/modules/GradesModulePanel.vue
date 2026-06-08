@@ -16,6 +16,7 @@
             <th v-if="isAdmin" class="px-3 py-2 text-left">{{ text.school }}</th>
             <th class="px-3 py-2 text-left">{{ text.grade }}</th>
             <th class="px-3 py-2 text-left">{{ text.gradeHead }}</th>
+            <th class="px-3 py-2 text-left">{{ text.requiredSubjectCount }}</th>
             <th class="px-3 py-2 text-left">{{ text.updatedDateTime }}</th>
             <th v-if="canManage" class="px-3 py-2 text-left">{{ text.action }}</th>
             <th v-if="canManage" class="px-3 py-2 text-left">{{ text.delete }}</th>
@@ -35,6 +36,29 @@
               </template>
               <template v-else>
                 {{ grade.grade_head || '-' }}
+              </template>
+            </td>
+            <td class="px-3 py-2">
+              <template v-if="canManage && grade.sch_grd_id">
+                <div class="flex items-center gap-2">
+                  <input
+                    :value="requiredSubjectCountEdits[grade.sch_grd_id] ?? ''"
+                    type="number"
+                    min="0"
+                    max="50"
+                    class="w-16 rounded border border-slate-300 px-2 py-1 text-sm"
+                    @input="onRequiredSubjectCountInput(grade.sch_grd_id, $event)"
+                  />
+                  <p
+                    v-if="(requiredSubjectCountEdits[grade.sch_grd_id] ?? '').trim() === ''"
+                    class="text-xs font-medium text-amber-600"
+                  >
+                    {{ text.requiredForMarks }}
+                  </p>
+                </div>
+              </template>
+              <template v-else>
+                {{ grade.required_subject_count ?? '-' }}
               </template>
             </td>
             <td class="px-3 py-2">{{ grade.date_updated || '-' }}</td>
@@ -78,7 +102,7 @@
 <script setup lang="ts">
 import { useLocalizedText } from '../../utils/uiText'
 
-interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; grade_head: string | null; date_updated: string | null }
+interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; required_subject_count: number | null; grade_head: string | null; date_updated: string | null }
 interface GradeReportRow { grade_id: number; grade: string; year: number; student_count: number }
 interface StaffOption { stf_id: number; name_with_ini: string }
 
@@ -91,6 +115,7 @@ const props = defineProps<{
   targetYear: number
   grades: Grade[]
   gradeEdits: Record<number, number>
+  requiredSubjectCountEdits: Record<number, string>
   staffOptions: StaffOption[]
   reportYear: number
   yearOptions: number[]
@@ -116,6 +141,8 @@ const text = useLocalizedText({
     school: 'School',
     grade: 'Grade',
     gradeHead: 'Grade Head',
+    requiredSubjectCount: 'Required Subject Count',
+    requiredForMarks: 'Required',
     updatedDateTime: 'Updated At',
     action: 'Action',
     delete: 'Delete',
@@ -135,6 +162,8 @@ const text = useLocalizedText({
     school: 'පාසල',
     grade: 'ශ්‍රේණිය',
     gradeHead: 'ශ්‍රේණි ප්‍රධානියා',
+    requiredSubjectCount: 'අවශ්‍ය විෂය ගණන',
+    requiredForMarks: 'අවශ්‍යයි',
     updatedDateTime: 'යාවත්කාලීන වෙලාව',
     action: 'ක්‍රියාව',
     delete: 'මකන්න',
@@ -154,6 +183,8 @@ const text = useLocalizedText({
     school: 'பள்ளி',
     grade: 'தரம்',
     gradeHead: 'தரத் தலைவர்',
+    requiredSubjectCount: 'தேவையான பாட எண்ணிக்கை',
+    requiredForMarks: 'தேவை',
     updatedDateTime: 'புதுப்பித்த நேரம்',
     action: 'செயல்',
     delete: 'நீக்கு',
@@ -193,6 +224,10 @@ const onReportYearChange = (event: Event): void => {
 const onGradeHeadChange = (gradeRowId: number, event: Event): void => {
   const value = Number((event.target as HTMLSelectElement).value)
   emit('update-grade-head', gradeRowId, Number.isFinite(value) ? value : 0)
+}
+
+const onRequiredSubjectCountInput = (gradeRowId: number, event: Event): void => {
+  props.requiredSubjectCountEdits[gradeRowId] = (event.target as HTMLInputElement).value.trim()
 }
 
 const availableStaffOptions = (grade: Grade): StaffOption[] => {

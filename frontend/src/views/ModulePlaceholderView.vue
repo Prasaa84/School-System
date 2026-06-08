@@ -18,6 +18,7 @@
       :target-year="targetYear"
       :grades="grades"
       :grade-edits="gradeEdits"
+      :required-subject-count-edits="requiredSubjectCountEdits"
       :staff-options="staffOptions"
       :report-year="reportYear"
       :year-options="yearOptions"
@@ -663,7 +664,7 @@ const ui = useUiStore()
 
 type TabKey = 'view' | 'reports'
 
-interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; grade_head: string | null; date_updated: string | null }
+interface Grade { sch_grd_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; year: number | null; stf_id: number | null; required_subject_count: number | null; grade_head: string | null; date_updated: string | null }
 interface GradeReportRow { grade_id: number; grade: string; year: number; student_count: number }
 interface ClassItem { sch_grd_cls_id: number | null; census_id: number | null; school_name: string | null; grade_id: number | null; grade: string | null; class_id: number | null; class: string | null; year: number | null; stf_id: number | null; approved_std_count: number | null; std_count: number | null; class_teacher: string | null; attendance_override_enabled?: number | null; attendance_override_date?: string | null }
 interface ClassReportRow { grade_id: number; grade: string; class_id: number; class: string; year: number; student_count: number }
@@ -844,6 +845,7 @@ const message = ref('')
 const targetYear = ref(currentCalendarYear)
 const staffOptions = ref<StaffOption[]>([])
 const gradeEdits = reactive<Record<number, number>>({})
+const requiredSubjectCountEdits = reactive<Record<number, string>>({})
 const classTeacherEdits = reactive<Record<number, number>>({})
 const classApprovedEdits = reactive<Record<number, number>>({})
 const grades = ref<Grade[]>([])
@@ -1783,9 +1785,11 @@ const openEditStaffDialog = async (row: StaffRow): Promise<void> => {
 
 const hydrateGradeEdits = (): void => {
   Object.keys(gradeEdits).forEach((k) => delete gradeEdits[Number(k)])
+  Object.keys(requiredSubjectCountEdits).forEach((k) => delete requiredSubjectCountEdits[Number(k)])
   for (const g of grades.value) {
     if (g.sch_grd_id) {
       gradeEdits[g.sch_grd_id] = g.stf_id ?? 0
+      requiredSubjectCountEdits[g.sch_grd_id] = g.required_subject_count == null ? '' : String(g.required_subject_count)
     }
   }
 }
@@ -1863,7 +1867,12 @@ const saveGrade = async (gradeRowId: number): Promise<void> => {
 
   try {
     const stfId = gradeEdits[gradeRowId] && gradeEdits[gradeRowId] > 0 ? gradeEdits[gradeRowId] : null
-    await api.put(`/grades/${gradeRowId}`, { stf_id: stfId })
+    const requiredSubjectCountRaw = (requiredSubjectCountEdits[gradeRowId] ?? '').trim()
+    const requiredSubjectCount = requiredSubjectCountRaw === '' ? null : Number(requiredSubjectCountRaw)
+    await api.put(`/grades/${gradeRowId}`, {
+      stf_id: stfId,
+      required_subject_count: requiredSubjectCountRaw === '' || Number.isFinite(requiredSubjectCount) ? requiredSubjectCount : requiredSubjectCountRaw,
+    })
     message.value = text.value.gradeRowUpdated
     await loadGrades()
   } catch (e: any) {

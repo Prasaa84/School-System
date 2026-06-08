@@ -108,6 +108,9 @@ class GradeController extends Controller
         if (in_array('stf_id', $gradeColumns, true)) {
             $query->addSelect('sgt.stf_id');
         }
+        if (in_array('required_subject_count', $gradeColumns, true)) {
+            $query->addSelect('sgt.required_subject_count');
+        }
 
         if (in_array('date_updated', $gradeColumns, true)) {
             $query->addSelect('sgt.date_updated');
@@ -149,6 +152,9 @@ class GradeController extends Controller
                 'grade' => $row->grade,
                 'year' => isset($row->year) ? (int) $row->year : null,
                 'stf_id' => isset($row->stf_id) ? (int) $row->stf_id : null,
+                'required_subject_count' => isset($row->required_subject_count) && $row->required_subject_count !== null
+                    ? (int) $row->required_subject_count
+                    : null,
                 'grade_head' => $row->grade_head ?? null,
                 'date_updated' => $row->date_updated ?? null,
             ];
@@ -263,6 +269,9 @@ class GradeController extends Controller
                     if (in_array('stf_id', $gradeColumns, true)) {
                         $insert['stf_id'] = null;
                     }
+                    if (in_array('required_subject_count', $gradeColumns, true)) {
+                        $insert['required_subject_count'] = null;
+                    }
                     if (in_array('date_added', $gradeColumns, true)) {
                         $insert['date_added'] = now();
                     }
@@ -360,6 +369,18 @@ class GradeController extends Controller
 
         $stfId = $request->input('stf_id');
         $stfId = is_numeric($stfId) ? (int) $stfId : null;
+        $requiredSubjectCountInput = $request->input('required_subject_count');
+        $requiredSubjectCount = null;
+        if ($requiredSubjectCountInput !== null && $requiredSubjectCountInput !== '') {
+            if (!is_numeric($requiredSubjectCountInput)) {
+                return response()->json(['message' => 'Required subject count must be a valid number.'], 422);
+            }
+
+            $requiredSubjectCount = (int) $requiredSubjectCountInput;
+            if ($requiredSubjectCount < 0 || $requiredSubjectCount > 50) {
+                return response()->json(['message' => 'Required subject count must be between 0 and 50.'], 422);
+            }
+        }
 
         $columns = Schema::getColumnListing($gradeTable);
         $schoolColumn = $this->resolveSchoolColumn($columns);
@@ -394,6 +415,9 @@ class GradeController extends Controller
         $updates = [];
         if (in_array('stf_id', $columns, true)) {
             $updates['stf_id'] = $stfId;
+        }
+        if (in_array('required_subject_count', $columns, true)) {
+            $updates['required_subject_count'] = $requiredSubjectCount;
         }
         if (in_array('date_updated', $columns, true)) {
             $updates['date_updated'] = now();

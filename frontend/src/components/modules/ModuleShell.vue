@@ -13,17 +13,18 @@
       </div>
     </section>
 
-    <p v-if="message" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ message }}</p>
-    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ error }}</p>
+    <p v-if="message" ref="messageRef" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ message }}</p>
+    <p v-if="error" ref="errorRef" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ error }}</p>
 
     <slot />
   </div>
 </template>
 
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { useLocalizedText } from '../../utils/uiText'
 
-defineProps<{
+const props = defineProps<{
   title: string
   subtitle: string
   supportsReports: boolean
@@ -35,6 +36,26 @@ defineProps<{
 defineEmits<{
   (e: 'change-tab', tab: 'view' | 'reports'): void
 }>()
+
+const messageRef = ref<HTMLElement | null>(null)
+const errorRef = ref<HTMLElement | null>(null)
+
+const scrollToStatus = async (target: typeof messageRef): Promise<void> => {
+  await nextTick()
+  target.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+watch(() => props.message, async (value) => {
+  if (String(value ?? '').trim() !== '') {
+    await scrollToStatus(messageRef)
+  }
+})
+
+watch(() => props.error, async (value) => {
+  if (String(value ?? '').trim() !== '') {
+    await scrollToStatus(errorRef)
+  }
+})
 
 const text = useLocalizedText({
   en: {

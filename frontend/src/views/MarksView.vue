@@ -239,8 +239,8 @@
       <div class="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl" @click.stop>
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
-            <h3 class="font-display text-lg font-bold text-slate-900">{{ text.uploadErrorsDialogTitle }}</h3>
-            <p class="mt-1 text-sm text-slate-600">{{ text.uploadErrorsDialogMessage }}</p>
+            <h3 class="font-display text-lg font-bold text-slate-900">{{ validationErrorsDialogTitle }}</h3>
+            <p class="mt-1 text-sm text-slate-600">{{ validationErrorsDialogMessage }}</p>
           </div>
           <button class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50" :title="text.close" :aria-label="text.close" @click="closeUploadErrorsDialog">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
@@ -431,6 +431,8 @@ const text = computed(() => {
       saveMarksError: 'වාර පරීක්ෂණ ලකුණු අවසන් කිරීමට නොහැකි විය.',
       saveMarksValidationSummary: 'ලකුණු පත්‍රය සුරැකීමට පෙර රතු පැහැයෙන් සලකුණු කළ කොටු පරීක්ෂා කරන්න.',
       saveDraftError: 'වාර පරීක්ෂණ ලකුණු කටුපත් සුරැකීමට නොහැකි විය.',
+      validationErrorsDialogTitle: 'ලකුණු පත්‍රයේ දෝෂ',
+      validationErrorsDialogMessage: 'සුරැකීමට පෙර ලැයිස්තුගත කර ඇති සියලු දෝෂ නිවැරදි කරන්න.',
       deleteMarksError: 'වාර පරීක්ෂණ ලකුණු මැකීමට නොහැකි විය.',
       exportMarksError: 'වාර පරීක්ෂණ ලකුණු පිටත් කිරීමට නොහැකි විය.',
       templateMarksError: 'ලකුණු ආයාත ආකෘතිය බාගත කිරීමට නොහැකි විය.',
@@ -506,6 +508,8 @@ const text = computed(() => {
       saveMarksError: 'காலாண்டு தேர்வு மதிப்பெண்களை இறுதிப்படுத்த முடியவில்லை.',
       saveMarksValidationSummary: 'சேமிப்பதற்கு முன் சிவப்பாக குறிக்கப்பட்ட செல்லுகளைச் சரிபார்க்கவும்.',
       saveDraftError: 'காலாண்டு தேர்வு மதிப்பெண் வரைவைக் சேமிக்க முடியவில்லை.',
+      validationErrorsDialogTitle: 'மதிப்பெண் தாள் பிழைகள்',
+      validationErrorsDialogMessage: 'சேமிப்பதற்கு முன் பட்டியலிடப்பட்ட அனைத்து பிழைகளையும் சரிசெய்யவும்.',
       deleteMarksError: 'காலாண்டு தேர்வு மதிப்பெண்களை நீக்க முடியவில்லை.',
       exportMarksError: 'காலாண்டு தேர்வு மதிப்பெண்களை ஏற்றுமதி செய்ய முடியவில்லை.',
       templateMarksError: 'மதிப்பெண் இறக்குமதி வடிவத்தைப் பதிவிறக்க முடியவில்லை.',
@@ -580,6 +584,8 @@ const text = computed(() => {
     saveMarksError: 'Unable to finalize term test marks.',
     saveMarksValidationSummary: 'Please check the highlighted cells before saving the marks sheet.',
     saveDraftError: 'Unable to save draft term test marks.',
+    validationErrorsDialogTitle: 'Marks Sheet Errors',
+    validationErrorsDialogMessage: 'Please correct all listed errors before saving the marks sheet.',
     deleteMarksError: 'Unable to delete term test marks.',
     exportMarksError: 'Unable to export term test marks.',
     templateMarksError: 'Unable to download marks import template.',
@@ -637,6 +643,8 @@ const uploadErrorMessages = ref<string[]>([])
 const messageRef = ref<HTMLElement | null>(null)
 const errorMessageRef = ref<HTMLElement | null>(null)
 const lockedDialogMessage = ref('')
+const validationErrorsDialogTitle = ref('')
+const validationErrorsDialogMessage = ref('')
 const confirmation = ref({ is_completed: false })
 const canManageMarksUi = computed(() => ['class teacher', 'class_teacher', 'classteacher'].includes(roleName))
 const isPrincipal = computed(() => (currentUser?.role_id ?? 0) === 2 || roleName === 'principal')
@@ -706,6 +714,17 @@ const setUploadErrorState = (messages: string[], fallbackMessage: string): void 
 
   errorMessage.value = normalized[0] ?? fallbackMessage
   uploadErrorMessages.value = normalized
+}
+
+const openValidationErrorsDialog = (messages: string[], options?: { title?: string, message?: string }): void => {
+  const normalized = messages
+    .map((item) => String(item ?? '').trim())
+    .filter((item) => item !== '')
+
+  uploadErrorMessages.value = normalized
+  validationErrorsDialogTitle.value = options?.title?.trim() || text.value.validationErrorsDialogTitle
+  validationErrorsDialogMessage.value = options?.message?.trim() || text.value.validationErrorsDialogMessage
+  showUploadErrorsDialog.value = normalized.length > 0
 }
 
 const resetMarksFileSelection = (): void => {
@@ -801,10 +820,15 @@ const applyValidationHighlights = (messages: string[]): void => {
       return
     }
 
-    const invalidCellMatch = /^Invalid mark for student\s+(.+?)\s+and subject\s+(\d+)\.\s+Use 0-100 or AB\.$/u.exec(trimmedMessage)
+    const invalidCellMatch = /^Invalid mark for student\s+(.+?)\s+and subject\s+(.+?)\.\s+Use 0-100 or AB\.$/u.exec(trimmedMessage)
     if (invalidCellMatch) {
-      const [, indexNo, subjectId] = invalidCellMatch
-      setCellError(indexNo, Number(subjectId), trimmedMessage)
+      const [, indexNo, subjectLabel] = invalidCellMatch
+      const subject = subjectRows.value.find((entry) => entry.subject === subjectLabel)
+      if (subject) {
+        setCellError(indexNo, subject.subject_id, trimmedMessage)
+      } else {
+        setRowError(indexNo, trimmedMessage)
+      }
       return
     }
 
@@ -912,6 +936,10 @@ const extractErrorMessages = (error: any, fallbackMessage: string): string[] => 
 
   const messageText = String(error?.response?.data?.message ?? fallbackMessage ?? '').trim()
   return messageText !== '' ? [messageText] : []
+}
+
+const hasDetailedValidationErrors = (error: any): boolean => {
+  return Array.isArray(error?.response?.data?.errors) && error.response.data.errors.length > 0
 }
 
 const setErrorMessagesState = (messages: string[], fallbackMessage: string, options: ErrorStateOptions = {}): void => {
@@ -1073,6 +1101,9 @@ const saveMarks = async (): Promise<void> => {
       text.value.saveMarksError,
       { summaryMessage: messages.length > 1 ? text.value.saveMarksValidationSummary : undefined },
     )
+    if (messages.length > 1 || hasDetailedValidationErrors(error)) {
+      openValidationErrorsDialog(messages)
+    }
     await scrollMessage(errorMessageRef)
   } finally {
     savingMarks.value = false
@@ -1104,7 +1135,15 @@ const saveDraft = async (): Promise<void> => {
     message.value = successMessage
     await scrollMessage(messageRef)
   } catch (error: any) {
-    setErrorMessagesState(extractErrorMessages(error, text.value.saveDraftError), text.value.saveDraftError)
+    const messages = extractErrorMessages(error, text.value.saveDraftError)
+    setErrorMessagesState(
+      messages,
+      text.value.saveDraftError,
+      { summaryMessage: messages.length > 1 ? text.value.saveMarksValidationSummary : undefined },
+    )
+    if (messages.length > 1 || hasDetailedValidationErrors(error)) {
+      openValidationErrorsDialog(messages)
+    }
     await scrollMessage(errorMessageRef)
   } finally {
     savingDraft.value = false
@@ -1320,7 +1359,10 @@ const uploadMarksFile = async (): Promise<void> => {
     const messages = extractErrorMessages(error, text.value.uploadMarksError)
     clearValidationHighlights()
     setUploadErrorState(messages, text.value.uploadMarksError)
-    showUploadErrorsDialog.value = messages.length > 0
+    openValidationErrorsDialog(messages, {
+      title: text.value.uploadErrorsDialogTitle,
+      message: text.value.uploadErrorsDialogMessage,
+    })
     resetMarksFileSelection()
     await scrollMessage(errorMessageRef)
   } finally {
