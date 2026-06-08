@@ -134,7 +134,10 @@
                 v-for="subject in subjectRows"
                 :key="`subject-col-${subject.subject_id}`"
                 :title="subject.subject"
-                class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600"
+                :class="[
+                  'w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600',
+                  subjectHeaderClass(subject.sub_cat_id),
+                ]"
               >
                 <span class="inline-flex h-48 items-end justify-center gap-1 text-xs leading-none">
                   <span class="inline-flex w-5 items-end justify-center whitespace-nowrap [writing-mode:vertical-rl] rotate-180">
@@ -175,7 +178,10 @@
               <td
                 v-for="subject in subjectRows"
                 :key="`marks-cell-${row.index_no}-${subject.subject_id}`"
-                class="px-1 py-2 text-center"
+                :class="[
+                  'px-1 py-2 text-center',
+                  subjectCellClass(subject.sub_cat_id),
+                ]"
               >
                 <input
                   v-if="canEditLoaded"
@@ -1458,6 +1464,36 @@ const subjectHeaderLabel = (subject: SubjectRow): string => {
   if (categoryId === 4) return `${name} - OP3`
 
   return name
+}
+
+const subjectHeaderClass = (categoryId?: number): string => {
+  switch (Number(categoryId ?? 0)) {
+    case 1:
+      return 'bg-sky-100 text-sky-900'
+    case 2:
+      return 'bg-emerald-100 text-emerald-900'
+    case 3:
+      return 'bg-amber-100 text-amber-900'
+    case 4:
+      return 'bg-rose-100 text-rose-900'
+    default:
+      return ''
+  }
+}
+
+const subjectCellClass = (categoryId?: number): string => {
+  switch (Number(categoryId ?? 0)) {
+    case 1:
+      return 'bg-sky-50'
+    case 2:
+      return 'bg-emerald-50'
+    case 3:
+      return 'bg-amber-50'
+    case 4:
+      return 'bg-rose-50'
+    default:
+      return ''
+  }
 }
 
 const formatSubjectHeader = (subjectName: string): { line1: string, line2: string } => {

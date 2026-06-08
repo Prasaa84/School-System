@@ -290,13 +290,13 @@ const clearStatus = (): void => {
 const subjectRowClass = (category: string): string => {
   switch (String(category).trim().toUpperCase()) {
     case 'MAIN':
-      return 'bg-cyan-50/80'
+      return 'bg-sky-100/80'
     case 'OP1':
-      return 'bg-emerald-50/80'
+      return 'bg-emerald-100/80'
     case 'OP2':
-      return 'bg-amber-50/80'
+      return 'bg-amber-100/80'
     case 'OP3':
-      return 'bg-rose-50/80'
+      return 'bg-rose-100/80'
     default:
       return ''
   }
