@@ -130,12 +130,39 @@
             <tr>
               <th class="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600">#</th>
               <th class="sticky left-[70px] z-20 min-w-[220px] bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600">{{ text.student }}</th>
-              <th v-for="subject in subjectRows" :key="`subject-col-${subject.subject_id}`" class="min-w-[120px] px-3 py-2 text-center font-semibold text-slate-600">
-                {{ subject.subject }}
+              <th
+                v-for="subject in subjectRows"
+                :key="`subject-col-${subject.subject_id}`"
+                :title="subject.subject"
+                class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600"
+              >
+                <span class="inline-flex h-48 items-end justify-center gap-1 text-xs leading-none">
+                  <span class="inline-flex w-5 items-end justify-center whitespace-nowrap [writing-mode:vertical-rl] rotate-180">
+                    {{ formatSubjectHeader(subjectHeaderLabel(subject)).line1 }}
+                  </span>
+                  <span
+                    v-if="formatSubjectHeader(subjectHeaderLabel(subject)).line2"
+                    class="inline-flex w-5 items-end justify-center whitespace-nowrap [writing-mode:vertical-rl] rotate-180"
+                  >
+                    {{ formatSubjectHeader(subjectHeaderLabel(subject)).line2 }}
+                  </span>
+                </span>
               </th>
-              <th class="min-w-[90px] px-3 py-2 text-center font-semibold text-slate-600">{{ text.total }}</th>
-              <th class="min-w-[90px] px-3 py-2 text-center font-semibold text-slate-600">{{ text.average }}</th>
-              <th class="min-w-[90px] px-3 py-2 text-center font-semibold text-slate-600">{{ text.position }}</th>
+              <th class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600">
+                <span class="inline-flex h-48 w-5 items-end justify-center whitespace-nowrap text-xs leading-none [writing-mode:vertical-rl] rotate-180">
+                  {{ text.total }}
+                </span>
+              </th>
+              <th class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600">
+                <span class="inline-flex h-48 w-5 items-end justify-center whitespace-nowrap text-xs leading-none [writing-mode:vertical-rl] rotate-180">
+                  {{ text.average }}
+                </span>
+              </th>
+              <th class="w-[64px] min-w-[64px] px-1 py-2 align-bottom text-center font-semibold text-slate-600">
+                <span class="inline-flex h-48 w-5 items-end justify-center whitespace-nowrap text-xs leading-none [writing-mode:vertical-rl] rotate-180">
+                  {{ text.position }}
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
@@ -148,7 +175,7 @@
               <td
                 v-for="subject in subjectRows"
                 :key="`marks-cell-${row.index_no}-${subject.subject_id}`"
-                class="px-3 py-2 text-center"
+                class="px-1 py-2 text-center"
               >
                 <input
                   v-if="canEditLoaded"
@@ -157,7 +184,7 @@
                   maxlength="3"
                   :title="getCellErrorMessage(row.index_no, subject.subject_id)"
                   :class="[
-                    'w-20 rounded-lg border px-2 py-1 text-center text-sm outline-none focus:ring-2',
+                    'w-12 rounded-lg border px-1 py-1 text-center text-sm outline-none focus:ring-2',
                     getCellErrorMessage(row.index_no, subject.subject_id)
                       ? 'border-red-400 bg-red-50 text-red-900 ring-red-300 focus:border-red-500 focus:ring-red-200'
                       : 'border-slate-300 ring-cyan-500 focus:ring-cyan-200',
@@ -1378,6 +1405,57 @@ const onSchoolChange = async (): Promise<void> => {
 const scrollMessage = async (target: typeof messageRef): Promise<void> => {
   await nextTick()
   target.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+const subjectHeaderLabel = (subject: SubjectRow): string => {
+  const name = String(subject.subject ?? '').trim()
+  const categoryId = Number(subject.sub_cat_id ?? 0)
+
+  if (categoryId === 2) return `${name} - OP1`
+  if (categoryId === 3) return `${name} - OP2`
+  if (categoryId === 4) return `${name} - OP3`
+
+  return name
+}
+
+const formatSubjectHeader = (subjectName: string): { line1: string, line2: string } => {
+  const normalized = String(subjectName ?? '').trim().replace(/\s+/gu, ' ')
+  if (!normalized) {
+    return { line1: '', line2: '' }
+  }
+
+  const compactLength = Array.from(normalized.replace(/\s+/gu, '')).length
+  if (compactLength <= 22) {
+    return { line1: normalized, line2: '' }
+  }
+
+  const words = normalized.split(' ')
+  if (words.length === 1) {
+    const midpoint = Math.ceil(normalized.length / 2)
+    return {
+      line1: normalized.slice(0, midpoint),
+      line2: normalized.slice(midpoint),
+    }
+  }
+
+  let bestSplitIndex = 1
+  let smallestLengthGap = Number.POSITIVE_INFINITY
+
+  for (let index = 1; index < words.length; index += 1) {
+    const line1 = words.slice(0, index).join(' ')
+    const line2 = words.slice(index).join(' ')
+    const gap = Math.abs(line1.length - line2.length)
+
+    if (gap < smallestLengthGap) {
+      bestSplitIndex = index
+      smallestLengthGap = gap
+    }
+  }
+
+  return {
+    line1: words.slice(0, bestSplitIndex).join(' '),
+    line2: words.slice(bestSplitIndex).join(' '),
+  }
 }
 
 const formatNumeric = (value: number | null): string => {
