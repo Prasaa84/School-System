@@ -5,65 +5,64 @@
       <p class="mt-2 text-sm text-slate-600">{{ text.subtitle }}</p>
     </header>
 
-    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div class="grid gap-4 md:grid-cols-6">
-        <label v-if="isAdmin" class="text-sm text-slate-700 md:col-span-5">
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="grid gap-3 md:grid-cols-6">
+        <label v-if="isAdmin" class="text-xs text-slate-700 md:col-span-4">
           {{ text.school }}
-          <select v-model.number="selectedSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" @change="onSchoolChange">
+          <select v-model.number="selectedSchoolCensusId" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" @change="onSchoolChange">
             <option :value="0">{{ text.selectSchool }}</option>
             <option v-for="row in schools" :key="`marks-school-${row.id}`" :value="Number(row.id)">{{ row.label }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label class="text-xs text-slate-700">
           {{ text.year }}
-          <select v-model.number="selectedYear" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="lockedYear !== null || loadingOptions">
+          <select v-model.number="selectedYear" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" :disabled="lockedYear !== null || loadingOptions">
             <option :value="0">{{ text.selectYear }}</option>
             <option v-for="year in years" :key="`marks-year-${year}`" :value="year">{{ year }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label class="text-xs text-slate-700">
           {{ text.term }}
-          <select v-model.number="selectedTerm" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="loadingOptions">
+          <select v-model.number="selectedTerm" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" :disabled="loadingOptions">
             <option :value="0">{{ text.selectTerm }}</option>
             <option v-for="row in terms" :key="`marks-term-${row.id}`" :value="row.id">{{ row.label }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label class="text-xs text-slate-700">
           {{ text.grade }}
-          <select v-model.number="selectedGradeId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="lockedGradeId !== null || loadingOptions">
+          <select v-model.number="selectedGradeId" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" :disabled="lockedGradeId !== null || loadingOptions">
             <option :value="0">{{ text.selectGrade }}</option>
             <option v-for="row in grades" :key="`marks-grade-${row.grade_id}`" :value="row.grade_id">{{ row.label }}</option>
           </select>
         </label>
 
-        <label class="text-sm text-slate-700">
+        <label class="text-xs text-slate-700">
           {{ text.class }}
-          <select v-model.number="selectedClassId" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" :disabled="lockedClassId !== null || loadingOptions">
+          <select v-model.number="selectedClassId" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" :disabled="lockedClassId !== null || loadingOptions">
             <option :value="0">{{ text.selectClass }}</option>
             <option v-for="row in classes" :key="`marks-class-${row.class_id}`" :value="row.class_id">{{ row.label }}</option>
           </select>
         </label>
 
-        <div class="flex items-end">
-          <button class="w-full rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loadingMarks || loadingOptions" @click="loadMarks">
+        <div class="flex items-end gap-2 md:col-span-2">
+          <button class="flex-1 rounded-xl bg-cyan-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loadingMarks || loadingOptions" @click="loadMarks">
             {{ loadingMarks ? text.loading : text.show }}
+          </button>
+          <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-sm font-semibold text-cyan-700 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60" :disabled="exportingMarks || loadingOptions" @click="exportMarks">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path d="M10 2a1 1 0 0 1 1 1v7.59l2.3-2.29a1 1 0 1 1 1.4 1.41l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.41L9 10.59V3a1 1 0 0 1 1-1Z" />
+              <path d="M4 14a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
+            </svg>
+            {{ exportingMarks ? text.exporting : text.export }}
           </button>
         </div>
 
         <div class="md:col-span-6">
           <div class="flex flex-nowrap items-end gap-2 overflow-x-auto pb-1">
-            <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60" :disabled="exportingMarks || loadingOptions" @click="exportMarks">
-              <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path d="M10 2a1 1 0 0 1 1 1v7.59l2.3-2.29a1 1 0 1 1 1.4 1.41l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.41L9 10.59V3a1 1 0 0 1 1-1Z" />
-                <path d="M4 14a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
-              </svg>
-              {{ exportingMarks ? text.exporting : text.export }}
-            </button>
-
-            <button v-if="canDownloadTemplate" class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="downloadingTemplate || loadingOptions" @click="downloadImportTemplate">
+            <button v-if="canDownloadTemplate" class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="downloadingTemplate || loadingOptions" @click="downloadImportTemplate">
               <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path d="M5 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.41A2 2 0 0 0 16.41 6L13 2.59A2 2 0 0 0 11.59 2H5Zm6 1.5V7a1 1 0 0 0 1 1h3.5V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6Z" />
                 <path d="M8 10a1 1 0 0 1 1 1v1h2v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
@@ -73,7 +72,7 @@
 
             <template v-if="canManageMarksUi">
               <input ref="marksFileInputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="onMarksFileSelected" />
-              <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="handleOpenMarksFilePicker">
+              <button class="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="handleOpenMarksFilePicker">
                 <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path d="M10 3a1 1 0 0 1 1 1v6.59l1.3-1.29a1 1 0 1 1 1.4 1.41l-3 3a1 1 0 0 1-1.4 0l-3-3a1 1 0 1 1 1.4-1.41L9 10.59V4a1 1 0 0 1 1-1Z" />
                   <path d="M4 13a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
@@ -81,9 +80,9 @@
                 {{ text.file }}
               </button>
 
-              <span class="my-auto min-w-0 shrink text-sm text-slate-600">{{ selectedMarksFileName || text.noFileSelected }}</span>
+              <span class="my-auto min-w-0 shrink text-xs text-slate-600">{{ selectedMarksFileName || text.noFileSelected }}</span>
 
-              <button class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="uploadingMarks || !selectedMarksFile" @click="handleUploadMarksFile">
+              <button class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-cyan-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="uploadingMarks || !selectedMarksFile" @click="handleUploadMarksFile">
                 <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path d="M10 17a1 1 0 0 1-1-1V9.41L7.7 10.7a1 1 0 1 1-1.4-1.41l3-3a1 1 0 0 1 1.4 0l3 3a1 1 0 0 1-1.4 1.41L11 9.41V16a1 1 0 0 1-1 1Z" />
                   <path d="M4 14a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z" />
@@ -241,6 +240,19 @@
       :busy="deletingMarks"
       @close="closeDeleteDialog"
       @confirm="confirmDeleteMarks"
+    />
+
+    <ConfirmDialog
+      :open="showFinalizeDialog"
+      :title="text.finalizeDialogTitle"
+      :message="finalizeDialogMessage"
+      :confirm-label="text.confirmFinalize"
+      :busy-confirm-label="text.saving"
+      :cancel-label="text.cancel"
+      :close-label="text.cancel"
+      :busy="savingMarks"
+      @close="closeFinalizeDialog"
+      @confirm="confirmSaveMarks"
     />
 
     <div v-if="showUploadErrorsDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 print:hidden" @click="closeUploadErrorsDialog">
@@ -413,11 +425,13 @@ const text = computed(() => {
       export: 'පිටත් කරන්න',
       template: 'ආකෘතිය',
       file: 'ගොනුව',
-      upload: 'උඩුගත කරන්න',
-      delete: 'ලකුණු මකන්න',
-      confirmDelete: 'මකන්න',
-      deleting: 'මකමින්...',
-      cancel: 'අවලංගු',
+        upload: 'උඩුගත කරන්න',
+        delete: 'ලකුණු මකන්න',
+        finalizeDialogTitle: 'ලකුණු අවසන් කරන්න',
+        confirmFinalize: 'අවසන් කර සුරකින්න',
+        confirmDelete: 'මකන්න',
+        deleting: 'මකමින්...',
+        cancel: 'අවලංගු',
       search: 'සොයන්න',
       totalStudents: 'ශිෂ්‍යයන්',
       totalSubjects: 'විෂයයන්',
@@ -444,10 +458,11 @@ const text = computed(() => {
       validationErrorsDialogMessage: 'සුරැකීමට පෙර ලැයිස්තුගත කර ඇති සියලු දෝෂ නිවැරදි කරන්න.',
       deleteMarksError: 'වාර පරීක්ෂණ ලකුණු මැකීමට නොහැකි විය.',
       exportMarksError: 'වාර පරීක්ෂණ ලකුණු පිටත් කිරීමට නොහැකි විය.',
-      templateMarksError: 'ලකුණු ආයාත ආකෘතිය බාගත කිරීමට නොහැකි විය.',
-      uploadMarksError: 'වාර පරීක්ෂණ ලකුණු කටුපත් උඩුගත කිරීමට නොහැකි විය.',
-      uploadErrorsDialogTitle: 'උඩුගත කිරීමේ දෝෂ',
-      uploadErrorsDialogMessage: 'Excel ගොනුවේ ඇති සියලු දෝෂ නිවැරදි කර නැවත උඩුගත කරන්න.',
+        templateMarksError: 'ලකුණු ආයාත ආකෘතිය බාගත කිරීමට නොහැකි විය.',
+        uploadMarksError: 'වාර පරීක්ෂණ ලකුණු කටුපත් උඩුගත කිරීමට නොහැකි විය.',
+        finalizeWarningMessage: 'අවසන් කර සුරැකීමෙන් පසු මෙම ලකුණු වෙනස් කළ නොහැක. ඉදිරියට යන්නද?',
+        uploadErrorsDialogTitle: 'උඩුගත කිරීමේ දෝෂ',
+        uploadErrorsDialogMessage: 'Excel ගොනුවේ ඇති සියලු දෝෂ නිවැරදි කර නැවත උඩුගත කරන්න.',
       lockedDialogTitle: 'ලකුණු පත්‍රය අගුලු දමා ඇත',
       lockedEditMessage: 'මෙම ලකුණු පත්‍රය දැනටමත් සම්පූර්ණ කර ඇත. සංස්කරණයට පෙර නැවත විවෘත කරන්න.',
       lockedDeleteMessage: 'මෙම ලකුණු පත්‍රය දැනටමත් සම්පූර්ණ කර ඇත. මකා දැමීමට පෙර නැවත විවෘත කරන්න.',
@@ -490,11 +505,13 @@ const text = computed(() => {
       export: 'ஏற்றுமதி',
       template: 'வடிவம்',
       file: 'கோப்பு',
-      upload: 'பதிவேற்று',
-      delete: 'மதிப்பெண்களை நீக்கு',
-      confirmDelete: 'நீக்கு',
-      deleting: 'நீக்கப்படுகிறது...',
-      cancel: 'ரத்து செய்',
+        upload: 'பதிவேற்று',
+        delete: 'மதிப்பெண்களை நீக்கு',
+        finalizeDialogTitle: 'மதிப்பெண்களை இறுதிப்படுத்து',
+        confirmFinalize: 'இறுதியாக சேமிக்கவும்',
+        confirmDelete: 'நீக்கு',
+        deleting: 'நீக்கப்படுகிறது...',
+        cancel: 'ரத்து செய்',
       search: 'தேடு',
       totalStudents: 'மாணவர்கள்',
       totalSubjects: 'பாடங்கள்',
@@ -521,10 +538,11 @@ const text = computed(() => {
       validationErrorsDialogMessage: 'சேமிப்பதற்கு முன் பட்டியலிடப்பட்ட அனைத்து பிழைகளையும் சரிசெய்யவும்.',
       deleteMarksError: 'காலாண்டு தேர்வு மதிப்பெண்களை நீக்க முடியவில்லை.',
       exportMarksError: 'காலாண்டு தேர்வு மதிப்பெண்களை ஏற்றுமதி செய்ய முடியவில்லை.',
-      templateMarksError: 'மதிப்பெண் இறக்குமதி வடிவத்தைப் பதிவிறக்க முடியவில்லை.',
-      uploadMarksError: 'காலாண்டு தேர்வு மதிப்பெண் வரைவைக் பதிவேற்ற முடியவில்லை.',
-      uploadErrorsDialogTitle: 'பதிவேற்ற பிழைகள்',
-      uploadErrorsDialogMessage: 'Excel கோப்பிலுள்ள அனைத்து பிழைகளையும் சரிசெய்து மீண்டும் பதிவேற்றவும்.',
+        templateMarksError: 'மதிப்பெண் இறக்குமதி வடிவத்தைப் பதிவிறக்க முடியவில்லை.',
+        uploadMarksError: 'காலாண்டு தேர்வு மதிப்பெண் வரைவைக் பதிவேற்ற முடியவில்லை.',
+        finalizeWarningMessage: 'இறுதியாக சேமித்த பிறகு இந்த மதிப்பெண்களை மாற்ற முடியாது. தொடரவா?',
+        uploadErrorsDialogTitle: 'பதிவேற்ற பிழைகள்',
+        uploadErrorsDialogMessage: 'Excel கோப்பிலுள்ள அனைத்து பிழைகளையும் சரிசெய்து மீண்டும் பதிவேற்றவும்.',
       lockedDialogTitle: 'மதிப்பெண் தாள் பூட்டப்பட்டுள்ளது',
       lockedEditMessage: 'இந்த மதிப்பெண் தாள் ஏற்கனவே முடிக்கப்பட்டுள்ளது. திருத்துவதற்கு முன் மீண்டும் திறக்கவும்.',
       lockedDeleteMessage: 'இந்த மதிப்பெண் தாள் ஏற்கனவே முடிக்கப்பட்டுள்ளது. நீக்குவதற்கு முன் மீண்டும் திறக்கவும்.',
@@ -566,11 +584,13 @@ const text = computed(() => {
     export: 'Export',
     template: 'Template',
     file: 'File',
-    upload: 'Upload',
-    delete: 'Delete Marks',
-    confirmDelete: 'Delete',
-    deleting: 'Deleting...',
-    cancel: 'Cancel',
+      upload: 'Upload',
+      delete: 'Delete Marks',
+      finalizeDialogTitle: 'Finalize Marks',
+      confirmFinalize: 'Finalize and Save',
+      confirmDelete: 'Delete',
+      deleting: 'Deleting...',
+      cancel: 'Cancel',
     search: 'Search',
     totalStudents: 'Students',
     totalSubjects: 'Subjects',
@@ -597,10 +617,11 @@ const text = computed(() => {
     validationErrorsDialogMessage: 'Please correct all listed errors before saving the marks sheet.',
     deleteMarksError: 'Unable to delete term test marks.',
     exportMarksError: 'Unable to export term test marks.',
-    templateMarksError: 'Unable to download marks import template.',
-    uploadMarksError: 'Unable to upload term test marks draft.',
-    uploadErrorsDialogTitle: 'Upload Errors',
-    uploadErrorsDialogMessage: 'Please correct all errors in the Excel file and upload it again.',
+      templateMarksError: 'Unable to download marks import template.',
+      uploadMarksError: 'Unable to upload term test marks draft.',
+      finalizeWarningMessage: 'After final save, these marks cannot be changed. Do you want to continue?',
+      uploadErrorsDialogTitle: 'Upload Errors',
+      uploadErrorsDialogMessage: 'Please correct all errors in the Excel file and upload it again.',
     lockedDialogTitle: 'Marks Sheet Locked',
     lockedEditMessage: 'This marks sheet has already been completed. Reopen it before editing.',
     lockedDeleteMessage: 'This marks sheet has already been completed. Reopen it before deleting.',
@@ -639,6 +660,7 @@ const uploadingMarks = ref(false)
 const deletingMarks = ref(false)
 const updatingConfirmation = ref(false)
 const showDeleteDialog = ref(false)
+const showFinalizeDialog = ref(false)
 const showUploadErrorsDialog = ref(false)
 const showLockedDialog = ref(false)
 const canManageLoaded = ref(false)
@@ -681,6 +703,8 @@ const deleteDialogMessage = computed(() => {
 
   return `Do you want to delete all marks for ${selectedYear.value || '-'}, ${termLabel}, ${gradeLabel}, and ${classLabel}?`
 })
+
+const finalizeDialogMessage = computed(() => text.value.finalizeWarningMessage)
 
 const scopeLabel = computed(() => {
   if (roleName === 'class teacher') return 'Class teacher view'
@@ -1186,7 +1210,7 @@ const handleSaveMarks = async (): Promise<void> => {
     return
   }
 
-  await saveMarks()
+  showFinalizeDialog.value = true
 }
 
 const handleSaveDraft = async (): Promise<void> => {
@@ -1445,6 +1469,19 @@ const closeDeleteDialog = (): void => {
   }
 
   showDeleteDialog.value = false
+}
+
+const closeFinalizeDialog = (): void => {
+  if (savingMarks.value) {
+    return
+  }
+
+  showFinalizeDialog.value = false
+}
+
+const confirmSaveMarks = async (): Promise<void> => {
+  showFinalizeDialog.value = false
+  await saveMarks()
 }
 
 const confirmDeleteMarks = async (): Promise<void> => {
